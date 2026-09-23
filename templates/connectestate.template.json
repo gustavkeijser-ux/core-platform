@@ -1679,6 +1679,13 @@
         { "key": "fastighetsbeteckning",   "label": "Fastighetsbeteckning",     "field_type": "text",      "sort_order": 20,  "options": { "section": "grundinfo" }, "help_text": "T.ex. Västerås X:123" },
         { "key": "fastighetsagare",        "label": "Fastighetsägare",          "field_type": "text",      "sort_order": 30,  "options": { "section": "grundinfo" } },
         { "key": "forvaltare",             "label": "Förvaltare",               "field_type": "text",      "sort_order": 40,  "options": { "section": "grundinfo" } },
+        { "key": "ort",                    "label": "Ort",                      "field_type": "text",      "sort_order": 41,  "options": { "section": "grundinfo" }, "help_text": "Ärvs från leveransen vid skapande" },
+        { "key": "adress",                 "label": "Adress",                   "field_type": "text",      "sort_order": 42,  "options": { "section": "grundinfo" }, "help_text": "Ärvs från leveransen vid skapande" },
+        { "key": "kommun",                 "label": "Kommun",                   "field_type": "text",      "sort_order": 43,  "options": { "section": "grundinfo" }, "help_text": "Ärvs från leveransen vid skapande" },
+        { "key": "postnummer",             "label": "Postnummer",               "field_type": "text",      "sort_order": 44,  "options": { "section": "grundinfo" }, "help_text": "Ärvs från leveransen vid skapande" },
+        { "key": "geo_lat",                "label": "Latitud",                  "field_type": "number",    "sort_order": 45,  "options": { "section": "grundinfo" }, "help_text": "Ärvs från leveransen om redan geokodad, annars fylls den i av geokodningskörningen" },
+        { "key": "geo_lon",                "label": "Longitud",                 "field_type": "number",    "sort_order": 46,  "options": { "section": "grundinfo" }, "help_text": "Ärvs från leveransen om redan geokodad, annars fylls den i av geokodningskörningen" },
+        { "key": "geo_kalla",              "label": "Geokodningskälla",         "field_type": "text",      "sort_order": 47,  "options": { "section": "grundinfo" } },
 
         { "key": "befintligt_nat",         "label": "Befintligt nät",           "field_type": "text",      "sort_order": 100, "options": { "section": "nat_tv" }, "help_text": "T.ex. Tele2 Koax" },
         { "key": "nuvarande_tv",           "label": "Nuvarande TV-paket",      "field_type": "text",      "sort_order": 110, "options": { "section": "nat_tv" } },
