@@ -2419,6 +2419,11 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   margin: 0;
 }
 
+.d2dpb-detail__delete {
+  color: var(--danger, #c0392b);
+  border-color: var(--danger, #c0392b);
+}
+
 .d2dpb-detail__section {
   margin-top: var(--sp-6);
 }
