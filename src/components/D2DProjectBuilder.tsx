@@ -286,7 +286,17 @@ function FastighetRow({
 // =============================================================================
 // Lägg till fastighet — sök leverans
 // =============================================================================
-
+/** Ett kommunnamn innehåller aldrig siffror och är sällan längre än ett par
+ *  ord. Leveransdata har visats innehålla fastighetsbeteckningen felaktigt
+ *  kopierad in i kommun-fältet (t.ex. `" SKÖVDE-BRAGE 4"`) — den typen av
+ *  rad hoppas hellre över än förs vidare som en falsk sanning som senare
+ *  ligger till grund för geokodningens förankringskontroll. */
+function rimligtKommunnamn(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().replace(/^["']+|["']+$/g, "").trim();
+  if (!t || /\d/.test(t) || t.length > 40) return null;
+  return t;
+}
 function AddFastighetPicker({ projektId, turordningStart, onAdded }: {
   projektId: string; turordningStart: number; onAdded: () => void;
 }) {
