@@ -859,3 +859,102 @@ export async function d2dGeokodaNu(): Promise<{
     }
     return data as { adress: number; ort: number; utan_traff: number; utan_forankring: number; fel: number; totalt: number };
 }
+
+export type LeveransPunkt = {
+    id: string;
+    titel: string | null;
+    fastighetsbeteckning: string | null;
+    ort: string | null;
+    kommun: string | null;
+    adress: string | null;
+    lat: number;
+    lon: number;
+    geoKalla: string | null;
+    kundklar: string | null;
+    leveransmanad: string | null;
+    projektplanStatus: string | null;
+    redanIProjekt: boolean;
+    d2dFastighetId: string | null;
+    d2dProjektId: string | null;
+};
+
+/**
+ * Hämtar HELA leveransbeståndet som har koordinater — grunden för
+ * översiktskartan i D2D-delen. Till skillnad från d2dGetKartaData (som
+ * bara visar ett enskilt projekts redan inplockade fastigheter) visar den
+ * här allt som är levererat och ska levereras, oavsett projekt.
+ */
+export async function d2dGetLeveransKartaData(): Promise<LeveransPunkt[]> {
+    const { data, error } = await supabase.rpc("get_leverans_karta_data");
+    if (error) asError(error);
+    return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+          id: r.id as string,
+          titel: (r.titel as string) ?? null,
+          fastighetsbeteckning: (r.fastighetsbeteckning as string) ?? null,
+          ort: (r.ort as string) ?? null,
+          kommun: (r.kommun as string) ?? null,
+          adress: (r.adress as string) ?? null,
+          lat: r.lat as number,
+          lon: r.lon as number,
+          geoKalla: (r.geo_kalla as string) ?? null,
+          kundklar: (r.kundklar as string) ?? null,
+          leveransmanad: (r.leveransmanad as string) ?? null,
+          projektplanStatus: (r.projektplan_status as string) ?? null,
+          redanIProjekt: !!r.redan_i_projekt,
+          d2dFastighetId: (r.d2d_fastighet_id as string) ?? null,
+          d2dProjektId: (r.d2d_projekt_id as string) ?? null,
+    }));
+}
+
+/** Ett kommunnamn innehåller aldrig siffror och är sällan längre än ett par
+ *  ord — samma sanering som Edge Function-motorn och AddFastighetPicker gör,
+ *  se kommentaren där för bakgrunden (SKÖVDE-BRAGE-exemplet). */
+function rimligtKommunnamnData(v: unknown): string | null {
+    if (typeof v !== "string") return null;
+    const t = v.trim().replace(/^["']+|["']+$/g, "").trim();
+    if (!t || /\d/.test(t) || t.length > 40) return null;
+    return t;
+}
+
+/**
+ * Skapar en d2d_fastighet från en leverans och kopplar den till projektet.
+ * Ärver koordinater direkt om leveransen redan är geokodad (ingen väntan på
+ * nästa geokodningskörning), och länkar tillbaka till leveransen via
+ * relationen d2d_fast_delivery så att översiktskartan kan visa vilka
+ * leveranser som redan är inplockade i ett projekt. Används av både
+ * AddFastighetPicker (textsökning) och kartans "Lägg till i projekt".
+ */
+export async function d2dSkapaFastighetFranLeverans(
+    leveransId: string, projektId: string, turordning: number
+  ): Promise<RecordRow> {
+    const full = await getRecord(leveransId);
+    const d = full.record.data as Record<string, unknown>;
+    const propertyRel = full.related.find((r) => r.record.objectType === "property");
+
+  const fastighetData: Record<string, unknown> = {
+        turordning,
+        fastighetsbeteckning: d.fastighetsbeteckning ?? null,
+        fastighetsagare: d.fastighetsagare ?? null,
+        befintligt_nat: d.befintlig_fiberleverantor ?? null,
+        nuvarande_tv: d.kanalpaket ?? d.kanalpaket_projektplan ?? null,
+        kabel_tv: d.befintlig_koax ?? null,
+        avtalstid_koax: d.avtalstid_ko ?? null,
+        kundklar_datum: d.kundklar ?? null,
+        ort: (d.ort as string | undefined) ?? null,
+        kommun: rimligtKommunnamnData(d.kommun),
+        adress: (d.adress as string | undefined) ?? null,
+        postnummer: (d.postnummer as string | undefined) ?? null,
+        geo_lat: (d.geo_lat as number | undefined) ?? null,
+        geo_lon: (d.geo_lon as number | undefined) ?? null,
+        geo_kalla: (d.geo_kalla as string | undefined) ?? null,
+  };
+    const title = (d.adress as string) || full.record.title || "Fastighet";
+
+  const row = await createRecord("d2d_fastighet", { ...fastighetData, name: title }, "ej_startad");
+    await addRelation(row.id, "d2d_fast_projekt", projektId);
+    await addRelation(row.id, "d2d_fast_delivery", leveransId);
+    if (propertyRel) {
+          await addRelation(row.id, "d2d_fast_property", propertyRel.record.id);
+    }
+    return row;
+}
