@@ -1,12 +1,153 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listRecords, getRecord, createRecord, updateRecord, addRelation, removeRelation,
   listSellers, d2dImportAddresses, d2dSetAssignment, d2dApproveProject,
+  d2dGetKartaData, d2dGeokodaNu, type KartaPunkt,
   type RecordRow, type SellerOption, DataError,
 } from "@/lib/data";
 import { StatusPill } from "./StatusPill";
 
+// =============================================================================
+// Kartan — Leaflet laddas via CDN (inget npm-beroende, se motivering i doc:
+// undviker att git-push-blockeringen gör paketuppdateringar besvärliga att
+// klistra in manuellt). Skriptet/CSS:en laddas en gång och återanvänds.
+// =============================================================================
+
+const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+
+let leafletLoading: Promise<void> | null = null;
+function loadLeaflet(): Promise<void> {
+  const w = window as unknown as { L?: unknown };
+  if (w.L) return Promise.resolve();
+  if (leafletLoading) return leafletLoading;
+  leafletLoading = new Promise((resolve, reject) => {
+    if (!document.querySelector(`link[href="${LEAFLET_CSS}"]`)) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = LEAFLET_CSS;
+      document.head.appendChild(link);
+    }
+    const script = document.createElement("script");
+    script.src = LEAFLET_JS;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Kunde inte ladda kartbiblioteket."));
+    document.body.appendChild(script);
+  });
+  return leafletLoading;
+}
+
+function KartaSection({ projektId, totalFastigheter }: { projektId: string; totalFastigheter: number }) {
+  const mapElRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<unknown>(null);
+  const [punkter, setPunkter] = useState<KartaPunkt[] | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [geokodar, setGeokodar] = useState(false);
+  const [geokodMsg, setGeokodMsg] = useState<string | null>(null);
+
+  const ladda = useCallback(async () => {
+    try {
+      const p = await d2dGetKartaData(projektId);
+      setPunkter(p);
+    } catch (e) {
+      setLoadErr(e instanceof DataError ? e.message : "Kunde inte hämta kartdata.");
+    }
+  }, [projektId]);
+
+  useEffect(() => { ladda(); }, [ladda]);
+
+  useEffect(() => {
+    if (!punkter || punkter.length === 0) return;
+    let cancelled = false;
+    loadLeaflet().then(() => {
+      if (cancelled || !mapElRef.current) return;
+      const L = (window as unknown as { L: any }).L;
+      if (!mapRef.current) {
+        mapRef.current = L.map(mapElRef.current);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap-bidragsgivare",
+          maxZoom: 19,
+        }).addTo(mapRef.current);
+      }
+      const map = mapRef.current as any;
+      // Rensa gamla markörer vid omladdning (t.ex. efter "Geokoda nu").
+      map.eachLayer((layer: any) => {
+        if (layer instanceof L.Marker) map.removeLayer(layer);
+      });
+      const bounds: [number, number][] = [];
+      for (const p of punkter) {
+        const marker = L.marker([p.lat, p.lon]).addTo(map);
+        const rader = [
+          `<strong>${p.titel ?? p.fastighetsbeteckning ?? "Fastighet"}</strong>`,
+          p.fastighetsbeteckning ? p.fastighetsbeteckning : null,
+          [p.adress, p.ort].filter(Boolean).join(", ") || null,
+          p.geoKalla === "ort" ? "<em>Ungefärlig placering (ort, ej exakt adress)</em>" : null,
+        ].filter(Boolean);
+        marker.bindPopup(rader.join("<br>"));
+        bounds.push([p.lat, p.lon]);
+      }
+      if (bounds.length === 1) map.setView(bounds[0], 13);
+      else map.fitBounds(bounds, { padding: [24, 24] });
+    }).catch((e) => setLoadErr(String(e)));
+    return () => { cancelled = true; };
+  }, [punkter]);
+
+  useEffect(() => () => {
+    const map = mapRef.current as any;
+    if (map) { map.remove(); mapRef.current = null; }
+  }, []);
+
+  async function geokodaNu() {
+    setGeokodar(true); setGeokodMsg(null); setLoadErr(null);
+    try {
+      const res = await d2dGeokodaNu();
+      const delar = [
+        res.adress ? `${res.adress} via adress` : null,
+        res.ort ? `${res.ort} via ort` : null,
+        res.utan_traff ? `${res.utan_traff} utan träff` : null,
+        res.utan_forankring ? `${res.utan_forankring} saknar ort/adress` : null,
+        res.fel ? `${res.fel} fel` : null,
+      ].filter(Boolean).join(", ");
+      setGeokodMsg(res.totalt === 0 ? "Inget att geokoda just nu." : `Körde ${res.totalt} st: ${delar}.`);
+      await ladda();
+    } catch (e) {
+      setLoadErr(e instanceof DataError ? e.message : "Kunde inte köra geokodningen.");
+    } finally {
+      setGeokodar(false);
+    }
+  }
+
+  const saknar = totalFastigheter - (punkter?.length ?? 0);
+
+  return (
+    <div className="d2dpb-detail__section">
+      <div className="d2dpb-detail__section-header">
+        <h3>Karta</h3>
+        <button className="btn btn--ghost btn--sm" onClick={geokodaNu} disabled={geokodar}>
+          {geokodar ? "Geokodar…" : "Geokoda nu"}
+        </button>
+      </div>
+      {totalFastigheter === 0 ? (
+        <div className="d2d-empty">Lägg till fastigheter i projektet för att se dem på kartan.</div>
+      ) : (
+        <>
+          <p className="ink-faint">
+            {saknar > 0
+              ? `${saknar} av ${totalFastigheter} fastighet(er) saknar koordinater ännu. Geokodningen körs automatiskt var 5:e minut, eller kör den direkt med knappen ovan.`
+              : `Alla ${totalFastigheter} fastighet(er) har koordinater.`}
+          </p>
+          {geokodMsg && <div className="d2d-save-ok">✓ {geokodMsg}</div>}
+          {loadErr && <div className="d2d-error">{loadErr}</div>}
+          {punkter && punkter.length > 0 && (
+            <div ref={mapElRef} className="d2dpb-karta" />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 // =============================================================================
 // Adressradsformulär — matchar exakt fälten som d2d_import_addresses tar emot
 // =============================================================================
