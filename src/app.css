@@ -2446,6 +2446,66 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   overflow: hidden;
 }
 
+.d2dpb-toplevel-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.d2dpb-leveranskarta__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+
+.d2dpb-leveranskarta__toolbar h2 {
+  margin: 0;
+  margin-right: auto;
+}
+
+.d2dpb-leveranskarta__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  white-space: nowrap;
+}
+
+.d2dpb-leveranskarta__legend {
+  display: flex;
+  gap: var(--sp-4);
+  margin: var(--sp-2) 0;
+  font-size: 0.9em;
+  color: var(--ink-faint, #666);
+}
+
+.d2dpb-leveranskarta__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.d2dpb-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.d2dpb-dot--blue { background: #3388ff; }
+.d2dpb-dot--green { background: #2e9e4f; }
+.d2dpb-dot--gray { background: #8a8a8a; }
+
+.d2dpb-leveranskarta__map {
+  margin-top: var(--sp-3);
+  height: 640px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
 .d2dpb-fast {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
