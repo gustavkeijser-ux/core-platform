@@ -640,7 +640,7 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
           onAdded={load}
         />
       </div>
-
+      <KartaSection projektId={projektId} totalFastigheter={fastigheter.length} />
       <div className="d2dpb-detail__approve">
         <button className="btn btn--brand" onClick={approve} disabled={approving || fastigheter.length === 0}>
           {approving ? "Godkänner…" : "Godkänn projekt och dela ut adresser"}
