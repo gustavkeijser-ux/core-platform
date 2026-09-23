@@ -332,6 +332,10 @@ function AddFastighetPicker({ projektId, turordningStart, onAdded }: {
         kabel_tv: d.befintlig_koax ?? null,
         avtalstid_koax: d.avtalstid_ko ?? null,
         kundklar_datum: d.kundklar ?? null,
+                ort: (d.ort as string | undefined) ?? null,
+        kommun: rimligtKommunnamn(d.kommun),
+        adress: (d.adress as string | undefined) ?? null,
+        postnummer: (d.postnummer as string | undefined) ?? null,
       };
       const title = (d.adress as string) || full.record.title || "Fastighet";
 
