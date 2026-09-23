@@ -803,3 +803,59 @@ export async function d2dApproveProject(
   if (error) asError(error);
   return data as { ok: boolean; distributed: number; fastigheterUtanTilldelning: number };
 }
+
+
+export type KartaPunkt = {
+    id: string;
+    titel: string | null;
+    fastighetsbeteckning: string | null;
+    ort: string | null;
+    kommun: string | null;
+    adress: string | null;
+    lat: number;
+    lon: number;
+    geoKalla: string | null;
+    status: string | null;
+};
+
+/** Hämtar alla geokodade fastigheter i ett D2D-projekt (för kartan). */
+export async function d2dGetKartaData(projektId: string): Promise<KartaPunkt[]> {
+    const { data, error } = await supabase.rpc("get_karta_data", { p_projekt_id: projektId });
+    if (error) asError(error);
+    return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+          id: r.id as string,
+          titel: (r.titel as string) ?? null,
+          fastighetsbeteckning: (r.fastighetsbeteckning as string) ?? null,
+          ort: (r.ort as string) ?? null,
+          kommun: (r.kommun as string) ?? null,
+          adress: (r.adress as string) ?? null,
+          lat: r.lat as number,
+          lon: r.lon as number,
+          geoKalla: (r.geo_kalla as string) ?? null,
+          status: (r.status as string) ?? null,
+    }));
+}
+
+/**
+ * Triggar geokodningsmotorn (Edge Function) direkt, i stället för att vänta
+ * på nästa schemalagda körning (var 5:e minut). Samma kodväg som cron-jobbet.
+ * Tar max 40 fastigheter i taget (BATCH_SIZE i funktionen) — anropa igen om
+ * "utan_forankring"+"adress"+"ort" summerar till mindre än det totala antalet
+ * som saknar koordinater.
+ */
+export async function d2dGeokodaNu(): Promise<{
+    adress: number; ort: number; utan_traff: number; utan_forankring: number; fel: number; totalt: number;
+}> {
+    const { data, error } = await supabase.functions.invoke("geokoda-d2d-fastigheter");
+    if (error) {
+          let detail = error.message ?? "Kunde inte köra geokodningen.";
+          try {
+                  const body = await (error as { context?: Response }).context?.json();
+                  if (body?.error) detail = body.error;
+          } catch {
+                  // svarskroppen var inte JSON — behåll det generiska meddelandet
+          }
+          throw new DataError("unknown", detail);
+    }
+    return data as { adress: number; ort: number; utan_traff: number; utan_forankring: number; fel: number; totalt: number };
+}
