@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   listRecords, getRecord, createRecord, updateRecord, removeRelation,
   listSellers, d2dImportAddresses, d2dSetAssignment, d2dApproveProject,
+  d2dDeleteProjekt,
   d2dGetKartaData, d2dGeokodaNu, type KartaPunkt,
   d2dGetLeveransKartaData, d2dSkapaFastighetFranLeverans, type LeveransPunkt,
   type RecordRow, type SellerOption, DataError,
@@ -695,6 +696,8 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
   const [approving, setApproving] = useState(false);
   const [approveMsg, setApproveMsg] = useState<string | null>(null);
   const [approveErr, setApproveErr] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -766,6 +769,23 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
     }
   }
 
+  async function deleteProject() {
+    if (!project) return;
+    const varning =
+      `Radera hela projektet "${project.title ?? "Namnlöst projekt"}"?\n\n` +
+      `Detta tar bort projektet samt ${fastigheter.length} fastighet(er) och alla lägenheter/adresser ` +
+      `som hör till dem. Går inte att ångra i appen.`;
+    if (!confirm(varning)) return;
+    setDeleting(true); setDeleteErr(null);
+    try {
+      await d2dDeleteProjekt(projektId);
+      onBack();
+    } catch (e) {
+      setDeleteErr(e instanceof DataError ? e.message : "Kunde inte ta bort projektet.");
+      setDeleting(false);
+    }
+  }
+
   if (loading) return <div className="d2d-loading">Laddar projekt…</div>;
   if (!project) return <div className="d2d-empty">Projektet hittades inte.</div>;
 
@@ -777,7 +797,15 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
         <button className="btn btn--ghost btn--sm" onClick={onBack}>← Alla projekt</button>
         <h2>{project.title ?? "Projekt"}</h2>
         <StatusPill status={project.status} />
+        <button
+          className="btn btn--ghost btn--sm d2dpb-detail__delete"
+          onClick={deleteProject}
+          disabled={deleting}
+        >
+          {deleting ? "Tar bort…" : "Ta bort projekt"}
+        </button>
       </div>
+      {deleteErr && <div className="d2d-error">{deleteErr}</div>}
       {!!data.description && <p className="ink-faint">{String(data.description)}</p>}
 
       <div className="d2dpb-detail__section">
