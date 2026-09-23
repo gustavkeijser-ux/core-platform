@@ -2437,6 +2437,14 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   border-radius: var(--r-md);
   background: var(--surface-alt);
 }
+.d2dpb-karta {
+  margin-top: var(--sp-3);
+  height: 420px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
 
 .d2dpb-fast {
   border: 1px solid var(--border);
