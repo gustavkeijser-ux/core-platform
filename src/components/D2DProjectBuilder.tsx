@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  listRecords, getRecord, createRecord, updateRecord, addRelation, removeRelation,
+  listRecords, getRecord, createRecord, updateRecord, removeRelation,
   listSellers, d2dImportAddresses, d2dSetAssignment, d2dApproveProject,
   d2dGetKartaData, d2dGeokodaNu, type KartaPunkt,
+  d2dGetLeveransKartaData, d2dSkapaFastighetFranLeverans, type LeveransPunkt,
   type RecordRow, type SellerOption, DataError,
 } from "@/lib/data";
 import { StatusPill } from "./StatusPill";
@@ -148,6 +149,197 @@ function KartaSection({ projektId, totalFastigheter }: { projektId: string; tota
     </div>
   );
 }
+
+// =============================================================================
+// Leveranskarta — toppnivåvy med ALLA leveranser (levererade + kommande),
+// oavsett om de plockats in i ett D2D-projekt än. Klick på en pin ger
+// möjlighet att lägga till fastigheten i ett valt projekt, som ett
+// komplement till textsökningen i AddFastighetPicker (delar samma
+// skapande-logik via d2dSkapaFastighetFranLeverans).
+// =============================================================================
+
+function LeveransKarta() {
+  const mapElRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<unknown>(null);
+  const [punkter, setPunkter] = useState<LeveransPunkt[] | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [geokodar, setGeokodar] = useState(false);
+  const [geokodMsg, setGeokodMsg] = useState<string | null>(null);
+
+  const [projekt, setProjekt] = useState<RecordRow[]>([]);
+  const [valtProjektId, setValtProjektId] = useState<string>("");
+  const [visaBaraOplockade, setVisaBaraOplockade] = useState(false);
+
+  const [addBusy, setAddBusy] = useState(false);
+  const [addErr, setAddErr] = useState<string | null>(null);
+  const [addOk, setAddOk] = useState<string | null>(null);
+
+  const ladda = useCallback(async () => {
+    try {
+      const [p, proj] = await Promise.all([
+        d2dGetLeveransKartaData(),
+        listRecords({ objectType: "d2d_projekt", limit: 200, sort: { field: "updated_at", dir: "desc" } }),
+      ]);
+      setPunkter(p);
+      setProjekt(proj.items);
+      setValtProjektId((cur) => cur || proj.items[0]?.id || "");
+    } catch (e) {
+      setLoadErr(e instanceof DataError ? e.message : "Kunde inte hämta kartdata.");
+    }
+  }, []);
+
+  useEffect(() => { ladda(); }, [ladda]);
+
+  const synligaPunkter = (punkter ?? []).filter((p) => !visaBaraOplockade || !p.redanIProjekt);
+
+  const laggTill = useCallback(async (leveransId: string) => {
+    if (!valtProjektId) {
+      setAddErr("Välj ett projekt först.");
+      return;
+    }
+    setAddBusy(true); setAddErr(null); setAddOk(null);
+    try {
+      await d2dSkapaFastighetFranLeverans(leveransId, valtProjektId, Date.now());
+      setAddOk("Fastigheten lades till i projektet.");
+      await ladda();
+    } catch (e) {
+      setAddErr(e instanceof DataError ? e.message : "Kunde inte lägga till fastigheten.");
+    } finally {
+      setAddBusy(false);
+    }
+  }, [valtProjektId, ladda]);
+
+  useEffect(() => {
+    if (!mapElRef.current) return;
+    let cancelled = false;
+    loadLeaflet().then(() => {
+      if (cancelled || !mapElRef.current) return;
+      const L = (window as unknown as { L: any }).L;
+      if (!mapRef.current) {
+        mapRef.current = L.map(mapElRef.current);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap-bidragsgivare",
+          maxZoom: 19,
+        }).addTo(mapRef.current);
+      }
+      const map = mapRef.current as any;
+      map.eachLayer((layer: any) => {
+        if (layer instanceof L.CircleMarker) map.removeLayer(layer);
+      });
+      const bounds: [number, number][] = [];
+      for (const p of synligaPunkter) {
+        const farg = p.redanIProjekt ? "#3388ff" : (p.kundklar ? "#2e9e4f" : "#8a8a8a");
+        const marker = L.circleMarker([p.lat, p.lon], {
+          radius: 6, color: farg, fillColor: farg, fillOpacity: 0.85, weight: 1,
+        }).addTo(map);
+        const rader = [
+          `<strong>${p.titel ?? p.fastighetsbeteckning ?? "Fastighet"}</strong>`,
+          p.fastighetsbeteckning ? p.fastighetsbeteckning : null,
+          [p.adress, p.ort].filter(Boolean).join(", ") || null,
+          p.geoKalla === "ort" ? "<em>Ungefärlig placering (ort, ej exakt adress)</em>" : null,
+          p.redanIProjekt ? "<em>Redan i ett D2D-projekt</em>" : null,
+        ].filter(Boolean);
+        const popupEl = document.createElement("div");
+        popupEl.innerHTML = rader.join("<br>");
+        if (!p.redanIProjekt) {
+          const btn = document.createElement("button");
+          btn.className = "btn btn--brand btn--sm";
+          btn.style.marginTop = "6px";
+          btn.textContent = "Lägg till i valt projekt";
+          btn.onclick = () => laggTill(p.id);
+          popupEl.appendChild(document.createElement("br"));
+          popupEl.appendChild(btn);
+        }
+        marker.bindPopup(popupEl);
+        bounds.push([p.lat, p.lon]);
+      }
+      if (bounds.length === 1) map.setView(bounds[0], 13);
+      else if (bounds.length > 1) map.fitBounds(bounds, { padding: [24, 24] });
+      else map.setView([59.33, 18.06], 5);
+    }).catch((e) => setLoadErr(String(e)));
+    return () => { cancelled = true; };
+  }, [synligaPunkter, laggTill]);
+
+  useEffect(() => () => {
+    const map = mapRef.current as any;
+    if (map) { map.remove(); mapRef.current = null; }
+  }, []);
+
+  async function geokodaNu() {
+    setGeokodar(true); setGeokodMsg(null); setLoadErr(null);
+    try {
+      const res = await d2dGeokodaNu();
+      const delar = [
+        res.adress ? `${res.adress} via adress` : null,
+        res.ort ? `${res.ort} via ort` : null,
+        res.utan_traff ? `${res.utan_traff} utan träff` : null,
+        res.utan_forankring ? `${res.utan_forankring} saknar ort/adress` : null,
+        res.fel ? `${res.fel} fel` : null,
+      ].filter(Boolean).join(", ");
+      setGeokodMsg(res.totalt === 0 ? "Inget att geokoda just nu." : `Körde ${res.totalt} st: ${delar}.`);
+      await ladda();
+    } catch (e) {
+      setLoadErr(e instanceof DataError ? e.message : "Kunde inte köra geokodningen.");
+    } finally {
+      setGeokodar(false);
+    }
+  }
+
+  if (!punkter) {
+    return loadErr
+      ? <div className="d2d-error">{loadErr}</div>
+      : <div className="d2d-loading">Laddar karta…</div>;
+  }
+
+  return (
+    <div className="d2dpb-leveranskarta">
+      <div className="d2dpb-leveranskarta__toolbar">
+        <h2>Leveranskarta</h2>
+        <label className="d2dpb-leveranskarta__filter">
+          <input
+            type="checkbox"
+            checked={visaBaraOplockade}
+            onChange={(e) => setVisaBaraOplockade(e.target.checked)}
+          />
+          Visa bara ej inplockade
+        </label>
+        <select
+          className="input"
+          value={valtProjektId}
+          onChange={(e) => setValtProjektId(e.target.value)}
+        >
+          <option value="">Välj projekt…</option>
+          {projekt.map((p) => (
+            <option key={p.id} value={p.id}>{p.title ?? "Namnlöst projekt"}</option>
+          ))}
+        </select>
+        <button className="btn btn--ghost btn--sm" onClick={geokodaNu} disabled={geokodar}>
+          {geokodar ? "Geokodar…" : "Geokoda nu"}
+        </button>
+      </div>
+
+      <p className="ink-faint">
+        {punkter.length} av leveransbeståndet har koordinater ännu ({synligaPunkter.length} visas).
+        Geokodningen körs automatiskt var 5:e minut, eller kör den direkt med knappen ovan.
+      </p>
+
+      <div className="d2dpb-leveranskarta__legend">
+        <span><i className="d2dpb-dot d2dpb-dot--blue" /> I ett D2D-projekt</span>
+        <span><i className="d2dpb-dot d2dpb-dot--green" /> Kundklar, ej inplockad</span>
+        <span><i className="d2dpb-dot d2dpb-dot--gray" /> Ej inplockad</span>
+      </div>
+
+      {geokodMsg && <div className="d2d-save-ok">✓ {geokodMsg}</div>}
+      {addOk && <div className="d2d-save-ok">✓ {addOk}</div>}
+      {addErr && <div className="d2d-error">{addErr}</div>}
+      {loadErr && <div className="d2d-error">{loadErr}</div>}
+      {addBusy && <div className="d2d-loading">Lägger till…</div>}
+
+      <div ref={mapElRef} className="d2dpb-leveranskarta__map" />
+    </div>
+  );
+}
+
 // =============================================================================
 // Adressradsformulär — matchar exakt fälten som d2d_import_addresses tar emot
 // =============================================================================
@@ -427,17 +619,7 @@ function FastighetRow({
 // =============================================================================
 // Lägg till fastighet — sök leverans
 // =============================================================================
-/** Ett kommunnamn innehåller aldrig siffror och är sällan längre än ett par
- *  ord. Leveransdata har visats innehålla fastighetsbeteckningen felaktigt
- *  kopierad in i kommun-fältet (t.ex. `" SKÖVDE-BRAGE 4"`) — den typen av
- *  rad hoppas hellre över än förs vidare som en falsk sanning som senare
- *  ligger till grund för geokodningens förankringskontroll. */
-function rimligtKommunnamn(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  const t = v.trim().replace(/^["']+|["']+$/g, "").trim();
-  if (!t || /\d/.test(t) || t.length > 40) return null;
-  return t;
-}
+
 function AddFastighetPicker({ projektId, turordningStart, onAdded }: {
   projektId: string; turordningStart: number; onAdded: () => void;
 }) {
@@ -460,31 +642,11 @@ function AddFastighetPicker({ projektId, turordningStart, onAdded }: {
   async function pick(delivery: RecordRow) {
     setBusy(true); setError(null);
     try {
-      const full = await getRecord(delivery.id);
-      const d = full.record.data as Record<string, unknown>;
-      const propertyRel = full.related.find((r) => r.record.objectType === "property");
-
-      const fastighetData: Record<string, unknown> = {
-        turordning: turordningStart,
-        fastighetsbeteckning: d.fastighetsbeteckning ?? null,
-        fastighetsagare: d.fastighetsagare ?? null,
-        befintligt_nat: d.befintlig_fiberleverantor ?? null,
-        nuvarande_tv: d.kanalpaket ?? d.kanalpaket_projektplan ?? null,
-        kabel_tv: d.befintlig_koax ?? null,
-        avtalstid_koax: d.avtalstid_ko ?? null,
-        kundklar_datum: d.kundklar ?? null,
-                ort: (d.ort as string | undefined) ?? null,
-        kommun: rimligtKommunnamn(d.kommun),
-        adress: (d.adress as string | undefined) ?? null,
-        postnummer: (d.postnummer as string | undefined) ?? null,
-      };
-      const title = (d.adress as string) || full.record.title || "Fastighet";
-
-      const row = await createRecord("d2d_fastighet", { ...fastighetData, name: title }, "ej_startad");
-      await addRelation(row.id, "d2d_fast_projekt", projektId);
-      if (propertyRel) {
-        await addRelation(row.id, "d2d_fast_property", propertyRel.record.id);
-      }
+      // Skapandet av d2d_fastighet-posten (inkl. ärvda koordinater och
+      // länken tillbaka till leveransen) sker i d2dSkapaFastighetFranLeverans
+      // så att både textsökningen här och "Lägg till i projekt" på
+      // översiktskartan delar exakt samma logik.
+      await d2dSkapaFastighetFranLeverans(delivery.id, projektId, turordningStart);
       setQuery(""); setOptions([]);
       onAdded();
     } catch (e) {
@@ -640,7 +802,9 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
           onAdded={load}
         />
       </div>
-            <KartaSection projektId={projektId} totalFastigheter={fastigheter.length} />
+
+      <KartaSection projektId={projektId} totalFastigheter={fastigheter.length} />
+
       <div className="d2dpb-detail__approve">
         <button className="btn btn--brand" onClick={approve} disabled={approving || fastigheter.length === 0}>
           {approving ? "Godkänner…" : "Godkänn projekt och dela ut adresser"}
@@ -741,11 +905,30 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
 // =============================================================================
 
 export function D2DProjectBuilder() {
-  const [view, setView] = useState<{ kind: "list" } | { kind: "project"; id: string }>({ kind: "list" });
+  const [view, setView] = useState<
+    { kind: "list" } | { kind: "project"; id: string } | { kind: "karta" }
+  >({ kind: "list" });
 
   return (
     <div className="d2dpb">
+      {view.kind !== "project" && (
+        <div className="d2dpb-toplevel-tabs">
+          <button
+            className={`btn btn--sm ${view.kind === "list" ? "btn--brand" : "btn--ghost"}`}
+            onClick={() => setView({ kind: "list" })}
+          >
+            Projekt
+          </button>
+          <button
+            className={`btn btn--sm ${view.kind === "karta" ? "btn--brand" : "btn--ghost"}`}
+            onClick={() => setView({ kind: "karta" })}
+          >
+            Karta
+          </button>
+        </div>
+      )}
       {view.kind === "list" && <ProjectList onOpen={(id) => setView({ kind: "project", id })} />}
+      {view.kind === "karta" && <LeveransKarta />}
       {view.kind === "project" && (
         <ProjectDetail projektId={view.id} onBack={() => setView({ kind: "list" })} />
       )}
