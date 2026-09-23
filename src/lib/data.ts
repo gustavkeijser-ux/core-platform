@@ -804,78 +804,94 @@ export async function d2dApproveProject(
   return data as { ok: boolean; distributed: number; fastigheterUtanTilldelning: number };
 }
 
+/**
+ * Raderar ett helt D2D-projekt: projektet självt samt alla fastigheter och
+ * lägenheter som hänger på det (kaskaderande mjuk radering via
+ * d2d_delete_projekt()-RPC:n). Går inte att ångra i UI:t, men är en soft
+ * delete (deleted_at) — inte en fysisk radering.
+ */
+export async function d2dDeleteProjekt(
+  projektId: string
+): Promise<{ fastigheter: number; lagenheter: number }> {
+  const { data, error } = await supabase.rpc("d2d_delete_projekt", {
+    p_projekt_id: projektId,
+  });
+  if (error) asError(error);
+  return data as { fastigheter: number; lagenheter: number };
+}
 
 export type KartaPunkt = {
-    id: string;
-    titel: string | null;
-    fastighetsbeteckning: string | null;
-    ort: string | null;
-    kommun: string | null;
-    adress: string | null;
-    lat: number;
-    lon: number;
-    geoKalla: string | null;
-    status: string | null;
+  id: string;
+  titel: string | null;
+  fastighetsbeteckning: string | null;
+  ort: string | null;
+  kommun: string | null;
+  adress: string | null;
+  lat: number;
+  lon: number;
+  geoKalla: string | null;
+  status: string | null;
 };
 
 /** Hämtar alla geokodade fastigheter i ett D2D-projekt (för kartan). */
 export async function d2dGetKartaData(projektId: string): Promise<KartaPunkt[]> {
-    const { data, error } = await supabase.rpc("get_karta_data", { p_projekt_id: projektId });
-    if (error) asError(error);
-    return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-          id: r.id as string,
-          titel: (r.titel as string) ?? null,
-          fastighetsbeteckning: (r.fastighetsbeteckning as string) ?? null,
-          ort: (r.ort as string) ?? null,
-          kommun: (r.kommun as string) ?? null,
-          adress: (r.adress as string) ?? null,
-          lat: r.lat as number,
-          lon: r.lon as number,
-          geoKalla: (r.geo_kalla as string) ?? null,
-          status: (r.status as string) ?? null,
-    }));
+  const { data, error } = await supabase.rpc("get_karta_data", { p_projekt_id: projektId });
+  if (error) asError(error);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    id: r.id as string,
+    titel: (r.titel as string) ?? null,
+    fastighetsbeteckning: (r.fastighetsbeteckning as string) ?? null,
+    ort: (r.ort as string) ?? null,
+    kommun: (r.kommun as string) ?? null,
+    adress: (r.adress as string) ?? null,
+    lat: r.lat as number,
+    lon: r.lon as number,
+    geoKalla: (r.geo_kalla as string) ?? null,
+    status: (r.status as string) ?? null,
+  }));
 }
 
 /**
  * Triggar geokodningsmotorn (Edge Function) direkt, i stället för att vänta
  * på nästa schemalagda körning (var 5:e minut). Samma kodväg som cron-jobbet.
- * Tar max 40 fastigheter i taget (BATCH_SIZE i funktionen) — anropa igen om
- * "utan_forankring"+"adress"+"ort" summerar till mindre än det totala antalet
- * som saknar koordinater.
+ * Geokodar HELA leveransbeståndet (inte bara inplockade fastigheter) — se
+ * doc för motivering. Tar max 25 leveranser i taget (BATCH_SIZE i
+ * funktionen) — anropa igen om summan av resultatfälten är mindre än det
+ * totala antalet som saknar koordinater.
  */
 export async function d2dGeokodaNu(): Promise<{
-    adress: number; ort: number; utan_traff: number; utan_forankring: number; fel: number; totalt: number;
+  adress: number; ort: number; utan_traff: number; utan_forankring: number; fel: number; totalt: number;
 }> {
-    const { data, error } = await supabase.functions.invoke("geokoda-d2d-fastigheter");
-    if (error) {
-          let detail = error.message ?? "Kunde inte köra geokodningen.";
-          try {
-                  const body = await (error as { context?: Response }).context?.json();
-                  if (body?.error) detail = body.error;
-          } catch {
-                  // svarskroppen var inte JSON — behåll det generiska meddelandet
-          }
-          throw new DataError("unknown", detail);
+  const { data, error } = await supabase.functions.invoke("geokoda-d2d-fastigheter");
+  if (error) {
+    let detail = error.message ?? "Kunde inte köra geokodningen.";
+    try {
+      const body = await (error as { context?: Response }).context?.json();
+      if (body?.error) detail = body.error;
+    } catch {
+      // svarskroppen var inte JSON — behåll det generiska meddelandet
     }
-    return data as { adress: number; ort: number; utan_traff: number; utan_forankring: number; fel: number; totalt: number };
+    throw new DataError("unknown", detail);
+  }
+  return data as { adress: number; ort: number; utan_traff: number; utan_forankring: number; fel: number; totalt: number };
 }
 
 export type LeveransPunkt = {
-    id: string;
-    titel: string | null;
-    fastighetsbeteckning: string | null;
-    ort: string | null;
-    kommun: string | null;
-    adress: string | null;
-    lat: number;
-    lon: number;
-    geoKalla: string | null;
-    kundklar: string | null;
-    leveransmanad: string | null;
-    projektplanStatus: string | null;
-    redanIProjekt: boolean;
-    d2dFastighetId: string | null;
-    d2dProjektId: string | null;
+  id: string;
+  titel: string | null;
+  fastighetsbeteckning: string | null;
+  ort: string | null;
+  kommun: string | null;
+  adress: string | null;
+  lat: number;
+  lon: number;
+  geoKalla: string | null;
+  kundklar: string | null;
+  leveransmanad: string | null;
+  projektplanStatus: string | null;
+  redanIProjekt: boolean;
+  d2dFastighetId: string | null;
+  d2dProjektId: string | null;
 };
 
 /**
@@ -885,35 +901,35 @@ export type LeveransPunkt = {
  * här allt som är levererat och ska levereras, oavsett projekt.
  */
 export async function d2dGetLeveransKartaData(): Promise<LeveransPunkt[]> {
-    const { data, error } = await supabase.rpc("get_leverans_karta_data");
-    if (error) asError(error);
-    return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-          id: r.id as string,
-          titel: (r.titel as string) ?? null,
-          fastighetsbeteckning: (r.fastighetsbeteckning as string) ?? null,
-          ort: (r.ort as string) ?? null,
-          kommun: (r.kommun as string) ?? null,
-          adress: (r.adress as string) ?? null,
-          lat: r.lat as number,
-          lon: r.lon as number,
-          geoKalla: (r.geo_kalla as string) ?? null,
-          kundklar: (r.kundklar as string) ?? null,
-          leveransmanad: (r.leveransmanad as string) ?? null,
-          projektplanStatus: (r.projektplan_status as string) ?? null,
-          redanIProjekt: !!r.redan_i_projekt,
-          d2dFastighetId: (r.d2d_fastighet_id as string) ?? null,
-          d2dProjektId: (r.d2d_projekt_id as string) ?? null,
-    }));
+  const { data, error } = await supabase.rpc("get_leverans_karta_data");
+  if (error) asError(error);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    id: r.id as string,
+    titel: (r.titel as string) ?? null,
+    fastighetsbeteckning: (r.fastighetsbeteckning as string) ?? null,
+    ort: (r.ort as string) ?? null,
+    kommun: (r.kommun as string) ?? null,
+    adress: (r.adress as string) ?? null,
+    lat: r.lat as number,
+    lon: r.lon as number,
+    geoKalla: (r.geo_kalla as string) ?? null,
+    kundklar: (r.kundklar as string) ?? null,
+    leveransmanad: (r.leveransmanad as string) ?? null,
+    projektplanStatus: (r.projektplan_status as string) ?? null,
+    redanIProjekt: !!r.redan_i_projekt,
+    d2dFastighetId: (r.d2d_fastighet_id as string) ?? null,
+    d2dProjektId: (r.d2d_projekt_id as string) ?? null,
+  }));
 }
 
 /** Ett kommunnamn innehåller aldrig siffror och är sällan längre än ett par
  *  ord — samma sanering som Edge Function-motorn och AddFastighetPicker gör,
  *  se kommentaren där för bakgrunden (SKÖVDE-BRAGE-exemplet). */
 function rimligtKommunnamnData(v: unknown): string | null {
-    if (typeof v !== "string") return null;
-    const t = v.trim().replace(/^["']+|["']+$/g, "").trim();
-    if (!t || /\d/.test(t) || t.length > 40) return null;
-    return t;
+  if (typeof v !== "string") return null;
+  const t = v.trim().replace(/^["']+|["']+$/g, "").trim();
+  if (!t || /\d/.test(t) || t.length > 40) return null;
+  return t;
 }
 
 /**
@@ -925,36 +941,38 @@ function rimligtKommunnamnData(v: unknown): string | null {
  * AddFastighetPicker (textsökning) och kartans "Lägg till i projekt".
  */
 export async function d2dSkapaFastighetFranLeverans(
-    leveransId: string, projektId: string, turordning: number
-  ): Promise<RecordRow> {
-    const full = await getRecord(leveransId);
-    const d = full.record.data as Record<string, unknown>;
-    const propertyRel = full.related.find((r) => r.record.objectType === "property");
+  leveransId: string, projektId: string, turordning: number
+): Promise<RecordRow> {
+  const full = await getRecord(leveransId);
+  const d = full.record.data as Record<string, unknown>;
+  const propertyRel = full.related.find((r) => r.record.objectType === "property");
 
   const fastighetData: Record<string, unknown> = {
-        turordning,
-        fastighetsbeteckning: d.fastighetsbeteckning ?? null,
-        fastighetsagare: d.fastighetsagare ?? null,
-        befintligt_nat: d.befintlig_fiberleverantor ?? null,
-        nuvarande_tv: d.kanalpaket ?? d.kanalpaket_projektplan ?? null,
-        kabel_tv: d.befintlig_koax ?? null,
-        avtalstid_koax: d.avtalstid_ko ?? null,
-        kundklar_datum: d.kundklar ?? null,
-        ort: (d.ort as string | undefined) ?? null,
-        kommun: rimligtKommunnamnData(d.kommun),
-        adress: (d.adress as string | undefined) ?? null,
-        postnummer: (d.postnummer as string | undefined) ?? null,
-        geo_lat: (d.geo_lat as number | undefined) ?? null,
-        geo_lon: (d.geo_lon as number | undefined) ?? null,
-        geo_kalla: (d.geo_kalla as string | undefined) ?? null,
+    turordning,
+    fastighetsbeteckning: d.fastighetsbeteckning ?? null,
+    fastighetsagare: d.fastighetsagare ?? null,
+    befintligt_nat: d.befintlig_fiberleverantor ?? null,
+    nuvarande_tv: d.kanalpaket ?? d.kanalpaket_projektplan ?? null,
+    kabel_tv: d.befintlig_koax ?? null,
+    avtalstid_koax: d.avtalstid_ko ?? null,
+    kundklar_datum: d.kundklar ?? null,
+    ort: (d.ort as string | undefined) ?? null,
+    kommun: rimligtKommunnamnData(d.kommun),
+    adress: (d.adress as string | undefined) ?? null,
+    postnummer: (d.postnummer as string | undefined) ?? null,
+    // Ärvs direkt om leveransen redan är geokodad — annars fylls den i av
+    // nästa schemalagda geokodningskörning (leveransen är redan i kön).
+    geo_lat: (d.geo_lat as number | undefined) ?? null,
+    geo_lon: (d.geo_lon as number | undefined) ?? null,
+    geo_kalla: (d.geo_kalla as string | undefined) ?? null,
   };
-    const title = (d.adress as string) || full.record.title || "Fastighet";
+  const title = (d.adress as string) || full.record.title || "Fastighet";
 
   const row = await createRecord("d2d_fastighet", { ...fastighetData, name: title }, "ej_startad");
-    await addRelation(row.id, "d2d_fast_projekt", projektId);
-    await addRelation(row.id, "d2d_fast_delivery", leveransId);
-    if (propertyRel) {
-          await addRelation(row.id, "d2d_fast_property", propertyRel.record.id);
-    }
-    return row;
+  await addRelation(row.id, "d2d_fast_projekt", projektId);
+  await addRelation(row.id, "d2d_fast_delivery", leveransId);
+  if (propertyRel) {
+    await addRelation(row.id, "d2d_fast_property", propertyRel.record.id);
+  }
+  return row;
 }
