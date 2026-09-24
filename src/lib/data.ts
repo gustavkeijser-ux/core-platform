@@ -128,10 +128,24 @@ const asError = (e: { code?: string; message: string }): never => {
 // Läsning
 // -----------------------------------------------------------------------------
 
-export async function getMetadata(): Promise<{ objects: ObjectDef[]; tenant: TenantBranding; isAdmin: boolean }> {
+export async function getMetadata(): Promise<{
+  objects: ObjectDef[]; tenant: TenantBranding; isAdmin: boolean; mustChangePassword: boolean;
+}> {
   const { data, error } = await supabase.rpc("get_metadata");
   if (error) asError(error);
-  return data as { objects: ObjectDef[]; tenant: TenantBranding; isAdmin: boolean };
+  return data as { objects: ObjectDef[]; tenant: TenantBranding; isAdmin: boolean; mustChangePassword: boolean };
+}
+
+/**
+ * Byter lösenord på den inloggade användaren och rensar
+ * must_change_password-flaggan (se ForcedPasswordChangePage). Auth.updateUser
+ * hanterar själva lösenordsbytet — RPC:n bara kvitterar att kravet är uppfyllt.
+ */
+export async function completePasswordChange(newPassword: string): Promise<void> {
+  const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
+  if (pwErr) throw new DataError("unknown", pwErr.message);
+  const { error } = await supabase.rpc("complete_password_change");
+  if (error) asError(error);
 }
 
 /**
