@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { getMetadata, type ObjectDef, type TenantBranding } from "@/lib/data";
 import { LoginPage } from "@/components/LoginPage";
+import { ForcedPasswordChangePage } from "@/components/ForcedPasswordChangePage";
 import { Sidebar } from "@/components/Sidebar";
 import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
@@ -30,6 +31,7 @@ export default function App() {
   const [objects, setObjects] = useState<ObjectDef[] | null>(null);
   const [branding, setBranding] = useState<TenantBranding | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [view, setView] = useState<View | null>(null);
 
@@ -53,6 +55,7 @@ export default function App() {
         setObjects(res.objects);
         setBranding(res.tenant ?? null);
         setIsAdmin(!!res.isAdmin);
+        setMustChangePassword(!!res.mustChangePassword);
         setView({ kind: "dashboard" });
       })
       .catch((e) => setMetaError(e.message ?? "Kunde inte hämta metadata."));
@@ -67,6 +70,7 @@ export default function App() {
         setObjects(res.objects);
         setBranding(res.tenant ?? null);
         setIsAdmin(!!res.isAdmin);
+        setMustChangePassword(!!res.mustChangePassword);
       })
       .catch(() => { /* tyst — behåll befintlig data */ });
   }, []);
@@ -85,6 +89,9 @@ export default function App() {
   }
   if (objects.length === 0) {
     return <div className="loading-shell">Inga objekttyper är konfigurerade för din tenant ännu.</div>;
+  }
+  if (mustChangePassword) {
+    return <ForcedPasswordChangePage onDone={() => setMustChangePassword(false)} />;
   }
 
   // D2D-läge: helt separat vy
