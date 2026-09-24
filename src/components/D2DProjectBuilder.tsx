@@ -464,6 +464,18 @@ function AddressEditor({
 
 type Assignment = { user_id: string; procent: number };
 
+/**
+ * Jämn fördelning som alltid summerar till exakt 100 (en säljare → 100 %,
+ * två → 50/50, tre → 34/33/33 osv. — överskottet av heltalsdivisionen läggs
+ * på de första raderna så att summan aldrig hamnar under 100).
+ */
+function jamnFordelning(n: number): number[] {
+  if (n <= 0) return [];
+  const bas = Math.floor(100 / n);
+  const rest = 100 - bas * n;
+  return Array.from({ length: n }, (_, i) => bas + (i < rest ? 1 : 0));
+}
+
 function AssignmentEditor({
   fastighetId, sellers, initial, onSaved,
 }: {
@@ -476,16 +488,28 @@ function AssignmentEditor({
 
   const sum = rows.reduce((s, r) => s + (Number(r.procent) || 0), 0);
 
+  // Lägg till/ta bort säljare fördelar om procentsatserna jämnt över alla
+  // rader (default). Går alltid att skriva över manuellt i procentfältet
+  // efteråt — se input-fältets onChange nedan, som bara ändrar just den
+  // raden och inte rör de andra.
   function addRow() {
     const unused = sellers.find((s) => !rows.some((r) => r.user_id === s.id));
     if (!unused) return;
-    setRows((rs) => [...rs, { user_id: unused.id, procent: 0 }]);
+    setRows((rs) => {
+      const next = [...rs, { user_id: unused.id, procent: 0 }];
+      const split = jamnFordelning(next.length);
+      return next.map((r, i) => ({ ...r, procent: split[i] }));
+    });
   }
   function setRow(i: number, patch: Partial<Assignment>) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
   function removeRow(i: number) {
-    setRows((rs) => rs.filter((_, idx) => idx !== i));
+    setRows((rs) => {
+      const next = rs.filter((_, idx) => idx !== i);
+      const split = jamnFordelning(next.length);
+      return next.map((r, j) => ({ ...r, procent: split[j] }));
+    });
   }
 
   async function save() {
