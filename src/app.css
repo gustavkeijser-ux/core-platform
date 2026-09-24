@@ -2588,6 +2588,68 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   background: var(--surface-alt);
 }
 
+.d2dpb-addr__input--wide {
+  width: 16rem;
+}
+
+.d2dpb-addr__list {
+  margin-bottom: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.d2dpb-addr__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.d2dpb-addr__row:last-child {
+  border-bottom: none;
+}
+
+.d2dpb-addr__row-namn {
+  flex: 1;
+}
+
+.d2dpb-addr__bubble {
+  flex: none;
+  border: none;
+  background: var(--surface-alt);
+  border-radius: 999px;
+  width: 1.75rem;
+  height: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.d2dpb-addr__bubble:hover {
+  background: var(--surface-sunk);
+}
+
+.d2dpb-addr__bubble-pop {
+  position: absolute;
+  right: var(--sp-2);
+  top: 100%;
+  z-index: 5;
+  max-width: 22rem;
+  margin-top: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .16);
+  font-size: var(--text-sm);
+  white-space: normal;
+}
+
 .d2dpb-addr__actions, .d2dpb-assign__actions {
   display: flex;
   align-items: center;
