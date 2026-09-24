@@ -1,13 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  listRecords, getRecord, createRecord, updateRecord, removeRelation,
+  listRecords, getRecord, createRecord, updateRecord, removeRelation, addRelation,
   listSellers, d2dImportAddresses, d2dSetAssignment, d2dApproveProject,
   d2dDeleteProjekt,
   d2dGetKartaData, d2dGeokodaNu, type KartaPunkt,
   d2dGetLeveransKartaData, d2dSkapaFastighetFranLeverans, type LeveransPunkt,
   type RecordRow, type SellerOption, DataError,
 } from "@/lib/data";
+import { lasXlsx, tillObjekt } from "@/lib/xlsx";
 import { StatusPill } from "./StatusPill";
 
 // =============================================================================
@@ -351,6 +352,7 @@ type AddrRow = {
   ingang: string; alias: string; punktid: string; klass: string; cpe_model: string;
   installationsdatum: string; befintlig_fiber: string; befintlig_koax: string;
   koax_avslutsdatum: string; befintligt_kanalpaket: string; nytt_kanalpaket: string;
+  kommentar: string;
 };
 
 const EMPTY_ADDR_ROW: AddrRow = {
@@ -358,6 +360,7 @@ const EMPTY_ADDR_ROW: AddrRow = {
   portkod: "", gatunamn: "", gatnr: "", ingang: "", alias: "", punktid: "",
   klass: "", cpe_model: "", installationsdatum: "", befintlig_fiber: "",
   befintlig_koax: "", koax_avslutsdatum: "", befintligt_kanalpaket: "", nytt_kanalpaket: "",
+  kommentar: "",
 };
 
 const ADDR_COLUMNS: Array<{ key: keyof AddrRow; label: string }> = [
@@ -369,6 +372,7 @@ const ADDR_COLUMNS: Array<{ key: keyof AddrRow; label: string }> = [
   { key: "postort", label: "Postort" },
   { key: "fastighetsbeteckning", label: "Fastighetsbeteckning" },
   { key: "portkod", label: "Portkod" },
+  { key: "kommentar", label: "Kommentar" },
   { key: "alias", label: "Alias" },
   { key: "punktid", label: "PunktID" },
   { key: "klass", label: "Klass" },
@@ -381,6 +385,31 @@ const ADDR_COLUMNS: Array<{ key: keyof AddrRow; label: string }> = [
   { key: "nytt_kanalpaket", label: "Nytt kanalpaket" },
 ];
 
+/** Fritextrubriker i en uppladdad Excel-fil (Falken-formatet m.fl.), normaliserade
+ *  till gemener utan omgivande blanksteg, mappade till AddrRow-nycklarna. */
+const EXCEL_RUBRIK_TILL_FALT: Record<string, keyof AddrRow> = {
+  "lägenhetsnummer": "lagenhetsnummer",
+  "gatunamn": "gatunamn",
+  "gatnr": "gatnr",
+  "ingång": "ingang",
+  "postnr": "postnummer",
+  "postort": "postort",
+  "fastighetsbeteckning": "fastighetsbeteckning",
+  "portkod / fä": "portkod",
+  "portkod": "portkod",
+  "kommentar": "kommentar",
+  "alias": "alias",
+  "punktid": "punktid",
+  "klass": "klass",
+  "cpe model": "cpe_model",
+  "installationsdatum": "installationsdatum",
+  "befintlig fiber": "befintlig_fiber",
+  "befintligt koax": "befintlig_koax",
+  "avslutsdatum befintlig koax": "koax_avslutsdatum",
+  "befintligt kanalpaket": "befintligt_kanalpaket",
+  "nytt kanalpaket": "nytt_kanalpaket",
+};
+
 function AddressEditor({
   fastighetId, existingCount, onImported,
 }: {
@@ -390,6 +419,45 @@ function AddressEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+
+  // ── Redan inlagda adresser — med kommentarbubbla ──────────────────────
+  const [adresser, setAdresser] = useState<RecordRow[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [openKommentar, setOpenKommentar] = useState<string | null>(null);
+
+  const loadAdresser = useCallback(async () => {
+    setLoadingList(true);
+    try {
+      const { data: relRows } = await supabase
+        .from("relationships")
+        .select("from_record_id")
+        .eq("rel_type", "d2d_lag_fastighet")
+        .eq("to_record_id", fastighetId);
+      const ids = ((relRows ?? []) as Array<{ from_record_id: string }>).map((r) => r.from_record_id);
+      if (ids.length === 0) { setAdresser([]); return; }
+      const { data: recs } = await supabase
+        .from("records")
+        .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
+        .in("id", ids);
+      const sorted = ((recs ?? []) as RecordRow[]).sort((a, b) => {
+        const da = a.data as Record<string, unknown>, db = b.data as Record<string, unknown>;
+        const ga = String(da.gatunamn ?? ""), gb = String(db.gatunamn ?? "");
+        if (ga !== gb) return ga.localeCompare(gb, "sv");
+        const na = Number(da.gatunummer ?? 0), nb = Number(db.gatunummer ?? 0);
+        if (na !== nb) return na - nb;
+        const ia = String(da.ingang ?? ""), ib = String(db.ingang ?? "");
+        if (ia !== ib) return ia.localeCompare(ib, "sv");
+        return String(a.title ?? "").localeCompare(String(b.title ?? ""), "sv");
+      });
+      setAdresser(sorted);
+    } catch {
+      setAdresser([]);
+    } finally {
+      setLoadingList(false);
+    }
+  }, [fastighetId]);
+
+  useEffect(() => { loadAdresser(); }, [loadAdresser]);
 
   function setCell(i: number, key: keyof AddrRow, value: string) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
@@ -406,6 +474,7 @@ function AddressEditor({
       setOk(`${res.imported} adress(er) sparade.`);
       setRows([{ ...EMPTY_ADDR_ROW }]);
       onImported();
+      loadAdresser();
     } catch (e) {
       setError(e instanceof DataError ? e.message : "Kunde inte spara adresserna.");
     } finally {
@@ -418,6 +487,38 @@ function AddressEditor({
       <div className="d2dpb-addr__header">
         <span>{existingCount} adress(er) redan inlagda</span>
       </div>
+
+      {adresser.length > 0 && (
+        <div className="d2dpb-addr__list">
+          {adresser.map((a) => {
+            const ad = a.data as Record<string, unknown>;
+            const namn = [ad.gatunamn, ad.gatunummer].filter(Boolean).join(" ")
+              + (ad.ingang ? ` ${ad.ingang}` : "")
+              + (a.title ? ` · lgh ${a.title}` : "");
+            const kommentar = ad.kommentar ? String(ad.kommentar) : null;
+            return (
+              <div key={a.id} className="d2dpb-addr__row">
+                <span className="d2dpb-addr__row-namn">{namn.trim() || a.title || "—"}</span>
+                {kommentar && (
+                  <button
+                    type="button"
+                    className="d2dpb-addr__bubble"
+                    title="Visa kommentar"
+                    onClick={() => setOpenKommentar((cur) => (cur === a.id ? null : a.id))}
+                  >
+                    💬
+                  </button>
+                )}
+                {kommentar && openKommentar === a.id && (
+                  <div className="d2dpb-addr__bubble-pop">{kommentar}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {loadingList && adresser.length === 0 && <div className="d2d-loading">Laddar adresser…</div>}
+
       <div className="d2dpb-addr__table-wrap">
         <table className="d2dpb-addr__table">
           <thead>
@@ -432,7 +533,7 @@ function AddressEditor({
                 {ADDR_COLUMNS.map((c) => (
                   <td key={c.key}>
                     <input
-                      className="d2dpb-addr__input"
+                      className={c.key === "kommentar" ? "d2dpb-addr__input d2dpb-addr__input--wide" : "d2dpb-addr__input"}
                       value={row[c.key]}
                       onChange={(e) => setCell(i, c.key, e.target.value)}
                     />
@@ -454,6 +555,121 @@ function AddressEditor({
         {ok && <span className="d2d-save-ok">✓ {ok}</span>}
         {error && <span className="d2d-error">{error}</span>}
       </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Massimport av adresslista (Excel) — grupperar raderna per fastighets-
+// beteckning, matchar mot fastigheter som redan finns i projektet och skapar
+// nya åt dem som saknas. Kommentar-kolumnen följer med rakt in i lägenheten
+// (samma fält som visas som bubbla i adresslistan och i säljarens app).
+// =============================================================================
+
+type ExcelImportSummary = { matchade: number; skapade: number; adresser: number; utanFastbet: number };
+
+function ExcelImportPanel({
+  projektId, fastigheter, onDone,
+}: {
+  projektId: string; fastigheter: FastRow[]; onDone: () => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<ExcelImportSummary | null>(null);
+  const filRef = useRef<HTMLInputElement>(null);
+
+  async function valjFil(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    e.target.value = ""; // så samma fil går att välja igen om man vill importera på nytt
+    setError(null); setSummary(null);
+    setBusy("Läser filen…");
+    try {
+      const blad = await lasXlsx(f);
+      const objekt = tillObjekt(blad.rader);
+
+      const rader = objekt.map((o) => {
+        const rad: AddrRow = { ...EMPTY_ADDR_ROW };
+        for (const [rubrik, varde] of Object.entries(o)) {
+          const key = EXCEL_RUBRIK_TILL_FALT[rubrik.trim().toLowerCase()];
+          if (key) rad[key] = varde;
+        }
+        return rad;
+      });
+
+      const grupper = new Map<string, AddrRow[]>();
+      let utanFastbet = 0;
+      for (const rad of rader) {
+        const beteckning = rad.fastighetsbeteckning.trim();
+        if (!beteckning) { utanFastbet++; continue; }
+        const nyckel = beteckning.toLowerCase();
+        if (!grupper.has(nyckel)) grupper.set(nyckel, []);
+        grupper.get(nyckel)!.push(rad);
+      }
+      if (grupper.size === 0) {
+        setError("Hittade inga rader med fastighetsbeteckning i filen.");
+        return;
+      }
+
+      let matchade = 0, skapade = 0, adresser = 0;
+      for (const [nyckel, gruppRader] of grupper) {
+        const beteckning = gruppRader[0].fastighetsbeteckning;
+        const befintlig = fastigheter.find((f) =>
+          String((f.data as Record<string, unknown>).fastighetsbeteckning ?? "").trim().toLowerCase() === nyckel
+        );
+        let fastId: string;
+        if (befintlig) {
+          fastId = befintlig.id;
+          matchade++;
+        } else {
+          setBusy(`Skapar fastighet ${beteckning}…`);
+          const forsta = gruppRader[0];
+          const namn = [forsta.gatunamn, forsta.gatnr].filter(Boolean).join(" ") || beteckning;
+          const ny = await createRecord("d2d_fastighet", {
+            name: namn, fastighetsbeteckning: beteckning,
+          }, "ej_startad");
+          await addRelation(ny.id, "d2d_fast_projekt", projektId);
+          fastId = ny.id;
+          skapade++;
+        }
+        setBusy(`Importerar adresser för ${beteckning}…`);
+        const res = await d2dImportAddresses(fastId, gruppRader as unknown as Record<string, string>[]);
+        adresser += res.imported;
+      }
+
+      setSummary({ matchade, skapade, adresser, utanFastbet });
+      onDone();
+    } catch (err) {
+      setError(
+        err instanceof DataError ? err.message
+          : err instanceof Error ? err.message : "Kunde inte läsa filen."
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="d2dpb-picker">
+      <input ref={filRef} type="file" accept=".xlsx" onChange={valjFil} style={{ display: "none" }} />
+      <button className="btn btn--ghost btn--sm" onClick={() => filRef.current?.click()} disabled={!!busy}>
+        {busy ?? "Importera adresslista (Excel)"}
+      </button>
+      <p className="ink-faint" style={{ marginTop: "var(--sp-1)" }}>
+        Kolumner som <code>Fastighetsbeteckning</code>, <code>Gatunamn</code>, <code>Lägenhetsnummer</code> och
+        {" "}<code>Kommentar</code> läses in automatiskt. Raderna grupperas per fastighetsbeteckning — matchar det
+        en fastighet som redan finns i projektet läggs adresserna dit, annars skapas en ny fastighet åt gruppen.
+      </p>
+      {error && <div className="d2d-error">{error}</div>}
+      {summary && (
+        <div className="d2d-save-ok">
+          ✓ {summary.adresser} adress(er) importerade — {summary.matchade} fastighet(er) matchade,{" "}
+          {summary.skapade} ny(a) fastighet(er) skapade
+          {summary.utanFastbet > 0
+            ? `, ${summary.utanFastbet} rad(er) saknade fastighetsbeteckning och hoppades över`
+            : ""}.
+        </div>
+      )}
     </div>
   );
 }
@@ -852,6 +1068,11 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
           projektId={projektId}
           turordningStart={fastigheter.length + 1}
           onAdded={load}
+        />
+        <ExcelImportPanel
+          projektId={projektId}
+          fastigheter={fastigheter}
+          onDone={load}
         />
       </div>
 
