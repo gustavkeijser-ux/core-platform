@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useRoute, navigate } from "@/lib/route";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listRecords, getRecord, createRecord, updateRecord, removeRelation, addRelation,
@@ -1178,9 +1179,17 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
 // =============================================================================
 
 export function D2DProjectBuilder() {
-  const [view, setView] = useState<
-    { kind: "list" } | { kind: "project"; id: string } | { kind: "karta" }
-  >({ kind: "list" });
+  // Vyn ligger i URL:en (#/d2dbuilder, …/karta, …/projekt/<id>) så en
+  // omladdning stannar kvar i samma projekt.
+  const route = useRoute();
+  const sub = route.segs[0] === "d2dbuilder" ? route.segs.slice(1) : [];
+  const view: { kind: "list" } | { kind: "project"; id: string } | { kind: "karta" } =
+    sub[0] === "projekt" && sub[1] ? { kind: "project", id: sub[1] }
+    : sub[0] === "karta" ? { kind: "karta" }
+    : { kind: "list" };
+  const setView = (v: typeof view) =>
+    navigate(v.kind === "project" ? ["d2dbuilder", "projekt", v.id]
+      : v.kind === "karta" ? ["d2dbuilder", "karta"] : ["d2dbuilder"]);
 
   return (
     <div className="d2dpb">
