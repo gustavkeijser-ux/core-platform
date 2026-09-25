@@ -2252,16 +2252,16 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 }
 
 /* ── Lägenhetslista i kolumner ────────────────────────────────────────────
-   Prick | Adress | Ingång | Lgh | Namn | Status. Samma grid på rubrikraden
-   och på varje rad så kolumnerna linjerar. På smala mobiler döljs
-   statusetiketten (pricken bär färgen) så de fyra datakolumnerna får plats. */
+   Varje lägenhet är ett eget rundat kort med luft emellan (samma språk som
+   dörrlistan i boendeappen). Ikon | Adress | Ingång | Lgh | Namn | Status —
+   samma grid på rubrikraden och i varje kort så kolumnerna linjerar. På
+   smala mobiler döljs statusetiketten (ikonens färg bär statusen). */
 
 .d2d-lag-table {
-  --lag-cols: 10px minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.2fr) 8.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  overflow: hidden;
+  --lag-cols: 2.5rem minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.2fr) 8.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
 }
 
 .d2d-lag-table__head,
@@ -2270,7 +2270,7 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   grid-template-columns: var(--lag-cols);
   align-items: center;
   column-gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-4) var(--sp-4);
 }
 
 .d2d-lag-table__head {
@@ -2279,10 +2279,10 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--ink-faint);
-  background: var(--surface-sunk);
-  border-bottom: 1px solid var(--border);
-  padding-top: var(--sp-2);
-  padding-bottom: var(--sp-2);
+  padding-top: 0;
+  padding-bottom: 0;
+  /* ram + skugga på korten tar lika mycket plats — håll rubrikerna i linje */
+  border: 1px solid transparent;
 }
 
 /* Statuskolumnen högerställd, fast bredd så alla rader linjerar. */
@@ -2295,20 +2295,33 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   text-align: left;
   font: inherit;
   color: inherit;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   row-gap: 2px;
-  transition: background var(--dur) var(--ease);
-}
-
-.d2d-lag-row:last-child {
-  border-bottom: none;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 
 .d2d-lag-row:hover {
-  background: var(--overlay-hover);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.d2d-lag-row:active {
+  transform: scale(.99);
+}
+
+/* Mjuk rundad ikonruta i statusens färg (jfr dörrikonerna i boendeappen). */
+.d2d-lag-row__icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-md);
+  display: grid;
+  place-items: center;
+  color: var(--st, var(--hue-slate));
+  background: color-mix(in srgb, var(--st, var(--hue-slate)) 14%, transparent);
 }
 
 .d2d-lag-row__cell {
@@ -2320,7 +2333,7 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 
 .d2d-lag-row__cell--addr,
 .d2d-lag-row__cell--lgh {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .d2d-lag-row__cell--empty {
@@ -2339,7 +2352,8 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 
 @media (max-width: 480px) {
   .d2d-lag-table {
-    --lag-cols: 10px minmax(0, 1.2fr) 3.25rem 3.25rem minmax(0, 1fr);
+    --lag-cols: 2rem minmax(0, 1.25fr) 2.75rem 2.75rem minmax(0, 1fr);
+    gap: var(--sp-2);
   }
   .d2d-lag-table__head {
     font-size: 10px;
@@ -2350,6 +2364,20 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
     column-gap: var(--sp-2);
     padding-left: var(--sp-3);
     padding-right: var(--sp-3);
+  }
+  .d2d-lag-row {
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+    border-radius: var(--r-md);
+  }
+  .d2d-lag-row__icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--r-sm);
+  }
+  .d2d-lag-row__icon svg {
+    width: 16px;
+    height: 16px;
   }
   .d2d-lag-table__status-col {
     display: none;
