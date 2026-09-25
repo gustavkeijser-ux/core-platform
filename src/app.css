@@ -2476,6 +2476,26 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   border-bottom: 1px solid var(--border);
 }
 
+/* ── Autospara-indikator (topbaren i lägenhetsvyn) ─────────────────────── */
+
+.d2d-autosave {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-faint);
+  min-width: 4.5rem;
+  text-align: right;
+}
+.d2d-autosave--saved { color: var(--hue-green); }
+.d2d-autosave--error { color: var(--hue-red); }
+
+.d2d-error--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
 /* ── Save bar ─────────────────────────────────────────────────────────── */
 
 .d2d-save-bar {
