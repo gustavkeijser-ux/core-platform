@@ -70,6 +70,70 @@ function formatLagenhetAdress(data: Record<string, unknown>, title: string | nul
 }
 
 // =============================================================================
+// Fastighets-/adressinfo (infrastruktur, TV, tillträde)
+// =============================================================================
+
+type InfoRow = { label: string; value: string };
+
+const txt = (v: unknown): string => (v === null || v === undefined ? "" : String(v).trim());
+
+/** Alla infrastrukturfakta säljaren behöver, i en fast ordning. Fastighetens
+ *  värden är utgångsläget; skickas en lägenhet med vinner dess egna
+ *  adressvärden från importen (…_adress, koax_avslutsdatum,
+ *  befintligt_kanalpaket, nytt_kanalpaket) där de finns — adresser kan avvika
+ *  från fastigheten i övrigt. Tomma värden hoppas över. */
+function infraRows(fast: Record<string, unknown>, lag?: Record<string, unknown>): InfoRow[] {
+  const l = lag ?? {};
+  const pick = (lagKey: string | null, fastKey: string) =>
+    (lagKey ? txt(l[lagKey]) : "") || txt(fast[fastKey]);
+
+  const koax = pick("befintlig_koax_adress", "befintlig_koax");
+  const koaxSlut = pick("koax_avslutsdatum", "avtalstid_koax");
+  const fiber = pick("befintlig_fiber_adress", "befintlig_fiber");
+  const fiberSlut = txt(fast.avtalstid_fiber);
+
+  const rows: Array<[string, string]> = [
+    ["Fastighetsägare", txt(fast.fastighetsagare)],
+    ["Förvaltare", txt(fast.forvaltare)],
+    ["Portkod", pick("portkod_adress", "portkod")],
+    ["Befintligt nät", txt(fast.befintligt_nat)],
+    ["Befintlig fiber", fiber ? (fiberSlut ? `${fiber} (t.o.m. ${fiberSlut})` : fiber) : ""],
+    ["Fiberavtal t.o.m.", !fiber ? fiberSlut : ""],
+    ["Befintlig koax", koax ? (koaxSlut ? `${koax} (t.o.m. ${koaxSlut})` : koax) : ""],
+    ["Koaxavtal t.o.m.", !koax ? koaxSlut : ""],
+    ["Kabel-TV", txt(fast.kabel_tv)],
+    ["Befintligt kanalpaket", pick("befintligt_kanalpaket", "nuvarande_tv")],
+    ["Nytt kanalpaket", pick("nytt_kanalpaket", "nytt_tv_installation")],
+    ["Kanalpaket efter avslut", txt(fast.nytt_tv_efter_avslut)],
+    ["Installationsdatum", pick("installationsdatum_adress", "installationsdatum")],
+    ["Kundklar", txt(fast.kundklar_datum)],
+    ["Gamla nätet avslutas", txt(fast.gamla_nat_avslutsdatum)],
+    ["Tillträde", txt(fast.tilltradesinstruktion)],
+  ];
+  return rows.filter(([, v]) => v).map(([label, value]) => ({ label, value }));
+}
+
+function InfraBox({ title, rows, emptyText }: { title: string; rows: InfoRow[]; emptyText: string }) {
+  return (
+    <div className="d2d-infobox">
+      <div className="d2d-infobox__header">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="7"/><line x1="10" y1="9" x2="10" y2="14"/><circle cx="10" cy="6.5" r=".8" fill="currentColor" stroke="none"/></svg>
+        <span>{title}</span>
+      </div>
+      <div className="d2d-infobox__grid">
+        {rows.map((r) => (
+          <div key={r.label} className="d2d-infobox__row">
+            <span className="d2d-infobox__label">{r.label}</span>
+            <span>{r.value}</span>
+          </div>
+        ))}
+        {rows.length === 0 && <div className="d2d-infobox__empty">{emptyText}</div>}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Fastighetslista
 // =============================================================================
 
@@ -234,30 +298,9 @@ function FastighetsDetalj({
         </div>
       )}
 
-      {/* Fastighetsinfo — ersätter den gamla knackprogress-stapeln. Detta är
-          generella, ganska statiska fakta om fastighetens infrastruktur
-          (sätts av projektledare/admin), inte adress-specifika värden —
-          adresser kan avvika i praktiken men detta är utgångsläget. */}
-      <div className="d2d-infobox">
-        <div className="d2d-infobox__header">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="7"/><line x1="10" y1="9" x2="10" y2="14"/><circle cx="10" cy="6.5" r=".8" fill="currentColor" stroke="none"/></svg>
-          <span>Fastighetsinfo</span>
-        </div>
-        <div className="d2d-infobox__grid">
-          {!!data.fastighetsagare && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Fastighetsägare</span><span>{String(data.fastighetsagare)}</span></div>}
-          {!!data.portkod && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Portkod</span><span>{String(data.portkod)}</span></div>}
-          {!!data.befintlig_fiber && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Befintlig fiber</span><span>{String(data.befintlig_fiber)}</span></div>}
-          {!!data.befintlig_koax && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Befintlig koax</span><span>{String(data.befintlig_koax)}</span></div>}
-          {!!data.avtalstid_koax && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Avslutsdatum koax</span><span>{String(data.avtalstid_koax)}</span></div>}
-          {!!data.installationsdatum && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Installationsdatum</span><span>{String(data.installationsdatum)}</span></div>}
-          {!!data.nuvarande_tv && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Befintligt kanalpaket</span><span>{String(data.nuvarande_tv)}</span></div>}
-          {!!data.nytt_tv_installation && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Nytt kanalpaket</span><span>{String(data.nytt_tv_installation)}</span></div>}
-          {!data.fastighetsagare && !data.portkod && !data.befintlig_fiber && !data.befintlig_koax
-            && !data.avtalstid_koax && !data.installationsdatum && !data.nuvarande_tv && !data.nytt_tv_installation && (
-            <div className="d2d-infobox__empty">Ingen fastighetsinfo ifylld ännu.</div>
-          )}
-        </div>
-      </div>
+      {/* Fastighetsinfo — alla ifyllda infrastruktur-/TV-fakta om
+          fastigheten (utgångsläget; enskilda adresser kan avvika). */}
+      <InfraBox title="Fastighetsinfo" rows={infraRows(data)} emptyText="Ingen fastighetsinfo ifylld ännu." />
 
       {/* Lägenhetslista */}
       <div className="d2d-lag-list">
@@ -344,6 +387,7 @@ function LagenhetForm({
   const [dirty, setDirty] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fastData, setFastData] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     (async () => {
@@ -353,13 +397,23 @@ function LagenhetForm({
         setRecord(res.record);
         setData({ ...res.record.data });
         setStatus(res.record.status);
+
+        // Fastighetens infrastrukturdata som utgångsläge för infon nedan.
+        // fastighetId saknas när man kommer från Signerade/Återkoppling —
+        // slå då upp den via relationen.
+        const fid = fastighetId
+          || res.related.find((r) => r.record.objectType === "d2d_fastighet")?.record.id;
+        if (fid) {
+          const { data: f } = await supabase.from("records").select("data").eq("id", fid).maybeSingle();
+          setFastData(((f?.data ?? {}) as Record<string, unknown>));
+        }
       } catch {
         // tyst
       } finally {
         setLoading(false);
       }
     })();
-  }, [lagenhetId]);
+  }, [lagenhetId, fastighetId]);
 
   const set = (key: string) => (value: unknown) => {
     setData((d) => ({ ...d, [key]: value }));
@@ -434,6 +488,10 @@ function LagenhetForm({
           {!!headerUndertext && <span className="d2d-topbar__sub">{headerUndertext}</span>}
         </div>
       </div>
+
+      {/* Adressens förutsättningar — fastighetens värden, överskrivna av
+          adressens egna där importen hade sådana. */}
+      <InfraBox title="Förutsättningar" rows={infraRows(fastData, data)} emptyText="Ingen info om nät/TV ifylld för den här adressen." />
 
       {/* Statusväljare — stora knappar */}
       <div className="d2d-status-picker">
