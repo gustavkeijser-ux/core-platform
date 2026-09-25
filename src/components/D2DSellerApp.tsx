@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getMetadata, listRecords, getRecord, updateRecord, createRecord, addRelation,
@@ -7,7 +7,8 @@ import {
 } from "@/lib/data";
 import { StatusPill } from "./StatusPill";
 import { FieldInput } from "@/lib/fields";
-import { ThemeToggle } from "@/lib/theme";
+import { ThemeToggle, useTheme } from "@/lib/theme";
+import { brandCssVars } from "@/lib/color";
 
 // =============================================================================
 // Typer & hjälpfunktioner
@@ -137,7 +138,6 @@ function FastighetsDetalj({
   const [related, setRelated] = useState<RelatedRecord[]>([]);
   const [lagenheter, setLagenheter] = useState<RecordRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showInfo, setShowInfo] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -171,18 +171,7 @@ function FastighetsDetalj({
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Knackprogress
-  const stats = useMemo(() => {
-    const s: Record<string, number> = {};
-    for (const l of lagenheter) {
-      const st = l.status ?? "ej_knackad";
-      s[st] = (s[st] ?? 0) + 1;
-    }
-    return s;
-  }, [lagenheter]);
-
   const total = lagenheter.length;
-  const knocked = total - (stats.ej_knackad ?? 0);
 
   if (loading) return <div className="d2d-loading">Laddar…</div>;
   if (!fastighet) return <div className="d2d-empty">Fastigheten hittades inte.</div>;
@@ -202,63 +191,41 @@ function FastighetsDetalj({
             <span className="d2d-topbar__sub">{String(data.fastighetsbeteckning)}</span>
           )}
         </div>
-        <button className="d2d-info-toggle" onClick={() => setShowInfo(!showInfo)}>
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="7"/><line x1="10" y1="9" x2="10" y2="14"/><circle cx="10" cy="6.5" r=".8" fill="currentColor" stroke="none"/></svg>
-        </button>
       </div>
 
       {/* Viktig info (varning) */}
       {!!data.viktigt_info && (
         <div className="d2d-warning">
-          <strong>Viktigt inför knackning</strong>
-          <p>{String(data.viktigt_info)}</p>
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" className="d2d-warning__icon"><path d="M10 2.5l7 3.2v4c0 4.2-2.9 7.6-7 8.8-4.1-1.2-7-4.6-7-8.8v-4l7-3.2Z"/></svg>
+          <div>
+            <strong>Viktigt inför knackning</strong>
+            <p>{String(data.viktigt_info)}</p>
+          </div>
         </div>
       )}
 
-      {/* Info-panel (toggle) */}
-      {showInfo && (
-        <div className="d2d-info-panel">
-          {!!data.portkod && <div className="d2d-info-row"><span className="d2d-info-label">Portkod</span><span>{String(data.portkod)}</span></div>}
-          {!!data.forvaltare && <div className="d2d-info-row"><span className="d2d-info-label">Förvaltare</span><span>{String(data.forvaltare)}</span></div>}
-          {!!data.fastighetsagare && <div className="d2d-info-row"><span className="d2d-info-label">Ägare</span><span>{String(data.fastighetsagare)}</span></div>}
-          {!!data.befintligt_nat && <div className="d2d-info-row"><span className="d2d-info-label">Befintligt nät</span><span>{String(data.befintligt_nat)}</span></div>}
-          {!!data.nuvarande_tv && <div className="d2d-info-row"><span className="d2d-info-label">Nuvarande TV</span><span>{String(data.nuvarande_tv)}</span></div>}
-          {!!data.nytt_tv_installation && <div className="d2d-info-row"><span className="d2d-info-label">Nytt TV vid inst.</span><span>{String(data.nytt_tv_installation)}</span></div>}
-          {!!data.tilltradesinstruktion && <div className="d2d-info-row"><span className="d2d-info-label">Tillträde</span><span>{String(data.tilltradesinstruktion)}</span></div>}
+      {/* Fastighetsinfo — ersätter den gamla knackprogress-stapeln. Detta är
+          generella, ganska statiska fakta om fastighetens infrastruktur
+          (sätts av projektledare/admin), inte adress-specifika värden —
+          adresser kan avvika i praktiken men detta är utgångsläget. */}
+      <div className="d2d-infobox">
+        <div className="d2d-infobox__header">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="7"/><line x1="10" y1="9" x2="10" y2="14"/><circle cx="10" cy="6.5" r=".8" fill="currentColor" stroke="none"/></svg>
+          <span>Fastighetsinfo</span>
         </div>
-      )}
-
-      {/* Progress */}
-      <div className="d2d-progress">
-        <div className="d2d-progress__header">
-          <span className="d2d-progress__label">Knackprogress</span>
-          <span className="d2d-progress__numbers">{knocked}/{total}</span>
-        </div>
-        <div className="d2d-progress__bar">
-          {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-            const count = stats[key] ?? 0;
-            if (count === 0 || total === 0) return null;
-            return (
-              <div
-                key={key}
-                className="d2d-progress__segment"
-                style={{ width: `${(count / total) * 100}%`, background: cfg.color }}
-                title={`${cfg.label}: ${count}`}
-              />
-            );
-          })}
-        </div>
-        <div className="d2d-progress__legend">
-          {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-            const count = stats[key] ?? 0;
-            if (count === 0) return null;
-            return (
-              <span key={key} className="d2d-progress__legend-item">
-                <span className="d2d-progress__dot" style={{ background: cfg.color }} />
-                {cfg.label} ({count})
-              </span>
-            );
-          })}
+        <div className="d2d-infobox__grid">
+          {!!data.fastighetsagare && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Fastighetsägare</span><span>{String(data.fastighetsagare)}</span></div>}
+          {!!data.portkod && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Portkod</span><span>{String(data.portkod)}</span></div>}
+          {!!data.befintlig_fiber && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Befintlig fiber</span><span>{String(data.befintlig_fiber)}</span></div>}
+          {!!data.befintlig_koax && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Befintlig koax</span><span>{String(data.befintlig_koax)}</span></div>}
+          {!!data.avtalstid_koax && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Avslutsdatum koax</span><span>{String(data.avtalstid_koax)}</span></div>}
+          {!!data.installationsdatum && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Installationsdatum</span><span>{String(data.installationsdatum)}</span></div>}
+          {!!data.nuvarande_tv && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Befintligt kanalpaket</span><span>{String(data.nuvarande_tv)}</span></div>}
+          {!!data.nytt_tv_installation && <div className="d2d-infobox__row"><span className="d2d-infobox__label">Nytt kanalpaket</span><span>{String(data.nytt_tv_installation)}</span></div>}
+          {!data.fastighetsagare && !data.portkod && !data.befintlig_fiber && !data.befintlig_koax
+            && !data.avtalstid_koax && !data.installationsdatum && !data.nuvarande_tv && !data.nytt_tv_installation && (
+            <div className="d2d-infobox__empty">Ingen fastighetsinfo ifylld ännu.</div>
+          )}
         </div>
       </div>
 
@@ -553,14 +520,24 @@ function AterkopplingarLista({
 export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
   const [view, setView] = useState<D2DView>({ kind: "fastigheter" });
   const [objects, setObjects] = useState<ObjectDef[]>([]);
+  const [brandColor, setBrandColor] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const { theme } = useTheme();
 
   useEffect(() => {
     getMetadata()
-      .then((res) => setObjects(res.objects))
+      .then((res) => {
+        setObjects(res.objects);
+        setBrandColor(res.tenant?.brandColor ?? undefined);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // Samma varumärkesfärg som resten av CRM:et (satt av admin i Inställningar
+  // → Utseende) — annars föll D2D-säljarvyn tillbake på standardlila, vilket
+  // stack ut mot resten av appen.
+  const brandVars = brandColor ? brandCssVars(brandColor, theme === "light") : undefined;
 
   const lagDef = objects.find((o) => o.key === "d2d_lagenhet");
 
@@ -619,7 +596,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
   const inDetail = view.kind === "fastighet" || view.kind === "lagenhet";
 
   return (
-    <div className="d2d-app">
+    <div className="d2d-app" style={brandVars as CSSProperties}>
       {/* Top header */}
       <div className="d2d-header">
         <div className="d2d-header__brand">
