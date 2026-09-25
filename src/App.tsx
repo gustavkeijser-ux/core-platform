@@ -16,6 +16,7 @@ import { D2DProjectBuilder } from "@/components/D2DProjectBuilder";
 import { MyTasksPage } from "@/components/MyTasksPage";
 import { ImportPage } from "@/components/ImportPage";
 import { UserSettings } from "@/components/UserSettings";
+import { useRoute, readRoute, navigate } from "@/lib/route";
 
 type View =
   | { kind: "dashboard" }
@@ -26,6 +27,21 @@ type View =
   | { kind: "d2d" }
   | { kind: "d2dbuilder" };
 
+/** URL → vy. Okänt/tomt → översikten. */
+function viewFromSegs(segs: string[]): View {
+  switch (segs[0]) {
+    case "ai": return { kind: "ai" };
+    case "tasks": return { kind: "tasks" };
+    case "import": return { kind: "import" };
+    case "d2d": return { kind: "d2d" };
+    case "d2dbuilder": return { kind: "d2dbuilder" };
+    case "list": if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
+  }
+  return { kind: "dashboard" };
+}
+
+const segsFromView = (v: View): string[] => (v.kind === "list" ? ["list", v.objectType] : [v.kind]);
+
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [objects, setObjects] = useState<ObjectDef[] | null>(null);
@@ -34,10 +50,15 @@ export default function App() {
   const [isSeller, setIsSeller] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [metaError, setMetaError] = useState<string | null>(null);
-  const [view, setView] = useState<View | null>(null);
+  // Var man är i appen ligger i URL:en (#/…) så att man stannar kvar på
+  // samma sida vid omladdning — se src/lib/route.ts.
+  const route = useRoute();
+  const [metaReady, setMetaReady] = useState(false);
 
   // ── Öppna post som redigerbart kort ─────────────────────────────────
-  const [openRecordId, setOpenRecordId] = useState<string | null>(null);
+  const openRecordId = route.query.get("post");
+  const setOpenRecordId = (id: string | null) => navigate(readRoute().segs, { post: id });
+  const setView = (v: View) => navigate(segsFromView(v));
   const [listReloadKey, setListReloadKey] = useState(0);
   const [visaInstallningar, setVisaInstallningar] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -58,11 +79,14 @@ export default function App() {
         setIsAdmin(!!res.isAdmin);
         setIsSeller(!!res.isSeller);
         setMustChangePassword(!!res.mustChangePassword);
-        // Ren dörrsäljare (ingen admin-roll också) möts direkt av
+        // Ren dörrsäljare (ingen admin-roll också) hålls alltid i
         // säljarvyn — enklare för dem, och de har inget annat de
-        // behöver i CRM:et. En admin som också har säljarrollen ser
-        // fortfarande hela CRM:et som vanligt.
-        setView(res.isSeller && !res.isAdmin ? { kind: "d2d" } : { kind: "dashboard" });
+        // behöver i CRM:et. Alla andra hamnar där URL:en pekar
+        // (översikten om den är tom), så en omladdning byter inte sida.
+        if (res.isSeller && !res.isAdmin && readRoute().segs[0] !== "d2d") {
+          navigate(["d2d"], undefined, true);
+        }
+        setMetaReady(true);
       })
       .catch((e) => setMetaError(e.message ?? "Kunde inte hämta metadata."));
   }, [session]);
@@ -81,6 +105,11 @@ export default function App() {
       })
       .catch(() => { /* tyst — behåll befintlig data */ });
   }, []);
+
+  const sellerOnly = isSeller && !isAdmin;
+  const view: View | null = !metaReady ? null
+    : sellerOnly && route.segs[0] !== "d2d" ? { kind: "d2d" }
+    : viewFromSegs(route.segs);
 
   if (session === undefined) {
     return <div className="loading-shell">Laddar…</div>;
