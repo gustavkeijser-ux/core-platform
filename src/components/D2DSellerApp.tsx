@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, type CSSProperties } from "react";
+import { useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getMetadata, listRecords, getRecord, updateRecord, createRecord, addRelation,
@@ -412,9 +412,7 @@ function LagenhetForm({
   const [data, setData] = useState<Record<string, unknown>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [saveOk, setSaveOk] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [fastData, setFastData] = useState<Record<string, unknown>>({});
   const [showFieldConfig, setShowFieldConfig] = useState(false);
@@ -445,30 +443,106 @@ function LagenhetForm({
     })();
   }, [lagenhetId, fastighetId]);
 
-  const set = (key: string) => (value: unknown) => {
-    setData((d) => ({ ...d, [key]: value }));
-    setDirty(true);
-    setSaveOk(false);
+  // ── Autospara ────────────────────────────────────────────────────────────
+  // Varje ändring sparas direkt — ingen Spara-knapp. Ändringar samlas i en
+  // väntande patch (bara de nycklar som ändrats; servern slår ihop dem med
+  // resten av posten) och skickas efter en kort paus när man skriver, eller
+  // direkt vid klick (status, val, ja/nej, datum). Sparas även när man går
+  // tillbaka, byter app eller stänger sidan.
+  const pendingRef = useRef<{ data: Record<string, unknown>; status: string | null }>({ data: {}, status: null });
+  const timerRef = useRef<number | null>(null);
+  const inflightRef = useRef<Promise<void> | null>(null);
+
+  const hasPending = () =>
+    Object.keys(pendingRef.current.data).length > 0 || pendingRef.current.status !== null;
+
+  const flush = useCallback(async (): Promise<void> => {
+    if (timerRef.current) { window.clearTimeout(timerRef.current); timerRef.current = null; }
+    while (inflightRef.current) await inflightRef.current;
+    if (!hasPending()) return;
+
+    const p = pendingRef.current;
+    pendingRef.current = { data: {}, status: null };
+    setSaveState("saving");
+    setError(null);
+
+    const run = (async () => {
+      try {
+        await updateRecord(lagenhetId, Object.keys(p.data).length ? p.data : undefined, p.status);
+        setSaveState(hasPending() ? "pending" : "saved");
+      } catch (e) {
+        // Lägg tillbaka det som inte gick igenom (nyare väntande värden vinner)
+        // så nästa försök skickar allt.
+        pendingRef.current = {
+          data: { ...p.data, ...pendingRef.current.data },
+          status: pendingRef.current.status ?? p.status,
+        };
+        setSaveState("error");
+        setError(e instanceof DataError ? e.message : "Kunde inte spara — kontrollera uppkopplingen.");
+      }
+    })();
+    inflightRef.current = run;
+    try { await run; } finally { inflightRef.current = null; }
+  }, [lagenhetId]);
+
+  const queueSave = (patch: Record<string, unknown>, nextStatus: string | null, delayMs: number) => {
+    pendingRef.current = {
+      data: { ...pendingRef.current.data, ...patch },
+      status: nextStatus ?? pendingRef.current.status,
+    };
+    setSaveState("pending");
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => { void flush(); }, delayMs);
   };
 
-  async function save() {
-    if (!record) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const row = await updateRecord(record.id, data, status);
-      setRecord(row);
-      setData({ ...row.data });
-      setStatus(row.status);
-      setDirty(false);
-      setSaveOk(true);
-      setTimeout(() => setSaveOk(false), 3000);
-    } catch (e) {
-      setError(e instanceof DataError ? e.message : "Kunde inte spara.");
-    } finally {
-      setSaving(false);
+  // Spara det som väntar när vyn lämnas, appen hamnar i bakgrunden
+  // (vanligt på mobil) eller sidan stängs.
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden") void flush(); };
+    const onPageHide = () => { void flush(); };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onPageHide);
+      void flush();
+    };
+  }, [flush]);
+
+  const handleBack = async () => {
+    await flush();
+    onBack();
+  };
+
+  // Fälttyper där varje tangenttryck ger en ändring väntar lite innan de
+  // sparas; övriga (val, ja/nej, datum) sparas direkt.
+  const TYPING_TYPES = new Set(["text", "long_text", "phone", "email", "url", "number", "currency", "percent"]);
+
+  const set = (key: string, delayMs = 800) => (value: unknown) => {
+    setData((d) => ({ ...d, [key]: value }));
+    queueSave({ [key]: value }, null, delayMs);
+  };
+
+  /** Lokal tid som "ÅÅÅÅ-MM-DDTHH:MM" — samma format som datum/tid-fältet
+   *  skickar när man fyller i det för hand. */
+  const nuLokalTid = () => {
+    const d = new Date();
+    const p2 = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  };
+
+  const changeStatus = (key: string) => {
+    if (key === status) return;
+    setStatus(key);
+    // Så fort en dörr fått en annan status än "Ej knackad" har säljaren
+    // varit där — "Senast kontakt" sätts automatiskt till nu.
+    const patch: Record<string, unknown> = {};
+    if (key !== "ej_knackad") {
+      patch.senast_kontakt = nuLokalTid();
+      setData((d) => ({ ...d, senast_kontakt: patch.senast_kontakt }));
     }
-  }
+    queueSave(patch, key, 0);
+  };
 
   if (loading) return <div className="d2d-loading">Laddar…</div>;
   if (!record) return <div className="d2d-empty">Lägenheten hittades inte.</div>;
@@ -514,7 +588,7 @@ function LagenhetForm({
       {/* Topbar — adress/lägenhet som statisk text, inte en redigerbar
           ruta, bara kontext om var säljaren står just nu. */}
       <div className="d2d-topbar">
-        <button className="d2d-back" onClick={onBack}>
+        <button className="d2d-back" onClick={() => { void handleBack(); }}>
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4l-6 6 6 6"/></svg>
         </button>
         <div className="d2d-topbar__title">
@@ -530,7 +604,19 @@ function LagenhetForm({
             Anpassa fält
           </button>
         )}
+        <span className={`d2d-autosave d2d-autosave--${saveState}`} aria-live="polite">
+          {saveState === "pending" || saveState === "saving" ? "Sparar…"
+            : saveState === "saved" ? "✓ Sparat"
+            : saveState === "error" ? "Ej sparat" : ""}
+        </span>
       </div>
+
+      {error && (
+        <div className="d2d-error d2d-error--row">
+          <span>{error}</span>
+          <button className="btn btn--ghost btn--sm" onClick={() => { void flush(); }}>Försök igen</button>
+        </div>
+      )}
 
       {showFieldConfig && (
         <FieldConfigPanel
@@ -556,11 +642,7 @@ function LagenhetForm({
             <button
               key={key}
               className={`d2d-status-btn ${cfg.cssClass}${status === key ? " d2d-status-btn--active" : ""}`}
-              onClick={() => {
-                setStatus(key);
-                setDirty(true);
-                setSaveOk(false);
-              }}
+              onClick={() => changeStatus(key)}
             >
               {cfg.label}
             </button>
@@ -578,7 +660,7 @@ function LagenhetForm({
                 key={r.key}
                 type="button"
                 className={`d2d-reason-chip${data.ej_intresserad_anledning === r.key ? " d2d-reason-chip--active" : ""}`}
-                onClick={() => set("ej_intresserad_anledning")(r.key)}
+                onClick={() => set("ej_intresserad_anledning", 0)(r.key)}
               >
                 {r.label}
               </button>
@@ -608,20 +690,12 @@ function LagenhetForm({
           <div key={group.section ?? gi} className="d2d-form-section">
             {group.label && <h3 className="d2d-form-section__title">{group.label}</h3>}
             {group.fields.map((f) => (
-              <FieldInput key={f.key} field={f} value={data[f.key]} onChange={set(f.key)} />
+              <FieldInput key={f.key} field={f} value={data[f.key]} onChange={set(f.key, TYPING_TYPES.has(f.fieldType) ? 800 : 0)} />
             ))}
           </div>
         ))}
       </div>
 
-      {/* Spara */}
-      {error && <div className="d2d-error">{error}</div>}
-      <div className="d2d-save-bar">
-        <button className="btn btn--brand d2d-save-btn" onClick={save} disabled={saving || !dirty}>
-          {saving ? "Sparar…" : "Spara"}
-        </button>
-        {saveOk && <span className="d2d-save-ok">✓ Sparat</span>}
-      </div>
     </div>
   );
 }
