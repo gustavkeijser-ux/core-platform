@@ -1016,6 +1016,16 @@
   gap: var(--sp-3);
 }
 @media (max-width: 520px) { .field-config__add-row { flex-direction: column; } }
+.field-config__add-row { flex-wrap: wrap; }
+.field-config__edit { display: flex; flex-direction: column; gap: var(--sp-2); }
+.field-config__edit-actions { display: flex; gap: var(--sp-2); }
+.field-config__meta { overflow-wrap: anywhere; }
+.field-config__advanced { margin-top: var(--sp-2); font-size: var(--text-sm); color: var(--ink-muted); }
+.field-config__advanced summary { cursor: pointer; margin-bottom: var(--sp-2); }
+@media (max-width: 520px) {
+  .field-config__row { flex-wrap: wrap; }
+  .field-config__actions { width: 100%; justify-content: flex-end; }
+}
 .field-config__footer {
   display: flex;
   justify-content: flex-end;
@@ -2044,6 +2054,10 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   /* Ingen nowrap/ellipsis — rubriken kan nu vara en fullständig adress
      (gatunamn, gatunummer, lägenhetsnummer) och ska aldrig klippas av. */
   overflow-wrap: break-word;
+}
+
+.d2d-topbar__admin {
+  flex-shrink: 0;
 }
 
 .d2d-topbar__sub {
