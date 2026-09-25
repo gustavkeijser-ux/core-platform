@@ -2237,6 +2237,111 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   flex-shrink: 0;
 }
 
+/* ── Lägenhetslista i kolumner ────────────────────────────────────────────
+   Prick | Adress | Ingång | Lgh | Namn | Status. Samma grid på rubrikraden
+   och på varje rad så kolumnerna linjerar. På smala mobiler döljs
+   statusetiketten (pricken bär färgen) så de fyra datakolumnerna får plats. */
+
+.d2d-lag-table {
+  --lag-cols: 10px minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.2fr) 8.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.d2d-lag-table__head,
+.d2d-lag-row {
+  display: grid;
+  grid-template-columns: var(--lag-cols);
+  align-items: center;
+  column-gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.d2d-lag-table__head {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  background: var(--surface-sunk);
+  border-bottom: 1px solid var(--border);
+  padding-top: var(--sp-2);
+  padding-bottom: var(--sp-2);
+}
+
+/* Statuskolumnen högerställd, fast bredd så alla rader linjerar. */
+.d2d-lag-table__status-col {
+  justify-self: end;
+}
+
+.d2d-lag-row {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  row-gap: 2px;
+  transition: background var(--dur) var(--ease);
+}
+
+.d2d-lag-row:last-child {
+  border-bottom: none;
+}
+
+.d2d-lag-row:hover {
+  background: var(--overlay-hover);
+}
+
+.d2d-lag-row__cell {
+  font-size: var(--text-sm);
+  min-width: 0;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.d2d-lag-row__cell--addr,
+.d2d-lag-row__cell--lgh {
+  font-weight: 600;
+}
+
+.d2d-lag-row__cell--empty {
+  color: var(--ink-faint);
+}
+
+/* Kommentaren på egen rad under datakolumnerna. */
+.d2d-lag-row__comment {
+  grid-column: 2 / -1;
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .d2d-lag-table {
+    --lag-cols: 10px minmax(0, 1.2fr) 3.25rem 3.25rem minmax(0, 1fr);
+  }
+  .d2d-lag-table__head {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+  .d2d-lag-table__head,
+  .d2d-lag-row {
+    column-gap: var(--sp-2);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+  }
+  .d2d-lag-table__status-col {
+    display: none;
+  }
+}
+
 /* ── Status-färgklasser ───────────────────────────────────────────────── */
 
 .d2d-status--slate  .d2d-lag-card__badge { background: rgba(136,144,160,.15); color: var(--hue-slate); }
