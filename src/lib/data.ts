@@ -129,11 +129,11 @@ const asError = (e: { code?: string; message: string }): never => {
 // -----------------------------------------------------------------------------
 
 export async function getMetadata(): Promise<{
-  objects: ObjectDef[]; tenant: TenantBranding; isAdmin: boolean; mustChangePassword: boolean;
+  objects: ObjectDef[]; tenant: TenantBranding; isAdmin: boolean; isSeller: boolean; mustChangePassword: boolean;
 }> {
   const { data, error } = await supabase.rpc("get_metadata");
   if (error) asError(error);
-  return data as { objects: ObjectDef[]; tenant: TenantBranding; isAdmin: boolean; mustChangePassword: boolean };
+  return data as { objects: ObjectDef[]; tenant: TenantBranding; isAdmin: boolean; isSeller: boolean; mustChangePassword: boolean };
 }
 
 /**
