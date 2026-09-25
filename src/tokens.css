@@ -2,11 +2,11 @@
    Designtokens — dark/light
    =============================================================================
    Uppdaterad efter Connectestates boendeapp ("Allt för ditt boende") som
-   stilreferens: varm krämvit botten, djupt tealgrön accentfärg, generöst
+   stilreferens: ljus gråbotten, djupt tealgrön accentfärg, generöst
    rundade kort och piller-knappar, mjuk vänlig typografi (Nunito), lugna
-   varma skuggor i stället för kalla blåsvarta. Mörkt läge är en spegelvänd
-   variant i samma varma familj (varm kolmörk botten, samma teal-accent) så
-   att appen känns som en enda produkt oavsett tema.
+   neutrala skuggor i stället för kalla blåsvarta eller varmt bruna. Mörkt
+   läge är en spegelvänd variant i samma familj (kolmörk botten, samma
+   teal-accent) så att appen känns som en enda produkt oavsett tema.
 
    En regel: komponenter refererar bara till variabler härifrån. Byt tema
    genom att sätta data-theme="light" på <html> — allt annat följer med
@@ -34,25 +34,25 @@
   --brand-soft:   rgba(16,107,96,.14);
   --brand-on:     #FFFFFF;
 
-  /* --- Ljust läge (default) — krämvit botten, vita rundade kort -------- */
-  --canvas:       radial-gradient(120% 90% at 100% 0%, #FBF8F1 0%, #F5EFE3 48%, #EFE7D6 100%);
-  --canvas-glow:  radial-gradient(46% 38% at 82% 6%, rgba(16,107,96,.10), transparent 70%);
+  /* --- Ljust läge (default) — ljus gråbotten, vita rundade kort -------- */
+  --canvas:       radial-gradient(120% 90% at 100% 0%, #FAFBFB 0%, #F2F4F4 48%, #E7EBEB 100%);
+  --canvas-glow:  radial-gradient(46% 38% at 82% 6%, rgba(16,107,96,.08), transparent 70%);
   --surface:      #FFFFFF;
-  --surface-sunk: #F3EDE0;
+  --surface-sunk: #EEF1F1;
   --surface-alt:  #E9F3F1;
 
   --ink:            #1E2A2E;
-  --ink-muted:      #6C6A5D;
-  --ink-faint:      #96927E;
+  --ink-muted:      #5C6469;
+  --ink-faint:      #8A9195;
   --ink-on-canvas:  #1E2A2E;
 
   --overlay-soft:   rgba(30,42,46,.05);
   --overlay-hover:  rgba(30,42,46,.045);
   --overlay-solid:  rgba(255,255,255,.94);
-  --scrim:          rgba(28,26,20,.4);
+  --scrim:          rgba(20,24,26,.4);
 
-  --border:        #EAE2CF;
-  --border-strong: #DBD0B4;
+  --border:        #E0E5E5;
+  --border-strong: #CBD3D4;
 
   --warn-soft: #FBEEDA;
   --warn-ink:  #93650F;
@@ -68,9 +68,9 @@
   --hue-red:    #D64562;
   --hue-zinc:   #757C8C;
 
-  --shadow-sm: 0 1px 2px rgba(60,48,20,.05), 0 2px 10px rgba(60,48,20,.05);
-  --shadow-md: 0 4px 14px rgba(60,48,20,.07), 0 14px 32px rgba(60,48,20,.06);
-  --shadow-lg: 0 10px 26px rgba(60,48,20,.09), 0 26px 56px rgba(60,48,20,.08);
+  --shadow-sm: 0 1px 2px rgba(30,41,46,.06), 0 2px 10px rgba(30,41,46,.05);
+  --shadow-md: 0 4px 14px rgba(30,41,46,.08), 0 14px 32px rgba(30,41,46,.07);
+  --shadow-lg: 0 10px 26px rgba(30,41,46,.10), 0 26px 56px rgba(30,41,46,.09);
   --shadow-brand: 0 8px 22px rgba(16,107,96,.30);
 
   /* --- Typografi -----------------------------------------------------------
