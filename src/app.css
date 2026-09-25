@@ -2283,6 +2283,53 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 .d2d-status--green.d2d-status-btn--active  { border-color: var(--hue-green);  color: var(--hue-green); background: rgba(63,195,134,.12); }
 .d2d-status--green-solid.d2d-status-btn--active { border-color: var(--hue-green); color: #fff; background: var(--hue-green); }
 
+/* ── Anledning vid "Inte intresserad" ─────────────────────────────────── */
+
+.d2d-reason-panel {
+  margin: 0 var(--sp-4) var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--surface-alt);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.d2d-reason-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.d2d-reason-chip {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-pill);
+  border: 2px solid transparent;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+}
+
+.d2d-reason-chip:hover {
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+
+.d2d-reason-chip--active {
+  border-color: var(--hue-red);
+  color: var(--hue-red);
+  background: rgba(241,108,130,.12);
+}
+
+.d2d-reason-panel__date {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
 /* ── D2D form ─────────────────────────────────────────────────────────── */
 
 .d2d-form {
