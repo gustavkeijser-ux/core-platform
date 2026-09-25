@@ -8,6 +8,7 @@ import {
 import { FieldInput } from "@/lib/fields";
 import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
+import { FieldConfigPanel } from "./FieldConfigPanel";
 
 // =============================================================================
 // Typer & hjälpfunktioner
@@ -397,11 +398,15 @@ function LagenhetForm({
   fastighetId,
   objectDef,
   onBack,
+  isAdmin = false,
+  onFieldsChanged,
 }: {
   lagenhetId: string;
   fastighetId: string;
   objectDef: ObjectDef | undefined;
   onBack: () => void;
+  isAdmin?: boolean;
+  onFieldsChanged?: () => void;
 }) {
   const [record, setRecord] = useState<RecordRow | null>(null);
   const [data, setData] = useState<Record<string, unknown>>({});
@@ -412,6 +417,7 @@ function LagenhetForm({
   const [saveOk, setSaveOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fastData, setFastData] = useState<Record<string, unknown>>({});
+  const [showFieldConfig, setShowFieldConfig] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -481,11 +487,15 @@ function LagenhetForm({
   // Gruppera fält per sektion (dölj ai-sektionen samt de interna fälten för
   // "inte intresserad"-anledning, som hanteras av sitt eget UI nedan i
   // stället för att dyka upp som ett generiskt formulärfält).
-  const fields = objectDef?.fields.filter((f) =>
+  // Fält som hanteras av eget UI (eller är interna) och aldrig ska dyka upp
+  // som generiska formulärfält — och inte heller i "Anpassa fält".
+  const configurableFields = objectDef?.fields.filter((f) =>
     f.options.section !== "ai"
     && f.key !== "ej_intresserad_anledning"
     && f.key !== "ej_intresserad_bindningstid"
   ) ?? [];
+  // Admin väljer via "Anpassa fält" vilka av dem säljarna ser (seller_hidden).
+  const fields = configurableFields.filter((f) => !f.options.seller_hidden);
 
   type FieldGroup = { section: string | null; label: string | null; fields: FieldDef[] };
   const groups: FieldGroup[] = [];
@@ -511,7 +521,28 @@ function LagenhetForm({
           <h2>{fullAdress}</h2>
           {!!headerUndertext && <span className="d2d-topbar__sub">{headerUndertext}</span>}
         </div>
+        {isAdmin && (
+          <button
+            className="btn btn--ghost btn--sm d2d-topbar__admin"
+            onClick={() => setShowFieldConfig(true)}
+            title="Välj vilka fält säljarna ser på adresser, och lägg till nya"
+          >
+            Anpassa fält
+          </button>
+        )}
       </div>
+
+      {showFieldConfig && (
+        <FieldConfigPanel
+          mode="seller"
+          objectType="d2d_lagenhet"
+          objectLabel="adresser (säljarvyn)"
+          fields={configurableFields}
+          sections={Object.entries(SECTION_LABELS).map(([key, label]) => ({ key, label }))}
+          onClose={() => setShowFieldConfig(false)}
+          onChanged={() => onFieldsChanged?.()}
+        />
+      )}
 
       {/* Adressens förutsättningar — fastighetens värden, överskrivna av
           adressens egna där importen hade sådana. */}
@@ -716,17 +747,21 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
   const [objects, setObjects] = useState<ObjectDef[]>([]);
   const [brandColor, setBrandColor] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const { theme } = useTheme();
 
-  useEffect(() => {
+  const loadMetadata = useCallback(() =>
     getMetadata()
       .then((res) => {
         setObjects(res.objects);
         setBrandColor(res.tenant?.brandColor ?? undefined);
+        setIsAdmin(!!res.isAdmin);
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => {}), []);
+
+  useEffect(() => {
+    loadMetadata().finally(() => setLoading(false));
+  }, [loadMetadata]);
 
   // Samma varumärkesfärg som resten av CRM:et (satt av admin i Inställningar
   // → Utseende) — annars föll D2D-säljarvyn tillbake på standardlila, vilket
@@ -758,6 +793,8 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
             lagenhetId={view.id}
             fastighetId={view.fastighetId}
             objectDef={lagDef}
+            isAdmin={isAdmin}
+            onFieldsChanged={loadMetadata}
             onBack={() => {
               if (view.fastighetId) {
                 setView({ kind: "fastighet", id: view.fastighetId });
