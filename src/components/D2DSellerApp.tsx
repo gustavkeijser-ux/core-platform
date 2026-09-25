@@ -9,6 +9,7 @@ import { FieldInput } from "@/lib/fields";
 import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { FieldConfigPanel } from "./FieldConfigPanel";
+import { useRoute, navigate } from "@/lib/route";
 
 // =============================================================================
 // Typer & hjälpfunktioner
@@ -20,6 +21,24 @@ type D2DView =
   | { kind: "aterkopplingar" }
   | { kind: "fastighet"; id: string }
   | { kind: "lagenhet"; id: string; fastighetId: string };
+
+/** URL (#/d2d/…) ↔ vy, så en omladdning stannar på samma fastighet/adress. */
+function d2dViewFromSegs(segs: string[]): D2DView {
+  const [kind, id, extra] = segs;
+  if (kind === "signerade") return { kind: "signerade" };
+  if (kind === "aterkopplingar") return { kind: "aterkopplingar" };
+  if (kind === "fastighet" && id) return { kind: "fastighet", id };
+  if (kind === "lagenhet" && id) return { kind: "lagenhet", id, fastighetId: extra ?? "" };
+  return { kind: "fastigheter" };
+}
+
+function d2dSegsFromView(v: D2DView): string[] {
+  switch (v.kind) {
+    case "fastighet": return ["d2d", "fastighet", v.id];
+    case "lagenhet": return v.fastighetId ? ["d2d", "lagenhet", v.id, v.fastighetId] : ["d2d", "lagenhet", v.id];
+    default: return ["d2d", v.kind];
+  }
+}
 
 type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "intresserad" | "sald" | "ovrigt";
 
@@ -817,7 +836,9 @@ function AterkopplingarLista({
 // =============================================================================
 
 export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
-  const [view, setView] = useState<D2DView>({ kind: "fastigheter" });
+  const route = useRoute();
+  const view: D2DView = d2dViewFromSegs(route.segs[0] === "d2d" ? route.segs.slice(1) : []);
+  const setView = (v: D2DView) => navigate(d2dSegsFromView(v));
   const [objects, setObjects] = useState<ObjectDef[]>([]);
   const [brandColor, setBrandColor] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
