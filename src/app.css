@@ -1949,9 +1949,10 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 .d2d-card__title {
   font-weight: 600;
   font-size: var(--text-base);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Ingen nowrap/ellipsis här längre — de här korten visar nu fullständig
+     adress (gatunamn, gatunummer, lägenhetsnummer) och den ska aldrig
+     klippas av, hellre radbryta på smala skärmar. */
+  overflow-wrap: break-word;
 }
 
 .d2d-card__sub {
@@ -2040,9 +2041,9 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 
 .d2d-topbar__title h2 {
   font-size: var(--text-lg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Ingen nowrap/ellipsis — rubriken kan nu vara en fullständig adress
+     (gatunamn, gatunummer, lägenhetsnummer) och ska aldrig klippas av. */
+  overflow-wrap: break-word;
 }
 
 .d2d-topbar__sub {
