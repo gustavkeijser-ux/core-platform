@@ -92,11 +92,21 @@ function infraRows(fast: Record<string, unknown>, lag?: Record<string, unknown>)
   const fiber = pick("befintlig_fiber_adress", "befintlig_fiber");
   const fiberSlut = txt(fast.avtalstid_fiber);
 
+  // Gamla nätet: har avslutsdatumet passerats är nätet släckt och ska inte
+  // se ut som något kunden fortfarande har. ISO-datum jämförs som strängar.
+  const nat = txt(fast.befintligt_nat);
+  const natSlut = txt(fast.gamla_nat_avslutsdatum);
+  const idag = new Date().toISOString().slice(0, 10);
+  const natSlackt = !!natSlut && natSlut <= idag;
+  const natText = nat
+    ? (natSlut ? `${nat} (${natSlackt ? "släckt" : "släcks"} ${natSlut})` : nat)
+    : "";
+
   const rows: Array<[string, string]> = [
     ["Fastighetsägare", txt(fast.fastighetsagare)],
     ["Förvaltare", txt(fast.forvaltare)],
     ["Portkod", pick("portkod_adress", "portkod")],
-    ["Befintligt nät", txt(fast.befintligt_nat)],
+    [natSlackt ? "Tidigare nät" : "Befintligt nät", natText],
     ["Befintlig fiber", fiber ? (fiberSlut ? `${fiber} (t.o.m. ${fiberSlut})` : fiber) : ""],
     ["Fiberavtal t.o.m.", !fiber ? fiberSlut : ""],
     ["Befintlig koax", koax ? (koaxSlut ? `${koax} (t.o.m. ${koaxSlut})` : koax) : ""],
@@ -107,7 +117,7 @@ function infraRows(fast: Record<string, unknown>, lag?: Record<string, unknown>)
     ["Kanalpaket efter avslut", txt(fast.nytt_tv_efter_avslut)],
     ["Installationsdatum", pick("installationsdatum_adress", "installationsdatum")],
     ["Kundklar", txt(fast.kundklar_datum)],
-    ["Gamla nätet avslutas", txt(fast.gamla_nat_avslutsdatum)],
+    ["Gamla nätet avslutas", !nat ? natSlut : ""],
     ["Tillträde", txt(fast.tilltradesinstruktion)],
   ];
   return rows.filter(([, v]) => v).map(([label, value]) => ({ label, value }));
