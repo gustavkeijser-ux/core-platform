@@ -68,6 +68,20 @@ function formatLagenhetAdress(data: Record<string, unknown>, title: string | nul
   return medIngang ? `${medIngang}, lgh ${title ?? "—"}` : `Lgh ${title ?? "—"}`;
 }
 
+/** Sorterar lägenheter i gångordning: gatunamn, gatunummer (1, 2, 3 …),
+ *  ingång (A, B, C …) och sist lägenhetsnummer (1001, 1002, 1101 …).
+ *  Numerisk jämförelse så 2 < 10 och 1002 < 1101, inte strängordning. */
+function jamforLagenheter(a: RecordRow, b: RecordRow): number {
+  const da = a.data as Record<string, unknown>;
+  const db = b.data as Record<string, unknown>;
+  const cmp = (x: unknown, y: unknown) =>
+    String(x ?? "").localeCompare(String(y ?? ""), "sv", { numeric: true, sensitivity: "base" });
+  return cmp(da.gatunamn, db.gatunamn)
+    || cmp(da.gatunummer, db.gatunummer)
+    || cmp(da.ingang, db.ingang)
+    || cmp(a.title, b.title);
+}
+
 // =============================================================================
 // Fastighets-/adressinfo (infrastruktur, TV, tillträde)
 // =============================================================================
@@ -262,7 +276,7 @@ function FastighetsDetalj({
           .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
           .in("id", lagIds)
           .order("title");
-        setLagenheter((lagData ?? []) as RecordRow[]);
+        setLagenheter(((lagData ?? []) as RecordRow[]).sort(jamforLagenheter));
       } else {
         setLagenheter([]);
       }
