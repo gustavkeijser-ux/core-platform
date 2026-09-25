@@ -5,7 +5,6 @@ import {
   type ObjectDef, type RecordRow, type RelatedRecord, type FieldDef,
   DataError,
 } from "@/lib/data";
-import { StatusPill } from "./StatusPill";
 import { FieldInput } from "@/lib/fields";
 import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
@@ -179,7 +178,10 @@ function FastighetsLista({
           .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
           .in("id", fastIds)
           .order("title");
-        setItems((fastData ?? []) as RecordRow[]);
+        // Sortera på fastighetsbeteckning (numeriskt, så Falken 9 < Falken 10).
+        const bet = (r: RecordRow) => String((r.data as Record<string, unknown>).fastighetsbeteckning ?? r.title ?? "");
+        setItems(((fastData ?? []) as RecordRow[]).sort((a, b) =>
+          bet(a).localeCompare(bet(b), "sv", { numeric: true })));
       } catch {
         // tyst
       } finally {
@@ -205,17 +207,15 @@ function FastighetsLista({
         const data = item.data as Record<string, unknown>;
         return (
           <button key={item.id} className="d2d-card" onClick={() => onOpen(item.id)}>
+            {/* Bara fastighetsbeteckning + fastighetsägare — adressen syns
+                inne i fastigheten. */}
             <div className="d2d-card__main">
-              <span className="d2d-card__title">{item.title ?? "Namnlös"}</span>
-              {!!data.fastighetsbeteckning && (
-                <span className="d2d-card__sub">{String(data.fastighetsbeteckning)}</span>
+              <span className="d2d-card__title">
+                {data.fastighetsbeteckning ? String(data.fastighetsbeteckning) : (item.title ?? "Namnlös")}
+              </span>
+              {!!data.fastighetsagare && (
+                <span className="d2d-card__sub">{String(data.fastighetsagare)}</span>
               )}
-            </div>
-            <div className="d2d-card__meta">
-              {!!data.antal_lagenheter && (
-                <span className="d2d-card__badge">{String(data.antal_lagenheter)} lgh</span>
-              )}
-              <StatusPill status={item.status} />
             </div>
             <svg className="d2d-card__chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 4l4 4-4 4"/></svg>
           </button>
