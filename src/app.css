@@ -32,7 +32,13 @@
 .app-shell__content {
   height: 100vh;
   overflow-y: auto;
-  overflow-x: auto;
+  /* Låst i sidled (inte "auto") — annars går hela sidan att dra sidledes så
+     fort NÅGOT innehåll är ens en pixel bredare än ytan (vanligt på mobil
+     pga box-sizing/paddar), vilket kändes som ett irriterande "läckande"
+     sidoskroll överallt i appen. Breda element (tabeller, kanban) har sin
+     egen scrollcontainer (.rtable-scroll, .kanban m.fl.) och skrollar där
+     de behöver, utan att hela sidan följer med. */
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -2044,35 +2050,29 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   color: var(--ink-muted);
 }
 
-.d2d-info-toggle {
-  background: none;
-  border: none;
-  color: var(--ink-muted);
-  cursor: pointer;
-  padding: var(--sp-1);
-  border-radius: var(--r-sm);
-  flex-shrink: 0;
-}
-
-.d2d-info-toggle:hover {
-  background: var(--overlay-soft);
-  color: var(--ink);
-}
-
-/* ── Warning box ──────────────────────────────────────────────────────── */
+/* ── Warning box — mjuk bärnstensfärgad banderoll med sköldikon, samma
+   språk som "Välj rätt dörr"-varningen i boendeappen ──────────────────── */
 
 .d2d-warning {
   margin: var(--sp-3) var(--sp-4);
-  padding: var(--sp-3) var(--sp-4);
-  background: rgba(225, 29, 72, .08);
-  border: 1px solid rgba(225, 29, 72, .25);
-  border-radius: var(--r-md);
-  color: var(--hue-red);
+  padding: var(--sp-4);
+  background: var(--warn-soft);
+  border-radius: var(--r-lg);
+  color: var(--warn-ink);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.d2d-warning__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .d2d-warning strong {
   display: block;
   font-size: var(--text-sm);
+  font-weight: 700;
   margin-bottom: var(--sp-1);
 }
 
@@ -2082,97 +2082,71 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   line-height: 1.4;
 }
 
-/* ── Info panel ───────────────────────────────────────────────────────── */
+/* ── Fastighetsinfo-ruta ──────────────────────────────────────────────────
+   Ersätter den gamla knackprogress-stapeln: en lugn, alltid synlig kortyta
+   med de fakta säljaren faktiskt behöver innan de knackar på — inte hur
+   långt igång de kommit. */
 
-.d2d-info-panel {
-  margin: 0 var(--sp-4);
-  padding: var(--sp-3) var(--sp-4);
-  background: var(--surface-alt);
-  border-radius: var(--r-md);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  animation: d2d-slide-down .2s var(--ease);
-}
-
-@keyframes d2d-slide-down {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.d2d-info-row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  font-size: var(--text-sm);
-}
-
-.d2d-info-label {
-  color: var(--ink-faint);
-  flex-shrink: 0;
-}
-
-/* ── Progress bar ─────────────────────────────────────────────────────── */
-
-.d2d-progress {
+.d2d-infobox {
   margin: var(--sp-4) var(--sp-4) 0;
   padding: var(--sp-4);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
 }
 
-.d2d-progress__header {
+.d2d-infobox__header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: var(--sp-3);
+}
+
+.d2d-infobox__header svg {
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.d2d-infobox__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.d2d-infobox__row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: var(--sp-2);
+  gap: var(--sp-3);
+  font-size: var(--text-sm);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
 }
 
-.d2d-progress__label {
-  font-size: var(--text-sm);
-  font-weight: 600;
+.d2d-infobox__row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.d2d-infobox__row > span:last-child {
   color: var(--ink);
+  font-weight: 600;
+  text-align: right;
 }
 
-.d2d-progress__numbers {
-  font-size: var(--text-sm);
-  color: var(--ink-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.d2d-progress__bar {
-  display: flex;
-  height: 8px;
-  border-radius: var(--r-pill);
-  overflow: hidden;
-  background: var(--overlay-soft);
-}
-
-.d2d-progress__segment {
-  transition: width .3s var(--ease);
-}
-
-.d2d-progress__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2) var(--sp-4);
-  margin-top: var(--sp-3);
-}
-
-.d2d-progress__legend-item {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
-  font-size: 11px;
-  color: var(--ink-muted);
-}
-
-.d2d-progress__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.d2d-infobox__label {
+  color: var(--ink-faint);
   flex-shrink: 0;
+}
+
+.d2d-infobox__empty {
+  font-size: var(--text-sm);
+  color: var(--ink-faint);
+  font-style: italic;
 }
 
 /* ── Lägenhet-lista (knackvy) ─────────────────────────────────────────── */
@@ -2645,7 +2619,7 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .16);
+  box-shadow: var(--shadow-md);
   font-size: var(--text-sm);
   white-space: normal;
 }
