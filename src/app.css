@@ -301,6 +301,8 @@
 
 .input {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   font-family: var(--font-body);
   font-size: var(--text-base);
   color: var(--ink);
@@ -1861,6 +1863,10 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 .d2d-content {
   flex: 1;
   overflow-y: auto;
+  /* overflow-y: auto gör tyst även x-axeln skrollbar på den här rutan, och
+     html/body-spärren mot sidledsskroll når inte in hit — lås den här. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
   -webkit-overflow-scrolling: touch;
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
@@ -2511,8 +2517,20 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ink-faint);
-  min-width: 4.5rem;
   text-align: right;
+}
+.d2d-autosave:empty { display: none; }
+
+/* "Anpassa fält" (bara admin): på mobil bara kugghjulet, så adressen i
+   rubriken får plats i stället för att tryckas ihop. */
+.d2d-topbar__admin {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+@media (max-width: 480px) {
+  .d2d-topbar__admin-label { display: none; }
+  .d2d-topbar__admin { padding-left: var(--sp-2); padding-right: var(--sp-2); }
 }
 .d2d-autosave--saved { color: var(--hue-green); }
 .d2d-autosave--error { color: var(--hue-red); }
