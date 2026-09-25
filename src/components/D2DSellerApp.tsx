@@ -385,7 +385,12 @@ function FastighetsDetalj({
                   onClick={() => onOpenLagenhet(lag.id)}
                   aria-label={formatLagenhetAdress(lagData, lag.title)}
                 >
-                  <span className="d2d-lag-card__status-dot" style={{ background: cfg.color }} />
+                  <span className="d2d-lag-row__icon" style={{ "--st": cfg.color } as CSSProperties} aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="5" y="2.5" width="10" height="15" rx="1.5" />
+                      <circle cx="12" cy="10.5" r=".9" fill="currentColor" stroke="none" />
+                    </svg>
+                  </span>
                   <span className="d2d-lag-row__cell d2d-lag-row__cell--addr">{gatuadress || "—"}</span>
                   <span className="d2d-lag-row__cell">{lagData.ingang ? String(lagData.ingang) : "—"}</span>
                   <span className="d2d-lag-row__cell d2d-lag-row__cell--lgh">{lag.title ?? "—"}</span>
