@@ -171,6 +171,17 @@ html[data-theme="dark"] { color-scheme: dark; }
    scrollcontainer och påverkas inte av detta. */
 html, body { overflow-x: hidden; }
 
+/* Hindra att iPhone Safari zoomar in när man trycker i ett textfält —
+   det gör den automatiskt för fält med text under 16px, och efter zoomen
+   går hela sidan att dra i sidled. Gäller bara pekskärmar; datorn behåller
+   den mindre textstorleken. Textstorleksjustering av i liggande läge
+   stängs också av, den ger samma effekt. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (pointer: coarse) {
+  /* !important: måste vinna över komponentklasser som .input (15px). */
+  input, select, textarea { font-size: max(16px, 1em) !important; }
+}
+
 body {
   margin: 0;
   font-family: var(--font-body);
