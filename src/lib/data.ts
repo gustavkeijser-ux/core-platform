@@ -37,6 +37,8 @@ export type FieldDef = {
     code?: string; min?: number; max?: number; decimals?: number;
     section?: string;
     _hidden?: boolean;
+    /** Dolt för säljarna i D2D-säljarvyn (adressformuläret). CRM visar det ändå. */
+    seller_hidden?: boolean;
     /** Visas som kolumn i listvyn */
     _column?: boolean;
     /** Ordning bland listkolumnerna */
