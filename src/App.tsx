@@ -31,6 +31,7 @@ export default function App() {
   const [objects, setObjects] = useState<ObjectDef[] | null>(null);
   const [branding, setBranding] = useState<TenantBranding | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSeller, setIsSeller] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [view, setView] = useState<View | null>(null);
@@ -55,8 +56,13 @@ export default function App() {
         setObjects(res.objects);
         setBranding(res.tenant ?? null);
         setIsAdmin(!!res.isAdmin);
+        setIsSeller(!!res.isSeller);
         setMustChangePassword(!!res.mustChangePassword);
-        setView({ kind: "dashboard" });
+        // Ren dörrsäljare (ingen admin-roll också) möts direkt av
+        // säljarvyn — enklare för dem, och de har inget annat de
+        // behöver i CRM:et. En admin som också har säljarrollen ser
+        // fortfarande hela CRM:et som vanligt.
+        setView(res.isSeller && !res.isAdmin ? { kind: "d2d" } : { kind: "dashboard" });
       })
       .catch((e) => setMetaError(e.message ?? "Kunde inte hämta metadata."));
   }, [session]);
@@ -70,6 +76,7 @@ export default function App() {
         setObjects(res.objects);
         setBranding(res.tenant ?? null);
         setIsAdmin(!!res.isAdmin);
+        setIsSeller(!!res.isSeller);
         setMustChangePassword(!!res.mustChangePassword);
       })
       .catch(() => { /* tyst — behåll befintlig data */ });
@@ -94,10 +101,12 @@ export default function App() {
     return <ForcedPasswordChangePage onDone={() => setMustChangePassword(false)} />;
   }
 
-  // D2D-läge: helt separat vy
+  // D2D-läge: helt separat vy. Rena dörrsäljare (ingen admin-roll) får
+  // ingen väg tillbaka till CRM:et — de ska bara se säljarvyn, temaväxlaren
+  // och logga ut, för enkelhetens skull.
   if (view?.kind === "d2d") {
     return (
-      <D2DSellerApp onExitD2D={() => setView({ kind: "dashboard" })} />
+      <D2DSellerApp onExitD2D={isSeller && !isAdmin ? undefined : () => setView({ kind: "dashboard" })} />
     );
   }
 
