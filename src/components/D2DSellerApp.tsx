@@ -270,30 +270,52 @@ function FastighetsDetalj({
           <div className="d2d-empty">Inga lägenheter registrerade.</div>
         )}
 
-        {lagenheter.map((lag) => {
-          const lagData = lag.data as Record<string, unknown>;
-          const st = (lag.status ?? "ej_knackad") as KnockStatus;
-          const cfg = STATUS_CONFIG[st] ?? STATUS_CONFIG.ej_knackad;
-          return (
-            <button
-              key={lag.id}
-              className={`d2d-lag-card ${cfg.cssClass}`}
-              onClick={() => onOpenLagenhet(lag.id)}
-            >
-              <div className="d2d-lag-card__status-dot" style={{ background: cfg.color }} />
-              <div className="d2d-lag-card__main">
-                <span className="d2d-lag-card__title">{formatLagenhetAdress(lagData, lag.title)}</span>
-                {!!lagData.kund_namn && (
-                  <span className="d2d-lag-card__sub">{String(lagData.kund_namn)}</span>
-                )}
-                {!!lagData.kommentar && (
-                  <span className="d2d-lag-card__comment">{String(lagData.kommentar).slice(0, 60)}{String(lagData.kommentar).length > 60 ? "…" : ""}</span>
-                )}
-              </div>
-              <span className="d2d-lag-card__badge">{cfg.label}</span>
-            </button>
-          );
-        })}
+        {/* Kolumnvy: adress (gatunamn + nummer), ingång, lgh-nr och namn
+            (när säljaren fyllt i det) i egna kolumner, så listan går att
+            skanna uppifrån och ned per dörr. Statusen syns som färgad prick
+            längst till vänster + etikett längst till höger. */}
+        {lagenheter.length > 0 && (
+          <div className="d2d-lag-table">
+            <div className="d2d-lag-table__head" aria-hidden="true">
+              <span />
+              <span>Adress</span>
+              <span>Ingång</span>
+              <span>Lgh</span>
+              <span>Namn</span>
+              <span className="d2d-lag-table__status-col">Status</span>
+            </div>
+
+            {lagenheter.map((lag) => {
+              const lagData = lag.data as Record<string, unknown>;
+              const st = (lag.status ?? "ej_knackad") as KnockStatus;
+              const cfg = STATUS_CONFIG[st] ?? STATUS_CONFIG.ej_knackad;
+              const gatuadress = [lagData.gatunamn, lagData.gatunummer].filter(Boolean).join(" ");
+              const kommentar = lagData.kommentar ? String(lagData.kommentar) : "";
+              return (
+                <button
+                  key={lag.id}
+                  className={`d2d-lag-row ${cfg.cssClass}`}
+                  onClick={() => onOpenLagenhet(lag.id)}
+                  aria-label={formatLagenhetAdress(lagData, lag.title)}
+                >
+                  <span className="d2d-lag-card__status-dot" style={{ background: cfg.color }} />
+                  <span className="d2d-lag-row__cell d2d-lag-row__cell--addr">{gatuadress || "—"}</span>
+                  <span className="d2d-lag-row__cell">{lagData.ingang ? String(lagData.ingang) : "—"}</span>
+                  <span className="d2d-lag-row__cell d2d-lag-row__cell--lgh">{lag.title ?? "—"}</span>
+                  <span className={`d2d-lag-row__cell${lagData.kund_namn ? "" : " d2d-lag-row__cell--empty"}`}>
+                    {lagData.kund_namn ? String(lagData.kund_namn) : "—"}
+                  </span>
+                  <span className="d2d-lag-card__badge d2d-lag-table__status-col">{cfg.label}</span>
+                  {!!kommentar && (
+                    <span className="d2d-lag-row__comment">
+                      {kommentar.slice(0, 80)}{kommentar.length > 80 ? "…" : ""}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
