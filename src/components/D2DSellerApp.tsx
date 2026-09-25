@@ -39,6 +39,23 @@ const SECTION_LABELS: Record<string, string> = {
   forsaljning: "Försäljning",
 };
 
+// Statusar som INTE ska visas som egna bubblor i statusväljaren högst upp —
+// "Intresserad" är för löst definierat för att vara en egen slutstatus
+// (jfr "Såld"), så den plockas bort ur väljaren men finns kvar i
+// STATUS_CONFIG eftersom befintliga poster kan ha statusen satt sedan innan.
+const HIDDEN_STATUS_PICKS = new Set<KnockStatus>(["intresserad"]);
+
+// Anledningar säljaren kan välja mellan när en lägenhet markeras
+// "Inte intresserad" — låter statistiken brytas ner senare i CRM:et.
+const EJ_INTRESSERAD_REASONS: Array<{ key: string; label: string }> = [
+  { key: "for_gammal",         label: "För gammal" },
+  { key: "bindningstid",       label: "Bindningstid" },
+  { key: "flyttar",            label: "Flyttar" },
+  { key: "saknar_behov",       label: "Saknar behov" },
+  { key: "dalig_ekonomi",      label: "Dålig ekonomi" },
+  { key: "vill_inte_ha_fiber", label: "Vill inte ha fiber" },
+];
+
 // =============================================================================
 // Fastighetslista
 // =============================================================================
@@ -337,8 +354,27 @@ function LagenhetForm({
   if (loading) return <div className="d2d-loading">Laddar…</div>;
   if (!record) return <div className="d2d-empty">Lägenheten hittades inte.</div>;
 
-  // Gruppera fält per sektion (dölj ai-sektionen)
-  const fields = objectDef?.fields.filter((f) => f.options.section !== "ai") ?? [];
+  // Adress-header — statisk text, inte redigerbar. Ger säljaren snabb
+  // kontext om vilken lägenhet/adress hen faktiskt står i just nu.
+  const gatuadress = [data.gatunamn, data.gatunummer].filter(Boolean).join(" ");
+  const gatuadressMedIngang = data.ingang
+    ? `${gatuadress}${gatuadress ? ", " : ""}ingång ${String(data.ingang)}`
+    : gatuadress;
+  const ortRad = [data.postnummer, data.postort].filter(Boolean).join(" ");
+  const headerUndertext = [
+    ortRad || null,
+    data.fastighetsbeteckning ? String(data.fastighetsbeteckning) : null,
+    `Lgh ${record.title ?? "—"}`,
+  ].filter(Boolean).join(" · ");
+
+  // Gruppera fält per sektion (dölj ai-sektionen samt de interna fälten för
+  // "inte intresserad"-anledning, som hanteras av sitt eget UI nedan i
+  // stället för att dyka upp som ett generiskt formulärfält).
+  const fields = objectDef?.fields.filter((f) =>
+    f.options.section !== "ai"
+    && f.key !== "ej_intresserad_anledning"
+    && f.key !== "ej_intresserad_bindningstid"
+  ) ?? [];
 
   type FieldGroup = { section: string | null; label: string | null; fields: FieldDef[] };
   const groups: FieldGroup[] = [];
@@ -354,28 +390,71 @@ function LagenhetForm({
 
   return (
     <div className="d2d-detail">
-      {/* Topbar */}
+      {/* Topbar — adress/lägenhet som statisk text, inte en redigerbar
+          ruta, bara kontext om var säljaren står just nu. */}
       <div className="d2d-topbar">
         <button className="d2d-back" onClick={onBack}>
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4l-6 6 6 6"/></svg>
         </button>
         <div className="d2d-topbar__title">
-          <h2>Lgh {record.title ?? "—"}</h2>
+          <h2>{gatuadressMedIngang || `Lgh ${record.title ?? "—"}`}</h2>
+          {!!headerUndertext && <span className="d2d-topbar__sub">{headerUndertext}</span>}
         </div>
       </div>
 
       {/* Statusväljare — stora knappar */}
       <div className="d2d-status-picker">
-        {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-          <button
-            key={key}
-            className={`d2d-status-btn ${cfg.cssClass}${status === key ? " d2d-status-btn--active" : ""}`}
-            onClick={() => { setStatus(key); setDirty(true); setSaveOk(false); }}
-          >
-            {cfg.label}
-          </button>
-        ))}
+        {Object.entries(STATUS_CONFIG)
+          .filter(([key]) => !HIDDEN_STATUS_PICKS.has(key as KnockStatus))
+          .map(([key, cfg]) => (
+            <button
+              key={key}
+              className={`d2d-status-btn ${cfg.cssClass}${status === key ? " d2d-status-btn--active" : ""}`}
+              onClick={() => {
+                setStatus(key);
+                setDirty(true);
+                setSaveOk(false);
+              }}
+            >
+              {cfg.label}
+            </button>
+          ))}
       </div>
+
+      {/* Anledning — visas så fort statusen är "Inte intresserad", så
+          säljaren måste (eller i alla fall enkelt kan) ange varför. */}
+      {status === "inte_intresserad" && (
+        <div className="d2d-reason-panel">
+          <span className="label">Anledning</span>
+          <div className="d2d-reason-panel__chips">
+            {EJ_INTRESSERAD_REASONS.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                className={`d2d-reason-chip${data.ej_intresserad_anledning === r.key ? " d2d-reason-chip--active" : ""}`}
+                onClick={() => set("ej_intresserad_anledning")(r.key)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          {data.ej_intresserad_anledning === "bindningstid" && (
+            <div className="d2d-reason-panel__date">
+              <label htmlFor="ej-intresserad-bindningstid" className="label">
+                Bindningstid löper ut
+              </label>
+              <input
+                id="ej-intresserad-bindningstid"
+                className="input"
+                type="text"
+                placeholder="ÅÅÅÅ-MM-DD, ÅÅÅÅ-MM eller ÅÅÅÅ"
+                value={String(data.ej_intresserad_bindningstid ?? "")}
+                onChange={(e) => set("ej_intresserad_bindningstid")(e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Formulärfält */}
       <div className="d2d-form">
