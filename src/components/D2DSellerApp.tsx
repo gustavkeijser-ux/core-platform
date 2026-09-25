@@ -56,6 +56,19 @@ const EJ_INTRESSERAD_REASONS: Array<{ key: string; label: string }> = [
   { key: "vill_inte_ha_fiber", label: "Vill inte ha fiber" },
 ];
 
+/** Fullständig adress för en lägenhetspost — gatunamn, gatunummer och
+ *  lägenhetsnummer tillsammans, t.ex. "Storgatan 12, lgh 14A". Används
+ *  överallt en lägenhet visas i säljarvyn så säljaren aldrig behöver gissa
+ *  vilken dörr en rad i en lista syftar på. Faller tillbaka till bara
+ *  lägenhetsnumret om adressfälten saknas (t.ex. äldre poster). */
+function formatLagenhetAdress(data: Record<string, unknown>, title: string | null | undefined): string {
+  const gatuadress = [data.gatunamn, data.gatunummer].filter(Boolean).join(" ");
+  const medIngang = data.ingang
+    ? `${gatuadress}${gatuadress ? ", " : ""}ingång ${String(data.ingang)}`
+    : gatuadress;
+  return medIngang ? `${medIngang}, lgh ${title ?? "—"}` : `Lgh ${title ?? "—"}`;
+}
+
 // =============================================================================
 // Fastighetslista
 // =============================================================================
@@ -269,7 +282,7 @@ function FastighetsDetalj({
             >
               <div className="d2d-lag-card__status-dot" style={{ background: cfg.color }} />
               <div className="d2d-lag-card__main">
-                <span className="d2d-lag-card__title">{lag.title ?? "—"}</span>
+                <span className="d2d-lag-card__title">{formatLagenhetAdress(lagData, lag.title)}</span>
                 {!!lagData.kund_namn && (
                   <span className="d2d-lag-card__sub">{String(lagData.kund_namn)}</span>
                 )}
@@ -355,16 +368,14 @@ function LagenhetForm({
   if (!record) return <div className="d2d-empty">Lägenheten hittades inte.</div>;
 
   // Adress-header — statisk text, inte redigerbar. Ger säljaren snabb
-  // kontext om vilken lägenhet/adress hen faktiskt står i just nu.
-  const gatuadress = [data.gatunamn, data.gatunummer].filter(Boolean).join(" ");
-  const gatuadressMedIngang = data.ingang
-    ? `${gatuadress}${gatuadress ? ", " : ""}ingång ${String(data.ingang)}`
-    : gatuadress;
+  // kontext om vilken lägenhet/adress hen faktiskt står i just nu. Rubriken
+  // visar alltid fullständig adress: gatunamn, gatunummer OCH lägenhetsnummer
+  // tillsammans, aldrig bara ett av dem.
+  const fullAdress = formatLagenhetAdress(data, record.title);
   const ortRad = [data.postnummer, data.postort].filter(Boolean).join(" ");
   const headerUndertext = [
     ortRad || null,
     data.fastighetsbeteckning ? String(data.fastighetsbeteckning) : null,
-    `Lgh ${record.title ?? "—"}`,
   ].filter(Boolean).join(" · ");
 
   // Gruppera fält per sektion (dölj ai-sektionen samt de interna fälten för
@@ -397,7 +408,7 @@ function LagenhetForm({
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4l-6 6 6 6"/></svg>
         </button>
         <div className="d2d-topbar__title">
-          <h2>{gatuadressMedIngang || `Lgh ${record.title ?? "—"}`}</h2>
+          <h2>{fullAdress}</h2>
           {!!headerUndertext && <span className="d2d-topbar__sub">{headerUndertext}</span>}
         </div>
       </div>
@@ -523,7 +534,7 @@ function SigneradeLista({
         return (
           <button key={item.id} className="d2d-card d2d-card--signed" onClick={() => onOpenLagenhet(item.id, "")}>
             <div className="d2d-card__main">
-              <span className="d2d-card__title">Lgh {item.title ?? "—"}</span>
+              <span className="d2d-card__title">{formatLagenhetAdress(data, item.title)}</span>
               {!!data.kund_namn && <span className="d2d-card__sub">{String(data.kund_namn)}</span>}
               {!!data.produkt && <span className="d2d-card__meta-text">{String(data.produkt)}</span>}
             </div>
@@ -578,7 +589,7 @@ function AterkopplingarLista({
         return (
           <button key={item.id} className="d2d-card d2d-card--callback" onClick={() => onOpenLagenhet(item.id, "")}>
             <div className="d2d-card__main">
-              <span className="d2d-card__title">Lgh {item.title ?? "—"}</span>
+              <span className="d2d-card__title">{formatLagenhetAdress(data, item.title)}</span>
               {!!data.kund_namn && <span className="d2d-card__sub">{String(data.kund_namn)}</span>}
               {!!data.kommentar && (
                 <span className="d2d-card__comment">{String(data.kommentar).slice(0, 80)}{String(data.kommentar).length > 80 ? "…" : ""}</span>
