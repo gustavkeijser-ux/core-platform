@@ -624,8 +624,14 @@ function LagenhetForm({
             className="btn btn--ghost btn--sm d2d-topbar__admin"
             onClick={() => setShowFieldConfig(true)}
             title="Välj vilka fält säljarna ser på adresser, och lägg till nya"
+            aria-label="Anpassa fält"
           >
-            Anpassa fält
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 5.5h8M15 5.5h2M3 14.5h2M9 14.5h8" />
+              <circle cx="13" cy="5.5" r="2" />
+              <circle cx="7" cy="14.5" r="2" />
+            </svg>
+            <span className="d2d-topbar__admin-label">Anpassa fält</span>
           </button>
         )}
         <span className={`d2d-autosave d2d-autosave--${saveState}`} aria-live="polite">
