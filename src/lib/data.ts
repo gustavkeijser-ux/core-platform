@@ -43,6 +43,8 @@ export type FieldDef = {
     _column?: boolean;
     /** Ordning bland listkolumnerna */
     _column_order?: number;
+    /** Statuskolumnen i listan placeras direkt efter detta fält. */
+    _status_after?: boolean;
   };
   helpText: string | null;
   sortOrder: number;
