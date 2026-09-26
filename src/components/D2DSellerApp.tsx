@@ -10,6 +10,7 @@ import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { FieldConfigPanel } from "./FieldConfigPanel";
 import { useRoute, navigate } from "@/lib/route";
+import { useUserName } from "@/lib/users";
 
 // =============================================================================
 // Typer & hjälpfunktioner
@@ -263,12 +264,24 @@ function FastighetsLista({
 // Fastighetsöversikt med knackvy (lägenhetslista)
 // =============================================================================
 
+/** Namnet på säljaren som fått adressen tilldelad (eller "—"). */
+function SaljareCell({ id }: { id: string | null }) {
+  const name = useUserName(id);
+  return (
+    <span className={`d2d-lag-row__cell d2d-lag-row__cell--saljare${id ? "" : " d2d-lag-row__cell--empty"}`} title={id ? name : undefined}>
+      {id ? name : "—"}
+    </span>
+  );
+}
+
 function FastighetsDetalj({
   fastighetId,
+  isAdmin = false,
   onBack,
   onOpenLagenhet,
 }: {
   fastighetId: string;
+  isAdmin?: boolean;
   onBack: () => void;
   onOpenLagenhet: (id: string) => void;
 }) {
@@ -357,18 +370,23 @@ function FastighetsDetalj({
           <div className="d2d-empty">Inga lägenheter registrerade.</div>
         )}
 
-        {/* Kolumnvy: adress (gatunamn + nummer), ingång, lgh-nr och namn
-            (när säljaren fyllt i det) i egna kolumner, så listan går att
-            skanna uppifrån och ned per dörr. Statusen syns som färgad prick
-            längst till vänster + etikett längst till höger. */}
+        {/* Kolumnvy: (admin: tilldelad säljare,) adress (gatunamn + nummer),
+            ingång, lgh-nr, namn och kommentar i egna kolumner, så listan går
+            att skanna uppifrån och ned per dörr. Statusen syns som färgad
+            ikon längst till vänster + etikett längst till höger. På mobil
+            hamnar kommentaren på en egen rad under i stället för i en kolumn.
+            Säljarkolumnen visas bara för admin — en ren säljare ser ändå
+            bara sina egna adresser. */}
         {lagenheter.length > 0 && (
-          <div className="d2d-lag-table">
+          <div className={`d2d-lag-table${isAdmin ? " d2d-lag-table--admin" : ""}`}>
             <div className="d2d-lag-table__head" aria-hidden="true">
               <span />
+              {isAdmin && <span>Säljare</span>}
               <span>Adress</span>
               <span>Ingång</span>
               <span>Lgh</span>
               <span>Namn</span>
+              <span className="d2d-lag-table__komm-col">Kommentar</span>
               <span className="d2d-lag-table__status-col">Status</span>
             </div>
 
@@ -378,6 +396,7 @@ function FastighetsDetalj({
               const cfg = STATUS_CONFIG[st] ?? STATUS_CONFIG.ej_knackad;
               const gatuadress = [lagData.gatunamn, lagData.gatunummer].filter(Boolean).join(" ");
               const kommentar = lagData.kommentar ? String(lagData.kommentar) : "";
+              const saljareId = (lagData.saljare ? String(lagData.saljare) : null) ?? lag.owner_user_id ?? null;
               return (
                 <button
                   key={lag.id}
@@ -391,11 +410,18 @@ function FastighetsDetalj({
                       <circle cx="12" cy="10.5" r=".9" fill="currentColor" stroke="none" />
                     </svg>
                   </span>
+                  {isAdmin && <SaljareCell id={saljareId} />}
                   <span className="d2d-lag-row__cell d2d-lag-row__cell--addr">{gatuadress || "—"}</span>
                   <span className="d2d-lag-row__cell">{lagData.ingang ? String(lagData.ingang) : "—"}</span>
                   <span className="d2d-lag-row__cell d2d-lag-row__cell--lgh">{lag.title ?? "—"}</span>
                   <span className={`d2d-lag-row__cell${lagData.kund_namn ? "" : " d2d-lag-row__cell--empty"}`}>
                     {lagData.kund_namn ? String(lagData.kund_namn) : "—"}
+                  </span>
+                  <span
+                    className={`d2d-lag-row__cell d2d-lag-row__cell--komm d2d-lag-table__komm-col${kommentar ? "" : " d2d-lag-row__cell--empty"}`}
+                    title={kommentar || undefined}
+                  >
+                    {kommentar || "—"}
                   </span>
                   <span className="d2d-lag-card__badge d2d-lag-table__status-col">{cfg.label}</span>
                   {!!kommentar && (
@@ -888,6 +914,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
         return (
           <FastighetsDetalj
             fastighetId={view.id}
+            isAdmin={isAdmin}
             onBack={() => setView({ kind: "fastigheter" })}
             onOpenLagenhet={(id) => setView({ kind: "lagenhet", id, fastighetId: view.id })}
           />
