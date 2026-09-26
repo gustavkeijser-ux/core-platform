@@ -2259,12 +2259,14 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 
 /* ── Lägenhetslista i kolumner ────────────────────────────────────────────
    Varje lägenhet är ett eget rundat kort med luft emellan (samma språk som
-   dörrlistan i boendeappen). Ikon | Adress | Ingång | Lgh | Namn | Status —
-   samma grid på rubrikraden och i varje kort så kolumnerna linjerar. På
-   smala mobiler döljs statusetiketten (ikonens färg bär statusen). */
+   dörrlistan i boendeappen). Ikon | (Säljare) | Adress | Ingång | Lgh | Namn |
+   Kommentar | Status — samma grid på rubrikraden och i varje kort så
+   kolumnerna linjerar. Säljarkolumnen finns bara för admin. På smala
+   mobiler döljs statusetiketten (ikonens färg bär statusen) och kommentaren
+   flyttar till en egen rad under kortets kolumner. */
 
 .d2d-lag-table {
-  --lag-cols: 2.5rem minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.2fr) 8.5rem;
+  --lag-cols: 2.5rem minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.1fr) minmax(0, 1.6fr) 8.5rem;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
@@ -2346,7 +2348,27 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   color: var(--ink-faint);
 }
 
-/* Kommentaren på egen rad under datakolumnerna. */
+.d2d-lag-table--admin {
+  --lag-cols: 2.5rem minmax(0, 1fr) minmax(0, 1.3fr) 4rem 4rem minmax(0, 1fr) minmax(0, 1.5fr) 8.5rem;
+}
+
+.d2d-lag-row__cell--saljare {
+  font-weight: 600;
+}
+
+/* Kommentarkolumnen: max två rader, hela texten i verktygstipset. */
+.d2d-lag-row__cell--komm {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--ink-muted);
+}
+.d2d-lag-row__cell--komm.d2d-lag-row__cell--empty { color: var(--ink-faint); }
+
+/* Kommentaren på egen rad under datakolumnerna — bara på mobil, på bredare
+   skärmar har den en egen kolumn. */
+.d2d-lag-row__comment { display: none; }
 .d2d-lag-row__comment {
   grid-column: 2 / -1;
   font-size: var(--text-xs);
@@ -2361,6 +2383,11 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
     --lag-cols: 2rem minmax(0, 1.25fr) 2.75rem 2.75rem minmax(0, 1fr);
     gap: var(--sp-2);
   }
+  .d2d-lag-table--admin {
+    --lag-cols: 2rem minmax(0, .9fr) minmax(0, 1.2fr) 2.25rem 2.75rem minmax(0, .9fr);
+  }
+  .d2d-lag-table__komm-col { display: none; }
+  .d2d-lag-row__comment { display: block; }
   .d2d-lag-table__head {
     font-size: 10px;
     letter-spacing: 0;
