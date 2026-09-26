@@ -23,11 +23,41 @@ async function fetchName(id: string): Promise<string> {
   return name;
 }
 
+/** Hämtar alla användare i tenanten på en gång (RLS begränsar till egen
+ *  tenant) och fyller cachen — så att namn visas direkt i listor i stället
+ *  för ett id-fragment medan varje namn slås upp för sig. */
+let allUsers: Promise<UserOption[]> | null = null;
+export type UserOption = { id: string; name: string };
+export function loadAllUsers(): Promise<UserOption[]> {
+  if (!allUsers) {
+    allUsers = (async () => {
+      const { data, error } = await supabase.from("users").select("id,full_name,email");
+      if (error) { allUsers = null; return []; }
+      const list = (data ?? []).map((u) => ({
+        id: u.id as string,
+        name: (u.full_name as string | null) || (u.email as string | null) || String(u.id).slice(0, 8),
+      }));
+      for (const u of list) cache.set(u.id, u.name);
+      listeners.forEach((l) => l());
+      return list.sort((a, b) => a.name.localeCompare(b.name, "sv"));
+    })();
+  }
+  return allUsers;
+}
+
+/** Alla användare i tenanten (för väljare), sorterade på namn. */
+export function useTenantUsers(): UserOption[] {
+  const [list, setList] = useState<UserOption[]>([]);
+  useEffect(() => { let on = true; loadAllUsers().then((l) => { if (on) setList(l); }); return () => { on = false; }; }, []);
+  return list;
+}
+
 export function getUserName(id: string | null | undefined): string {
   if (!id) return "";
   if (cache.has(id)) return cache.get(id)!;
   if (!inflight.has(id)) inflight.set(id, fetchName(id));
-  return id.slice(0, 8);
+  // Medan namnet laddas: visa inget hellre än ett id-fragment.
+  return "…";
 }
 
 /** Hook-variant som ritar om komponenten när namnet blivit klart. */
