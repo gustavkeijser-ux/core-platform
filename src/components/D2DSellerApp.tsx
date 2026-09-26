@@ -588,13 +588,9 @@ function LagenhetForm({
     queueSave({ [key]: value }, null, delayMs);
   };
 
-  /** Lokal tid som "ÅÅÅÅ-MM-DDTHH:MM" — samma format som datum/tid-fältet
-   *  skickar när man fyller i det för hand. */
-  const nuLokalTid = () => {
-    const d = new Date();
-    const p2 = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
-  };
+  /** Nu, som ISO-tidpunkt i UTC (servern sparar datum/tid i UTC; fälten
+   *  visar den i lokal tid). */
+  const nuLokalTid = () => new Date().toISOString();
 
   const changeStatus = (key: string) => {
     if (key === status) return;
