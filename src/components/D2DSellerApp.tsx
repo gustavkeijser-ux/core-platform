@@ -109,7 +109,13 @@ function jamforLagenheter(a: RecordRow, b: RecordRow): number {
 
 type InfoRow = { label: string; value: string };
 
-const txt = (v: unknown): string => (v === null || v === undefined ? "" : String(v).trim());
+const txt = (v: unknown): string => {
+  if (v === null || v === undefined) return "";
+  const s = String(v).trim();
+  // "-" / "–" används i importfiler som "inget" — behandla som tomt.
+  return /^[-–—]+$/.test(s) ? "" : s;
+};
+const SAKNAS = "Saknas";
 
 /** Alla infrastrukturfakta säljaren behöver, i en fast ordning. Fastighetens
  *  värden är utgångsläget; skickas en lägenhet med vinner dess egna
@@ -141,16 +147,19 @@ function infraRows(fast: Record<string, unknown>, lag?: Record<string, unknown>)
     ["Förvaltare", txt(fast.forvaltare)],
     ["Portkod", pick("portkod_adress", "portkod")],
     [natSlackt ? "Tidigare nät" : "Befintligt nät", natText],
-    ["Befintlig fiber", fiber ? (fiberSlut ? `${fiber} (t.o.m. ${fiberSlut})` : fiber) : ""],
+    // Fiber, koax och TV visas alltid — finns inget står det "Saknas", så
+    // säljaren vet att det är kontrollerat och inte bara ej ifyllt.
+    ["Befintlig fiber", fiber ? (fiberSlut ? `${fiber} (t.o.m. ${fiberSlut})` : fiber) : (nat ? "" : SAKNAS)],
     ["Fiberavtal t.o.m.", !fiber ? fiberSlut : ""],
-    ["Befintlig koax", koax ? (koaxSlut ? `${koax} (t.o.m. ${koaxSlut})` : koax) : ""],
+    ["Befintlig koax", koax ? (koaxSlut ? `${koax} (t.o.m. ${koaxSlut})` : koax) : (txt(fast.kabel_tv) ? "" : SAKNAS)],
     ["Koaxavtal t.o.m.", !koax ? koaxSlut : ""],
     ["Kabel-TV", txt(fast.kabel_tv)],
-    ["Befintligt kanalpaket", pick("befintligt_kanalpaket", "nuvarande_tv")],
+    ["Befintlig TV", pick("befintligt_kanalpaket", "nuvarande_tv") || SAKNAS],
     ["Nytt kanalpaket", pick("nytt_kanalpaket", "nytt_tv_installation")],
     ["Kanalpaket efter avslut", txt(fast.nytt_tv_efter_avslut)],
     ["Installationsdatum", pick("installationsdatum_adress", "installationsdatum")],
     ["Kundklar", txt(fast.kundklar_datum)],
+    ["Antal lägenheter", txt(fast.antal_lagenheter)],
     ["Gamla nätet avslutas", !nat ? natSlut : ""],
     ["Tillträde", txt(fast.tilltradesinstruktion)],
   ];
@@ -192,20 +201,26 @@ function FastighetsLista({
   useEffect(() => {
     (async () => {
       try {
-        // RLS scopar redan d2d_lagenhet till säljarens egna rader (scope
-        // "own" för rollen dörrsäljare), så det här visar bara fastigheter
-        // där man faktiskt fått adresser tilldelade.
-        const lagRes = await listRecords({ objectType: "d2d_lagenhet", limit: 2000 });
-        const lagIds = lagRes.items.map((l) => l.id);
-        if (lagIds.length === 0) { setItems([]); return; }
-
-        const { data: rels } = await supabase
-          .from("relationships")
-          .select("to_record_id")
-          .eq("rel_type", "d2d_lag_fastighet")
-          .in("from_record_id", lagIds);
-
-        const fastIds = Array.from(new Set((rels ?? []).map((r) => r.to_record_id as string)));
+        // Kopplingarna lägenhet → fastighet hämtas direkt. RLS på
+        // relationships kräver att båda posterna är synliga, och
+        // d2d_lagenhet är scopad till säljarens egna rader (scope "own"
+        // för dörrsäljare) — så en säljare får bara fastigheter där den
+        // har adresser, admin får alla. (Tidigare listades lägenheterna
+        // först, men den listningen tar max 200 rader, så fastigheter vars
+        // lägenheter hamnade utanför de 200 syntes inte alls.)
+        const fastSet = new Set<string>();
+        const PAGE = 1000;
+        for (let from = 0; ; from += PAGE) {
+          const { data: rels, error } = await supabase
+            .from("relationships")
+            .select("to_record_id")
+            .eq("rel_type", "d2d_lag_fastighet")
+            .range(from, from + PAGE - 1);
+          if (error) throw error;
+          for (const r of rels ?? []) fastSet.add(r.to_record_id as string);
+          if (!rels || rels.length < PAGE) break;
+        }
+        const fastIds = Array.from(fastSet);
         if (fastIds.length === 0) { setItems([]); return; }
 
         const { data: fastData } = await supabase
