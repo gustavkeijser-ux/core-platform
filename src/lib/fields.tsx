@@ -31,6 +31,24 @@ const nf = (decimals = 0) =>
 
 const text: Renderer = { format: (v) => String(v ?? "") };
 
+/** Tolkar ett lagrat datum/tid-värde. Tål äldre format som "+00" (offset
+ *  utan minuter), som Date annars inte förstår → "Invalid Date". */
+export function parseDateValue(v: unknown): Date | null {
+  if (v === null || v === undefined || v === "") return null;
+  let s = String(v).trim();
+  s = s.replace(" ", "T").replace(/([+-]\d{2})$/, "$1:00");
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Datum → "ÅÅÅÅ-MM-DDTHH:MM" i lokal tid, för <input type="datetime-local">. */
+function toLocalInput(v: unknown): string {
+  const d = parseDateValue(v);
+  if (!d) return "";
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+
 export const RENDERERS: Record<FieldType, Renderer> = {
   text,
   phone: text,
@@ -64,21 +82,21 @@ export const RENDERERS: Record<FieldType, Renderer> = {
   boolean: { format: (v) => (v ? "Ja" : "Nej") },
 
   date: {
-    format: (v) =>
-      v
-        ? new Date(String(v)).toLocaleDateString("sv-SE", {
-            day: "numeric", month: "short", year: "numeric",
-          })
-        : "",
+    format: (v) => {
+      const d = parseDateValue(v);
+      return d
+        ? d.toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" })
+        : String(v ?? "");
+    },
   },
 
   datetime: {
-    format: (v) =>
-      v
-        ? new Date(String(v)).toLocaleString("sv-SE", {
-            day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-          })
-        : "",
+    format: (v) => {
+      const d = parseDateValue(v);
+      return d
+        ? d.toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+        : String(v ?? "");
+    },
   },
 
   select: {
@@ -237,13 +255,24 @@ export function FieldInput({ field, value, onChange, error }: InputProps) {
         );
 
       case "date":
-      case "datetime":
         return (
           <input
-            id={id} className="input"
-            type={t === "date" ? "date" : "datetime-local"}
-            value={value ? String(value).slice(0, t === "date" ? 10 : 16) : ""}
+            id={id} className="input" type="date"
+            value={value ? String(value).slice(0, 10) : ""}
             onChange={(e) => onChange(e.target.value || null)}
+          />
+        );
+
+      case "datetime":
+        // Visas i lokal tid, sparas som UTC (ISO med Z).
+        return (
+          <input
+            id={id} className="input" type="datetime-local"
+            value={toLocalInput(value)}
+            onChange={(e) => {
+              const d = e.target.value ? new Date(e.target.value) : null;
+              onChange(d && !isNaN(d.getTime()) ? d.toISOString() : null);
+            }}
           />
         );
 
