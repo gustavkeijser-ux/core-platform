@@ -17,6 +17,7 @@ import { MyTasksPage } from "@/components/MyTasksPage";
 import { ImportPage } from "@/components/ImportPage";
 import { UserSettings } from "@/components/UserSettings";
 import { useRoute, readRoute, navigate } from "@/lib/route";
+import { loadAllUsers } from "@/lib/users";
 
 type View =
   | { kind: "dashboard" }
@@ -72,6 +73,7 @@ export default function App() {
 
   useEffect(() => {
     if (!session) return;
+    loadAllUsers(); // användarnamn i cachen direkt, så användarfält visar namn
     getMetadata()
       .then((res) => {
         setObjects(res.objects);
