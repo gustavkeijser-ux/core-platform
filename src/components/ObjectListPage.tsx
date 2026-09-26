@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ObjectDef, RecordRow, ListView, RecordFilter } from "@/lib/data";
+import type { ObjectDef, RecordRow, ListView, RecordFilter, FieldDef } from "@/lib/data";
 import { listRecords, deleteRecord, listSavedViews, saveListView, deleteListView, DataError, supabase } from "@/lib/data";
 import { formatValue } from "@/lib/fields";
+import { UserBadge } from "@/lib/users";
 import { recordsToCsv, downloadCsv } from "@/lib/csv";
 import { StatusPill } from "./StatusPill";
 import { RecordDrawer } from "./RecordDrawer";
@@ -52,6 +53,30 @@ function pickColumns(def: ObjectDef) {
     .slice(0, 3);
 }
 
+type Cell = { kind: "title" } | { kind: "status" } | { kind: "field"; field: FieldDef };
+
+/**
+ * Kolumnordningen i tabellen. Normalt: postens titel, status, sedan de
+ * valda kolumnerna. Två undantag, båda styrda från fältdefinitionerna:
+ *  - Är titelfältet (t.ex. "name") självt valt som kolumn visas det på sin
+ *    plats i ordningen i stället för som fast första kolumn.
+ *  - Har ett valt fält options._status_after = true hamnar statuskolumnen
+ *    direkt efter det fältet i stället för tidigt.
+ */
+function columnLayout(def: ObjectDef, columns: FieldDef[]): Cell[] {
+  const hasStatuses = def.statuses.length > 0;
+  const titleAsColumn = columns.some((c) => c.key === def.titleField);
+  const statusAfter = columns.find((c) => c.options._status_after === true);
+  const out: Cell[] = [];
+  if (!titleAsColumn) out.push({ kind: "title" });
+  if (hasStatuses && !statusAfter) out.push({ kind: "status" });
+  for (const c of columns) {
+    out.push({ kind: "field", field: c });
+    if (hasStatuses && statusAfter && c.key === statusAfter.key) out.push({ kind: "status" });
+  }
+  return out;
+}
+
 export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: Props) {
   const [mode, setMode] = useState<"list" | "kanban">("list");
   const [showColumns, setShowColumns] = useState(false);
@@ -76,6 +101,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
   const [saveShared, setSaveShared] = useState(false);
 
   const columns = useMemo(() => pickColumns(objectDef), [objectDef]);
+  const layout = useMemo(() => columnLayout(objectDef, columns), [objectDef, columns]);
   const hasStatuses = objectDef.statuses.length > 0;
 
   async function load() {
@@ -326,58 +352,68 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
             <table className={`rtable${columns.length > 6 ? " rtable--wide" : ""}`}>
               <thead>
                 <tr>
-                  <th>
-                    <span className="rtable__th">
-                      <span className="rtable__th-label">{objectDef.labelSingular}</span>
-                      <ColumnFilter
-                        field="__title" label={objectDef.labelSingular} typ="text"
-                        aktivt={filterFor("__title")} sortering={sortFor("title")}
-                        onFilter={(f) => satKolumnfilter("__title", f)}
-                        onSortera={(dir) => setSort({ field: "title", dir })}
-                      />
-                    </span>
-                  </th>
-                  {hasStatuses && (
-                    <th>
-                      <span className="rtable__th">
-                        <span className="rtable__th-label">Status</span>
-                        <ColumnFilter
-                          field="__status" label="Status" typ="select"
-                          val={kolumnVal("__status", undefined, objectDef.statuses)}
-                          aktivt={filterFor("__status")} sortering={sortFor("status")}
-                          onFilter={(f) => satKolumnfilter("__status", f)}
-                          onSortera={(dir) => setSort({ field: "status", dir })}
-                        />
-                      </span>
-                    </th>
-                  )}
-                  {columns.map((c) => (
-                    <th key={c.key}>
-                      <span className="rtable__th">
-                        <span className="rtable__th-label">{c.label}</span>
-                        <ColumnFilter
-                          field={c.key} label={c.label} typ={c.fieldType}
-                          val={kolumnVal(c.key, c)}
-                          aktivt={filterFor(c.key)} sortering={sortFor(c.key)}
-                          onFilter={(f) => satKolumnfilter(c.key, f)}
-                          onSortera={(dir) => setSort({ field: c.key, dir })}
-                        />
-                      </span>
-                    </th>
-                  ))}
+                  {layout.map((cell) => {
+                    if (cell.kind === "title") return (
+                      <th key="__title">
+                        <span className="rtable__th">
+                          <span className="rtable__th-label">{objectDef.labelSingular}</span>
+                          <ColumnFilter
+                            field="__title" label={objectDef.labelSingular} typ="text"
+                            aktivt={filterFor("__title")} sortering={sortFor("title")}
+                            onFilter={(f) => satKolumnfilter("__title", f)}
+                            onSortera={(dir) => setSort({ field: "title", dir })}
+                          />
+                        </span>
+                      </th>
+                    );
+                    if (cell.kind === "status") return (
+                      <th key="__status">
+                        <span className="rtable__th">
+                          <span className="rtable__th-label">Status</span>
+                          <ColumnFilter
+                            field="__status" label="Status" typ="select"
+                            val={kolumnVal("__status", undefined, objectDef.statuses)}
+                            aktivt={filterFor("__status")} sortering={sortFor("status")}
+                            onFilter={(f) => satKolumnfilter("__status", f)}
+                            onSortera={(dir) => setSort({ field: "status", dir })}
+                          />
+                        </span>
+                      </th>
+                    );
+                    const c = cell.field;
+                    return (
+                      <th key={c.key}>
+                        <span className="rtable__th">
+                          <span className="rtable__th-label">{c.label}</span>
+                          <ColumnFilter
+                            field={c.key} label={c.label} typ={c.fieldType}
+                            val={kolumnVal(c.key, c)}
+                            aktivt={filterFor(c.key)} sortering={sortFor(c.key)}
+                            onFilter={(f) => satKolumnfilter(c.key, f)}
+                            onSortera={(dir) => setSort({ field: c.key, dir })}
+                          />
+                        </span>
+                      </th>
+                    );
+                  })}
                   <th aria-hidden="true" />
                 </tr>
               </thead>
               <tbody>
                 {items.map((r) => (
                   <tr key={r.id} className="rtable__row" onClick={() => onOpenRecord(r.id)}>
-                    <td className="rtable__title">{r.title ?? "Namnlös post"}</td>
-                    {hasStatuses && (
-                      <td><StatusPill status={r.status} def={objectDef.statuses.find((s) => s.key === r.status)} /></td>
-                    )}
-                    {columns.map((c) => (
-                      <td key={c.key}>{formatValue(c, r.data[c.key])}</td>
-                    ))}
+                    {layout.map((cell) => {
+                      if (cell.kind === "title") return <td key="__title" className="rtable__title">{r.title ?? "Namnlös post"}</td>;
+                      if (cell.kind === "status") return (
+                        <td key="__status"><StatusPill status={r.status} def={objectDef.statuses.find((s) => s.key === r.status)} /></td>
+                      );
+                      const c = cell.field;
+                      return (
+                        <td key={c.key} className={c.key === objectDef.titleField ? "rtable__title" : undefined}>
+                          {c.fieldType === "user" ? <UserBadge id={r.data[c.key] as string | null} /> : formatValue(c, r.data[c.key])}
+                        </td>
+                      );
+                    })}
                     <td>
                       {objectDef.can.delete && (
                         <button className="btn btn--ghost btn--sm" onClick={(e) => onDelete(r.id, e)}>Ta bort</button>
