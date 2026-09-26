@@ -1,4 +1,5 @@
 import type { FieldDef, FieldType } from "./data";
+import { getUserName, useTenantUsers } from "./users";
 
 /**
  * FÄLTREGISTRET
@@ -94,9 +95,9 @@ export const RENDERERS: Record<FieldType, Renderer> = {
     },
   },
 
-  // Användar-id visas som id tills en användarcache finns. Att visa en
-  // rå UUID är fult men ärligt; att visa ett tomt fält vore en lögn.
-  user: { format: (v) => (v ? String(v).slice(0, 8) : "") },
+  // Användarfält lagrar ett id men visas alltid med namn (från
+  // användarcachen i users.tsx, som App fyller vid inloggning).
+  user: { format: (v) => (v ? getUserName(String(v)) : "") },
 
   address: {
     wide: true,
@@ -121,6 +122,20 @@ type InputProps = {
   onChange: (value: unknown) => void;
   error?: string;
 };
+
+/** Väljare för användarfält: visar namn, sparar id. */
+function UserSelect({ id, value, onChange }: { id: string; value: unknown; onChange: (v: unknown) => void }) {
+  const users = useTenantUsers();
+  const cur = value ? String(value) : "";
+  const known = !cur || users.some((u) => u.id === cur);
+  return (
+    <select id={id} className="input" value={cur} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">Välj</option>
+      {!known && <option value={cur}>{getUserName(cur)}</option>}
+      {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+    </select>
+  );
+}
 
 export function FieldInput({ field, value, onChange, error }: InputProps) {
   const id = `f-${field.key}`;
@@ -231,6 +246,9 @@ export function FieldInput({ field, value, onChange, error }: InputProps) {
             onChange={(e) => onChange(e.target.value || null)}
           />
         );
+
+      case "user":
+        return <UserSelect id={id} value={value} onChange={onChange} />;
 
       case "address":
       case "json":
