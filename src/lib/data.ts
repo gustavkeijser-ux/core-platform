@@ -968,7 +968,10 @@ export async function d2dSkapaFastighetFranLeverans(
     fastighetsbeteckning: d.fastighetsbeteckning ?? null,
     fastighetsagare: d.fastighetsagare ?? null,
     befintligt_nat: d.befintlig_fiberleverantor ?? null,
-    nuvarande_tv: d.kanalpaket ?? d.kanalpaket_projektplan ?? null,
+    // Leveransens kanalpaket är det TV-paket Telia levererar (t.ex. "TV Bas")
+    // — alltså det NYA paketet, inte vad de boende har i dag. Nuvarande TV
+    // lämnas tomt (visas som "Saknas") tills någon fyller i det.
+    nytt_tv_installation: d.kanalpaket ?? d.kanalpaket_projektplan ?? null,
     kabel_tv: d.befintlig_koax ?? null,
     avtalstid_koax: d.avtalstid_ko ?? null,
     kundklar_datum: d.kundklar ?? null,
