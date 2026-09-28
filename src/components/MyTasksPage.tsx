@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { rememberRow, useReturnToRow } from "@/lib/returnRow";
 import {
   getMyTasks, completeTask, updateTask, DataError,
   type MyTasks, type MyTask, type MyTaskGroup,
@@ -27,6 +28,7 @@ export function MyTasksPage({ onOpenRecord }: Props) {
   const [data, setData] = useState<MyTasks | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const returnRow = useReturnToRow("mytasks", !!data);
 
   const load = useCallback(async () => {
     setError(null);
@@ -96,7 +98,7 @@ export function MyTasksPage({ onOpenRecord }: Props) {
             <div className="card" style={{ padding: 0 }}>
               <ul className="task-list">
                 {poster.map((t) => (
-                  <li key={t.id} className={`task${g.key === "forsenade" ? " task--late" : ""}`}>
+                  <li key={t.id} {...returnRow(t.id)} className={`task${g.key === "forsenade" ? " task--late" : ""}`}>
                     <label className="task__check">
                       <input type="checkbox" checked={false} disabled={busy === t.id}
                              onChange={() => klar(t)} />
@@ -115,7 +117,7 @@ export function MyTasksPage({ onOpenRecord }: Props) {
                       <div className="task__meta">
                         <span className="task__due">{datum(t.dueAt)}</span>
                         {t.recordId && (
-                          <button className="task__rec" onClick={() => onOpenRecord(t.recordId!)}>
+                          <button className="task__rec" onClick={() => { rememberRow("mytasks", t.id); onOpenRecord(t.recordId!); }}>
                             {t.recordTitle ?? "Namnlös post"}
                           </button>
                         )}
