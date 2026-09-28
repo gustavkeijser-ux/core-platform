@@ -2771,6 +2771,13 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   .followup__actions .btn { flex: 1 1 100%; }
 }
 
+/* Raden man kom tillbaka till blinkar kort så ögat hittar den direkt. */
+@keyframes d2d-return-flash {
+  0%, 60% { box-shadow: 0 0 0 3px var(--brand), var(--shadow-md); }
+  100%    { box-shadow: var(--shadow-sm); }
+}
+.d2d-return-flash { animation: d2d-return-flash 1.6s var(--ease); }
+
 /* ── D2D form ─────────────────────────────────────────────────────────── */
 
 .d2d-form {
