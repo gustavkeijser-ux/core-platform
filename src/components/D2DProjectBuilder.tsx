@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRoute, navigate } from "@/lib/route";
+import { rememberRow, useReturnToRow } from "@/lib/returnRow";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listRecords, getRecord, createRecord, updateRecord, removeRelation, addRelation,
@@ -1132,6 +1133,8 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
     }
   }
 
+  const returnRow = useReturnToRow("d2dbuilder:projekt", !loading, "d2d-return-flash");
+
   if (loading) return <div className="d2d-loading">Laddar projekt…</div>;
 
   return (
@@ -1160,7 +1163,7 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
       {items.length === 0 && <div className="d2d-empty">Inga D2D-projekt ännu.</div>}
 
       {items.map((item) => (
-        <button key={item.id} className="d2d-card" onClick={() => onOpen(item.id)}>
+        <button key={item.id} className="d2d-card" {...returnRow(item.id)} onClick={() => { rememberRow("d2dbuilder:projekt", item.id); onOpen(item.id); }}>
           <div className="d2d-card__main">
             <span className="d2d-card__title">{item.title ?? "Namnlöst projekt"}</span>
           </div>
