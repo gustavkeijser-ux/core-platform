@@ -57,6 +57,7 @@ const SECTION_LABELS: Record<string, string> = {
   knackning: "Knackning",
   kunddata: "Kunddata",
   forsaljning: "Försäljning",
+  salt: "Sålda tjänster",
 };
 
 // Statusar som INTE ska visas som egna bubblor i statusväljaren högst upp —
@@ -628,7 +629,28 @@ function LagenhetForm({
     f.options.section !== "ai"
     && f.key !== "ej_intresserad_anledning"
     && f.key !== "ej_intresserad_bindningstid"
+    && !f.options.sold_panel
   ) ?? [];
+  // Kategorierna i "Vad såldes?" — ett fält per kategori (select = ett val,
+  // multi_select = flera). Styrs helt av fältdefinitionerna, så kategorier
+  // och alternativ ändras under "Anpassa fält" i CRM:et.
+  const soldFields = (objectDef?.fields ?? [])
+    .filter((f) => f.options.sold_panel && f.visibility !== "hidden" && (f.options.choices?.length ?? 0) > 0)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const pickSold = (f: FieldDef, choice: string) => {
+    if (f.fieldType === "multi_select") {
+      const cur: string[] = Array.isArray(data[f.key]) ? (data[f.key] as unknown[]).map(String) : [];
+      const next = cur.includes(choice) ? cur.filter((c) => c !== choice) : [...cur, choice];
+      set(f.key, 0)(next.length ? next : null);
+    } else {
+      // Tryck igen på valt alternativ = avmarkera.
+      set(f.key, 0)(data[f.key] === choice ? null : choice);
+    }
+  };
+  const isPicked = (f: FieldDef, choice: string) =>
+    f.fieldType === "multi_select"
+      ? Array.isArray(data[f.key]) && (data[f.key] as unknown[]).map(String).includes(choice)
+      : data[f.key] === choice;
   // Admin väljer via "Anpassa fält" vilka av dem säljarna ser (seller_hidden).
   const fields = configurableFields.filter((f) => !f.options.seller_hidden);
 
@@ -748,6 +770,35 @@ function LagenhetForm({
               />
             </div>
           )}
+        </div>
+      )}
+
+      {/* Vad såldes? — visas när statusen är "Såld". En rubrik per
+          kategori; ett val per kategori, utom där flera går (t.ex. Mobil). */}
+      {status === "sald" && soldFields.length > 0 && (
+        <div className="d2d-reason-panel d2d-sold-panel">
+          <span className="label">Vad såldes?</span>
+          {soldFields.map((f) => (
+            <div key={f.key} className="d2d-sold-panel__group">
+              <span className="d2d-sold-panel__title">
+                {f.label}
+                {f.fieldType === "multi_select" && <span className="d2d-sold-panel__hint"> · välj en eller flera</span>}
+              </span>
+              <div className="d2d-reason-panel__chips">
+                {f.options.choices!.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    aria-pressed={isPicked(f, c.key)}
+                    className={`d2d-reason-chip d2d-sold-chip${isPicked(f, c.key) ? " d2d-sold-chip--active" : ""}`}
+                    onClick={() => pickSold(f, c.key)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
