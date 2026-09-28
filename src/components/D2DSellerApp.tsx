@@ -636,7 +636,9 @@ function LagenhetForm({
   // multi_select = flera). Styrs helt av fältdefinitionerna, så kategorier
   // och alternativ ändras under "Anpassa fält" i CRM:et.
   const soldFields = (objectDef?.fields ?? [])
-    .filter((f) => f.options.sold_panel && f.visibility !== "hidden" && (f.options.choices?.length ?? 0) > 0)
+    // Boolean-kategorier (t.ex. Trygghetspaket) har bara Ja/Nej, inga alternativ.
+    .filter((f) => f.options.sold_panel && f.visibility !== "hidden"
+      && (f.fieldType === "boolean" || (f.options.choices?.length ?? 0) > 0))
     .sort((a, b) => a.sortOrder - b.sortOrder);
   const pickSold = (f: FieldDef, choice: string) => {
     if (f.fieldType === "multi_select") {
@@ -652,14 +654,16 @@ function LagenhetForm({
   // Saknas svar men ett alternativ redan är valt räknas det som Ja.
   const svar = (data.salt_svar && typeof data.salt_svar === "object" ? data.salt_svar : {}) as Record<string, boolean>;
   const answer = (f: FieldDef): boolean | undefined => {
-    if (typeof svar[f.key] === "boolean") return svar[f.key];
     const v = data[f.key];
+    if (f.fieldType === "boolean") return typeof v === "boolean" ? v : undefined;
+    if (typeof svar[f.key] === "boolean") return svar[f.key];
     return (Array.isArray(v) ? v.length > 0 : !!v) ? true : undefined;
   };
   const setAnswer = (f: FieldDef, ja: boolean) => {
     const nextSvar = { ...svar, [f.key]: ja };
     const patch: Record<string, unknown> = { salt_svar: nextSvar };
-    if (!ja) patch[f.key] = null; // Nej = inget valt i kategorin
+    if (f.fieldType === "boolean") patch[f.key] = ja; // Ja/Nej är själva värdet
+    else if (!ja) patch[f.key] = null; // Nej = inget valt i kategorin
     setData((d) => ({ ...d, ...patch }));
     queueSave(patch, null, 0);
   };
@@ -813,7 +817,7 @@ function LagenhetForm({
                   >Nej</button>
                 </div>
               </div>
-              {answer(f) === true && (<>
+              {answer(f) === true && f.fieldType !== "boolean" && (<>
               {f.fieldType === "multi_select" && <span className="d2d-sold-panel__hint">Välj en eller flera</span>}
               <div className="d2d-reason-panel__chips">
                 {f.options.choices!.map((c) => (
