@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useRoute, navigate } from "@/lib/route";
+import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow, useReturnToRow } from "@/lib/returnRow";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -1215,7 +1215,7 @@ export function D2DProjectBuilder() {
       {view.kind === "list" && <ProjectList onOpen={(id) => setView({ kind: "project", id })} />}
       {view.kind === "karta" && <LeveransKarta />}
       {view.kind === "project" && (
-        <ProjectDetail projektId={view.id} onBack={() => setView({ kind: "list" })} />
+        <ProjectDetail projektId={view.id} onBack={() => goBack(() => setView({ kind: "list" }))} />
       )}
     </div>
   );
