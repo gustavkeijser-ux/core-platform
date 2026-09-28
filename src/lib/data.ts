@@ -45,6 +45,8 @@ export type FieldDef = {
     _column_order?: number;
     /** Statuskolumnen i listan placeras direkt efter detta fält. */
     _status_after?: boolean;
+    /** D2D: kategori i panelen "Vad såldes?" som visas när status = Såld. */
+    sold_panel?: boolean;
   };
   helpText: string | null;
   sortOrder: number;
