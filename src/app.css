@@ -478,6 +478,58 @@
 .rtable--wide th:first-child { z-index: 3; }
 .rtable--wide tr.rtable__row:hover td:first-child { background: var(--surface-sunk); }
 
+/* Mobil: varje rad blir ett eget kort med "Etikett  Värde" per rad i
+   stället för en bred tabell att dra i sidled. Rubrikraden (med kolumn-
+   filtren) döljs — filter finns i filterraden ovanför. Väldigt breda
+   listor visar de 10 första kolumnerna; resten syns när posten öppnas. */
+@media (max-width: 640px) {
+  .rtable-scroll { overflow-x: visible; }
+  .rtable, .rtable--wide { width: 100%; min-width: 0; }
+  .rtable thead { display: none; }
+  .rtable, .rtable tbody { display: block; }
+  .rtable tr.rtable__row {
+    display: block;
+    padding: var(--sp-3) var(--sp-4);
+    border-bottom: 1px solid var(--border);
+  }
+  .rtable tr.rtable__row:last-child { border-bottom: none; }
+  .rtable tr.rtable__row:hover td { background: none; }
+  .rtable td,
+  .rtable--wide td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--sp-3);
+    padding: 3px 0;
+    border: none;
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-align: right;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .rtable td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    max-width: 45%;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--ink-faint);
+  }
+  .rtable td:not([data-label])::before { content: none; }
+  .rtable td:nth-child(n + 11):not(.rtable__actions) { display: none; }
+  .rtable td:empty { display: none; }
+  .rtable td.rtable__actions { justify-content: flex-end; padding-top: var(--sp-2); }
+  .rtable--wide th:first-child,
+  .rtable--wide td:first-child {
+    position: static;
+    border-right: none;
+    background: none;
+  }
+}
+
 .pagination {
   display: flex; align-items: center; justify-content: flex-end;
   gap: var(--sp-3); margin-top: var(--sp-5);
