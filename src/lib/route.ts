@@ -26,16 +26,34 @@ export function formatRoute(segs: string[], query?: Record<string, string | null
   return "#/" + segs.map(encodeURIComponent).join("/") + (qs ? `?${qs}` : "");
 }
 
+/** Hur många steg in i appen den här historikposten ligger (0 = där man
+ *  landade). Sparas i history.state så det överlever omladdning. */
+const depth = (): number => {
+  const d = (history.state as { ceDepth?: unknown } | null)?.ceDepth;
+  return typeof d === "number" ? d : 0;
+};
+
 /** Navigera. replace = ersätt nuvarande historikpost (ingen ny bakåt-punkt). */
 export function navigate(segs: string[], query?: Record<string, string | null | undefined>, replace = false) {
   const next = formatRoute(segs, query);
   if (next === window.location.hash) return;
   if (replace) {
-    history.replaceState(history.state, "", next);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    history.replaceState({ ...(history.state ?? {}), ceDepth: depth() }, "", next);
   } else {
-    window.location.hash = next;
+    history.pushState({ ceDepth: depth() + 1 }, "", next);
   }
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+}
+
+/**
+ * Appens egna Tillbaka-knappar: gör exakt samma sak som webbläsarens/
+ * telefonens bakåt (tillbaka till sidan man faktiskt kom ifrån, med samma
+ * rad och läge). Finns ingen tidigare sida i appen — t.ex. när man öppnat
+ * en länk direkt — används fallback (sidans "förälder").
+ */
+export function goBack(fallback: () => void) {
+  if (depth() > 0) history.back();
+  else fallback();
 }
 
 /** Nuvarande route; renderar om vid varje ändring (även bakåt/framåt). */
