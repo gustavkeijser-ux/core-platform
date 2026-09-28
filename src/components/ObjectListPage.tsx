@@ -403,18 +403,18 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
                 {items.map((r) => (
                   <tr key={r.id} className="rtable__row" onClick={() => onOpenRecord(r.id)}>
                     {layout.map((cell) => {
-                      if (cell.kind === "title") return <td key="__title" className="rtable__title">{r.title ?? "Namnlös post"}</td>;
+                      if (cell.kind === "title") return <td key="__title" className="rtable__title" data-label={objectDef.labelSingular}>{r.title ?? "Namnlös post"}</td>;
                       if (cell.kind === "status") return (
-                        <td key="__status"><StatusPill status={r.status} def={objectDef.statuses.find((s) => s.key === r.status)} /></td>
+                        <td key="__status" data-label="Status"><StatusPill status={r.status} def={objectDef.statuses.find((s) => s.key === r.status)} /></td>
                       );
                       const c = cell.field;
                       return (
-                        <td key={c.key} className={c.key === objectDef.titleField ? "rtable__title" : undefined}>
+                        <td key={c.key} className={c.key === objectDef.titleField ? "rtable__title" : undefined} data-label={c.label}>
                           {c.fieldType === "user" ? <UserBadge id={r.data[c.key] as string | null} /> : formatValue(c, r.data[c.key])}
                         </td>
                       );
                     })}
-                    <td>
+                    <td className="rtable__actions">
                       {objectDef.can.delete && (
                         <button className="btn btn--ghost btn--sm" onClick={(e) => onDelete(r.id, e)}>Ta bort</button>
                       )}
