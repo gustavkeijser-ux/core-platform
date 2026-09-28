@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { rememberRow, useReturnToRow } from "@/lib/returnRow";
 import type { ObjectDef, RecordRow } from "@/lib/data";
 import { updateRecord, DataError } from "@/lib/data";
 import { formatValue } from "@/lib/fields";
@@ -16,6 +17,8 @@ type Props = {
  * helst med statusar, inte specifikt "Affärer".
  */
 export function KanbanBoard({ objectDef, records, onOpenRecord, onMoved }: Props) {
+  const listKey = `kanban:${objectDef.key}`;
+  const returnRow = useReturnToRow(listKey, records.length > 0);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,10 +69,11 @@ export function KanbanBoard({ objectDef, records, onOpenRecord, onMoved }: Props
                 {items.map((r) => (
                   <div
                     key={r.id}
+                    {...returnRow(r.id)}
                     className="kanban-card"
                     draggable
                     onDragStart={() => setDragId(r.id)}
-                    onClick={() => onOpenRecord(r.id)}
+                    onClick={() => { rememberRow(listKey, r.id); onOpenRecord(r.id); }}
                     style={moving === r.id ? { opacity: 0.5 } : undefined}
                   >
                     <div className="kanban-card__title">{r.title ?? "Namnlös post"}</div>
