@@ -9,7 +9,7 @@ import { FieldInput } from "@/lib/fields";
 import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { FieldConfigPanel } from "./FieldConfigPanel";
-import { useRoute, navigate } from "@/lib/route";
+import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
 
 const rememberRow = (listKey: string, id: string) => rememberRowShared("d2d:" + listKey, id);
@@ -1044,7 +1044,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
           <FastighetsDetalj
             fastighetId={view.id}
             isAdmin={isAdmin}
-            onBack={() => setView({ kind: "fastigheter" })}
+            onBack={() => goBack(() => setView({ kind: "fastigheter" }))}
             onOpenLagenhet={(id) => setView({ kind: "lagenhet", id, fastighetId: view.id })}
           />
         );
@@ -1057,7 +1057,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
             objectDef={lagDef}
             isAdmin={isAdmin}
             onFieldsChanged={loadMetadata}
-            onBack={() => {
+            onBack={() => goBack(() => {
               // Tillbaka till listan man kom ifrån (Återkopplingar/Signerade),
               // annars fastigheten adressen ligger i.
               if (view.from) {
@@ -1067,7 +1067,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
               } else {
                 setView({ kind: "fastigheter" });
               }
-            }}
+            })}
           />
         );
 
