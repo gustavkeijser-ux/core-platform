@@ -2577,9 +2577,48 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   color: var(--ink);
 }
 .d2d-sold-panel__hint {
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--ink-faint);
 }
+.d2d-sold-panel__group + .d2d-sold-panel__group {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.d2d-sold-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.d2d-sold-panel__head .d2d-sold-panel__title { min-width: 0; overflow-wrap: anywhere; }
+
+/* Ja/Nej-växel per kategori */
+.d2d-yesno {
+  flex: 0 0 auto;
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.d2d-yesno__btn {
+  min-width: 3.25rem;
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  border: none;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.d2d-yesno__btn--ja  { background: var(--hue-green); color: #fff; }
+.d2d-yesno__btn--nej { background: var(--surface-sunk); color: var(--ink); }
 /* Större träffyta än anledningschipsen — säljaren trycker med tummen. */
 .d2d-sold-chip {
   font-size: var(--text-sm);
