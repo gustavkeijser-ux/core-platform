@@ -25,22 +25,28 @@ type D2DView =
   | { kind: "signerade" }
   | { kind: "aterkopplingar" }
   | { kind: "fastighet"; id: string }
-  | { kind: "lagenhet"; id: string; fastighetId: string };
+  | { kind: "lagenhet"; id: string; fastighetId: string; from?: "signerade" | "aterkopplingar" };
 
 /** URL (#/d2d/…) ↔ vy, så en omladdning stannar på samma fastighet/adress. */
 function d2dViewFromSegs(segs: string[]): D2DView {
-  const [kind, id, extra] = segs;
+  const [kind, id, extra, from] = segs;
   if (kind === "signerade") return { kind: "signerade" };
   if (kind === "aterkopplingar") return { kind: "aterkopplingar" };
   if (kind === "fastighet" && id) return { kind: "fastighet", id };
-  if (kind === "lagenhet" && id) return { kind: "lagenhet", id, fastighetId: extra ?? "" };
+  if (kind === "lagenhet" && id) {
+    // from = listan man öppnade adressen från, så Tillbaka går dit igen.
+    const src = from === "signerade" || from === "aterkopplingar" ? from : undefined;
+    return { kind: "lagenhet", id, fastighetId: extra && extra !== "-" ? extra : "", from: src };
+  }
   return { kind: "fastigheter" };
 }
 
 function d2dSegsFromView(v: D2DView): string[] {
   switch (v.kind) {
     case "fastighet": return ["d2d", "fastighet", v.id];
-    case "lagenhet": return v.fastighetId ? ["d2d", "lagenhet", v.id, v.fastighetId] : ["d2d", "lagenhet", v.id];
+    case "lagenhet":
+      if (v.from) return ["d2d", "lagenhet", v.id, v.fastighetId || "-", v.from];
+      return v.fastighetId ? ["d2d", "lagenhet", v.id, v.fastighetId] : ["d2d", "lagenhet", v.id];
     default: return ["d2d", v.kind];
   }
 }
@@ -1052,7 +1058,11 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
             isAdmin={isAdmin}
             onFieldsChanged={loadMetadata}
             onBack={() => {
-              if (view.fastighetId) {
+              // Tillbaka till listan man kom ifrån (Återkopplingar/Signerade),
+              // annars fastigheten adressen ligger i.
+              if (view.from) {
+                setView({ kind: view.from });
+              } else if (view.fastighetId) {
                 setView({ kind: "fastighet", id: view.fastighetId });
               } else {
                 setView({ kind: "fastigheter" });
@@ -1064,14 +1074,14 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
       case "signerade":
         return (
           <SigneradeLista
-            onOpenLagenhet={(id, fId) => setView({ kind: "lagenhet", id, fastighetId: fId })}
+            onOpenLagenhet={(id, fId) => setView({ kind: "lagenhet", id, fastighetId: fId, from: "signerade" })}
           />
         );
 
       case "aterkopplingar":
         return (
           <AterkopplingarLista
-            onOpenLagenhet={(id, fId) => setView({ kind: "lagenhet", id, fastighetId: fId })}
+            onOpenLagenhet={(id, fId) => setView({ kind: "lagenhet", id, fastighetId: fId, from: "aterkopplingar" })}
           />
         );
     }
