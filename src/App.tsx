@@ -238,7 +238,8 @@ export default function App() {
 
         {view?.kind === "list" && objectDefFor(view.objectType) && (
           <ObjectListPage
-            key={`${view.objectType}-${listReloadKey}`}
+            key={view.objectType}
+            reloadKey={listReloadKey}
             objectDef={objectDefFor(view.objectType)!}
             onOpenRecord={openRecord}
             onMetadataChanged={reloadMetadata}
