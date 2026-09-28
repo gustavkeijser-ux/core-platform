@@ -2771,6 +2771,20 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   .followup__actions .btn { flex: 1 1 100%; }
 }
 
+/* Samma sak i CRM-listor, kanban, uppgifter och översikten. */
+@keyframes return-flash {
+  0%, 60% { outline: 3px solid var(--brand); outline-offset: -3px; }
+  100%    { outline: 3px solid transparent; outline-offset: -3px; }
+}
+.return-flash { animation: return-flash 1.6s var(--ease); }
+/* Tabellrader: outline syns inte på <tr> i alla webbläsare — tona cellerna. */
+@keyframes return-flash-bg {
+  0%, 60% { background: var(--brand-soft); }
+  100%    { background: transparent; }
+}
+.rtable tr.return-flash { animation: none; }
+.rtable tr.return-flash td { animation: return-flash-bg 1.6s var(--ease); }
+
 /* Raden man kom tillbaka till blinkar kort så ögat hittar den direkt. */
 @keyframes d2d-return-flash {
   0%, 60% { box-shadow: 0 0 0 3px var(--brand), var(--shadow-md); }
