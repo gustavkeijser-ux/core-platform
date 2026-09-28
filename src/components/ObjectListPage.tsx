@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ObjectDef, RecordRow, ListView, RecordFilter, FieldDef } from "@/lib/data";
 import { listRecords, deleteRecord, listSavedViews, saveListView, deleteListView, bulkAssign, DataError, supabase } from "@/lib/data";
 import { formatValue } from "@/lib/fields";
 import { UserBadge, useTenantUsers } from "@/lib/users";
+import { rememberRow, useReturnToRow, loadListState, saveListState } from "@/lib/returnRow";
 import { recordsToCsv, downloadCsv } from "@/lib/csv";
 import { StatusPill } from "./StatusPill";
 import { RecordDrawer } from "./RecordDrawer";
@@ -15,6 +16,14 @@ type Props = {
   objectDef: ObjectDef;
   onOpenRecord: (id: string) => void;
   onMetadataChanged?: () => void;
+  /** Ökas när en post sparats någon annanstans → ladda om listan utan att
+   *  tappa sida, filter eller skrollläge. */
+  reloadKey?: number;
+};
+
+type SavedListState = {
+  mode: "list" | "kanban"; page: number; search: string; status: string;
+  filters: RecordFilter[]; sort: { field: string; dir: "asc" | "desc" } | null; activeViewId: string;
 };
 
 const PAGE_SIZE = 25;
@@ -77,25 +86,29 @@ function columnLayout(def: ObjectDef, columns: FieldDef[]): Cell[] {
   return out;
 }
 
-export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: Props) {
-  const [mode, setMode] = useState<"list" | "kanban">("list");
+export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, reloadKey }: Props) {
+  // Listans läge (sida, sök, filter, sortering, vy) sparas per objekttyp så
+  // man kommer tillbaka till exakt samma läge efter menybyte/omladdning.
+  const stateKey = `list:${objectDef.key}`;
+  const [saved] = useState(() => loadListState<SavedListState>(stateKey));
+  const [mode, setMode] = useState<"list" | "kanban">(saved.mode ?? "list");
   const [showColumns, setShowColumns] = useState(false);
   const [items, setItems] = useState<RecordRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(saved.page ?? 0);
+  const [search, setSearch] = useState(saved.search ?? "");
+  const [status, setStatus] = useState(saved.status ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [liveCount, setLiveCount] = useState(0);
-  const [filters, setFilters] = useState<RecordFilter[]>([]);
+  const [filters, setFilters] = useState<RecordFilter[]>(saved.filters ?? []);
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(
-    () => DEFAULT_SORT[objectDef.key] ?? null
+    () => (saved.sort !== undefined ? saved.sort : DEFAULT_SORT[objectDef.key] ?? null)
   );
 
   const [views, setViews] = useState<ListView[]>([]);
-  const [activeViewId, setActiveViewId] = useState("");
+  const [activeViewId, setActiveViewId] = useState(saved.activeViewId ?? "");
   const [showSave, setShowSave] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveShared, setSaveShared] = useState(false);
@@ -215,21 +228,34 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
   }
 
   useEffect(() => {
-    // Ny objekttyp: nollställ vyval och gå tillbaka till listläge.
-    setMode("list"); setPage(0); setSearch(""); setStatus(""); setActiveViewId(""); setFilters([]);
-    setSort(DEFAULT_SORT[objectDef.key] ?? null);
     listSavedViews(objectDef.key).then(setViews).catch(() => setViews([]));
     /* eslint-disable-next-line */
   }, [objectDef.key]);
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [objectDef.key, page, status, mode]);
-  useEffect(() => { setPage(0); load(); /* eslint-disable-next-line */ }, [JSON.stringify(filters)]);
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [sort?.field, sort?.dir]);
+  // Spara läget varje gång det ändras.
   useEffect(() => {
+    saveListState<SavedListState>(stateKey, { mode, page, search, status, filters, sort, activeViewId });
+  }, [stateKey, mode, page, search, status, filters, sort, activeViewId]);
+
+  // Första renderingen återställer ett sparat läge — då ska sidnumret
+  // INTE nollställas av filter/sök-effekterna nedan.
+  const firstRun = useRef(true);
+  useEffect(() => { const t = setTimeout(() => { firstRun.current = false; }, 0); return () => clearTimeout(t); }, []);
+
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [objectDef.key, page, status, mode, reloadKey]);
+  useEffect(() => { if (firstRun.current) return; setPage(0); load(); /* eslint-disable-next-line */ }, [JSON.stringify(filters)]);
+  useEffect(() => { if (firstRun.current) return; load(); /* eslint-disable-next-line */ }, [sort?.field, sort?.dir]);
+  useEffect(() => {
+    if (firstRun.current) return;
     const t = setTimeout(() => { setPage(0); load(); }, 300);
     return () => clearTimeout(t);
     /* eslint-disable-next-line */
   }, [search]);
+
+  // Tillbaka till raden man öppnade senast.
+  const returnKey = `list:${objectDef.key}`;
+  const returnRow = useReturnToRow(returnKey, !loading && mode === "list");
+  const openRow = (id: string) => { rememberRow(returnKey, id); onOpenRecord(id); };
 
   /**
    * Live: lyssna på ändringar i records för den här objekttypen.
@@ -549,7 +575,8 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
                   <tr
                     key={r.id}
                     className={`rtable__row${isOverdue(r) ? " rtable__row--overdue" : ""}${selected.has(r.id) || allMatching ? " rtable__row--selected" : ""}`}
-                    onClick={() => onOpenRecord(r.id)}
+                    {...returnRow(r.id)}
+                    onClick={() => openRow(r.id)}
                   >
                     {canAssign && (
                       <td className="rtable__select" onClick={(e) => e.stopPropagation()}>
