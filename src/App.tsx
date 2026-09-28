@@ -204,7 +204,7 @@ export default function App() {
                 : view?.kind === "ai" ? "AI-assistent"
                 : view?.kind === "tasks" ? "Mina uppgifter"
                 : view?.kind === "import" ? "Import"
-                : view?.kind === "d2dbuilder" ? "D2D – Projektbyggare"
+                : view?.kind === "d2dbuilder" ? "D2D – Projekt"
                 : ""}
             </h1>
           </div>
