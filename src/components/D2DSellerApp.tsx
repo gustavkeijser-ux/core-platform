@@ -10,6 +10,10 @@ import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { FieldConfigPanel } from "./FieldConfigPanel";
 import { useRoute, navigate } from "@/lib/route";
+import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
+
+const rememberRow = (listKey: string, id: string) => rememberRowShared("d2d:" + listKey, id);
+const useReturnToRow = (listKey: string, ready: boolean) => useReturnToRowShared("d2d:" + listKey, ready, "d2d-return-flash");
 import { useUserName } from "@/lib/users";
 
 // =============================================================================
@@ -114,32 +118,7 @@ function jamforLagenheter(a: RecordRow, b: RecordRow): number {
  * per lista sparas (i minnet + sessionStorage, så det överlever en omladdning)
  * och när listan laddat klart skrollas raden in mitt i vyn och blinkar till.
  */
-const lastOpened = new Map<string, string>();
-const RETURN_KEY = "d2d:lastOpened:";
-
-function rememberRow(listKey: string, id: string) {
-  lastOpened.set(listKey, id);
-  try { sessionStorage.setItem(RETURN_KEY + listKey, id); } catch { /* privat läge m.m. */ }
-}
-
-function useReturnToRow(listKey: string, ready: boolean) {
-  useEffect(() => {
-    if (!ready) return;
-    let id = lastOpened.get(listKey) ?? null;
-    if (!id) { try { id = sessionStorage.getItem(RETURN_KEY + listKey); } catch { id = null; } }
-    if (!id) return;
-    // Vänta en bildruta så att listan hunnit ritas.
-    const raf = requestAnimationFrame(() => {
-      const el = document.querySelector<HTMLElement>(`[data-return-row="${CSS.escape(listKey + ":" + id)}"]`);
-      if (!el) return;
-      el.scrollIntoView({ block: "center" });
-      el.classList.add("d2d-return-flash");
-      window.setTimeout(() => el.classList.remove("d2d-return-flash"), 1600);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [listKey, ready]);
-  return (id: string) => ({ "data-return-row": `${listKey}:${id}` });
-}
+// Delad logik: src/lib/returnRow.ts (samma beteende i hela systemet).
 
 // =============================================================================
 // Fastighets-/adressinfo (infrastruktur, TV, tillträde)
