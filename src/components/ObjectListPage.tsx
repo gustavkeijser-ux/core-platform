@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ObjectDef, RecordRow, ListView, RecordFilter, FieldDef } from "@/lib/data";
-import { listRecords, deleteRecord, listSavedViews, saveListView, deleteListView, DataError, supabase } from "@/lib/data";
+import { listRecords, deleteRecord, listSavedViews, saveListView, deleteListView, bulkAssign, DataError, supabase } from "@/lib/data";
 import { formatValue } from "@/lib/fields";
-import { UserBadge } from "@/lib/users";
+import { UserBadge, useTenantUsers } from "@/lib/users";
 import { recordsToCsv, downloadCsv } from "@/lib/csv";
 import { StatusPill } from "./StatusPill";
 import { RecordDrawer } from "./RecordDrawer";
@@ -103,6 +103,94 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
   const columns = useMemo(() => pickColumns(objectDef), [objectDef]);
   const layout = useMemo(() => columnLayout(objectDef, columns), [objectDef, columns]);
   const hasStatuses = objectDef.statuses.length > 0;
+
+  // ── Ägarfält + uppföljningsdatum (styrs av fältoptioner, t.ex. Affärer:
+  // Säljare = owner_field, Nästa steg datum = _overdue).
+  const ownerField = objectDef.fields.find((f) => f.fieldType === "user" && f.options.owner_field);
+  const dueField = objectDef.fields.find((f) => (f.fieldType === "date" || f.fieldType === "datetime") && f.options._overdue);
+  const terminalStatuses = useMemo(
+    () => new Set(objectDef.statuses.filter((s) => s.isTerminal).map((s) => s.key)),
+    [objectDef.statuses]
+  );
+  const today = new Date().toISOString().slice(0, 10);
+  const isOverdue = (r: RecordRow) => {
+    if (!dueField || (r.status && terminalStatuses.has(r.status))) return false;
+    const v = r.data[dueField.key];
+    return !!v && String(v).slice(0, 10) < today;
+  };
+
+  const [myId, setMyId] = useState<string | null>(null);
+  useEffect(() => { supabase.auth.getSession().then(({ data }) => setMyId(data.session?.user.id ?? null)); }, []);
+
+  type Quick = { key: string; label: string; filter: RecordFilter };
+  const quickFilters: Quick[] = [
+    ...(ownerField && myId ? [{ key: "mine", label: "Mina", filter: { field: ownerField.key, op: "eq" as const, value: myId } }] : []),
+    ...(ownerField ? [{ key: "unassigned", label: "Ej tilldelade", filter: { field: ownerField.key, op: "empty" as const } }] : []),
+    ...(dueField ? [
+      { key: "overdue", label: "Försenade", filter: { field: dueField.key, op: "lt" as const, value: today } },
+      { key: "today", label: "Idag", filter: { field: dueField.key, op: "eq" as const, value: today } },
+      { key: "nodate", label: `Utan ${dueField.label.toLowerCase()}`, filter: { field: dueField.key, op: "empty" as const } },
+    ] : []),
+  ];
+  const quickActive = (q: Quick) => filters.some((f) => f.field === q.filter.field && f.op === q.filter.op && String(f.value ?? "") === String(q.filter.value ?? ""));
+  function toggleQuick(q: Quick) {
+    setActiveViewId("");
+    setFilters((prev) => {
+      const without = prev.filter((f) => f.field !== q.filter.field);
+      return quickActive(q) ? without : [...without, q.filter];
+    });
+  }
+
+  // ── Markera + tilldela (bara för den som får ta bort/ändra allt — i
+  // praktiken chef/admin; servern kontrollerar ändå behörigheten).
+  const canAssign = !!ownerField && objectDef.can.delete;
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [allMatching, setAllMatching] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignUsers, setAssignUsers] = useState<string[]>([]);
+  const [assigning, setAssigning] = useState(false);
+  const users = useTenantUsers();
+  useEffect(() => { setSelected(new Set()); setAllMatching(false); }, [objectDef.key, JSON.stringify(filters), search, status]);
+  const toggleRow = (id: string) => setSelected((prev) => {
+    const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); setAllMatching(false); return n;
+  });
+  const pageAllSelected = items.length > 0 && items.every((r) => selected.has(r.id));
+  const togglePage = () => setSelected((prev) => {
+    const n = new Set(prev);
+    if (pageAllSelected) items.forEach((r) => n.delete(r.id)); else items.forEach((r) => n.add(r.id));
+    setAllMatching(false);
+    return n;
+  });
+  const selectedCount = allMatching ? total : selected.size;
+
+  async function collectMatchingIds(): Promise<string[]> {
+    const ids: string[] = [];
+    for (let offset = 0; offset < total; offset += 200) {
+      const res = await listRecords({
+        objectType: objectDef.key, search: search || undefined, status: status || undefined,
+        filters: filters.length ? filters : undefined, sort: sort ?? undefined, limit: 200, offset,
+      });
+      ids.push(...res.items.map((r) => r.id));
+      if (res.items.length < 200) break;
+    }
+    return ids;
+  }
+
+  async function runAssign() {
+    if (!ownerField || assignUsers.length === 0) return;
+    setAssigning(true);
+    try {
+      const ids = allMatching ? await collectMatchingIds() : Array.from(selected);
+      const n = await bulkAssign(ids, assignUsers, ownerField.key);
+      setAssignOpen(false); setAssignUsers([]); setSelected(new Set()); setAllMatching(false);
+      await load();
+      alert(`${n} ${n === 1 ? objectDef.labelSingular.toLowerCase() : objectDef.labelPlural.toLowerCase()} ${assignUsers.length > 1 ? "fördelade" : "tilldelade"}.`);
+    } catch (e) {
+      alert(e instanceof DataError ? e.message : "Kunde inte tilldela.");
+    } finally {
+      setAssigning(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -320,6 +408,58 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
         )}
       </div>
 
+      {quickFilters.length > 0 && (
+        <div className="quick-filters" role="group" aria-label="Snabbfilter">
+          {quickFilters.map((q) => (
+            <button key={q.key} type="button" className="chip" aria-pressed={quickActive(q)} onClick={() => toggleQuick(q)}>
+              {q.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {canAssign && selectedCount > 0 && (
+        <div className="bulk-bar card">
+          <span className="bulk-bar__count">
+            <strong>{selectedCount}</strong> markerade
+            {!allMatching && pageAllSelected && total > items.length && (
+              <button className="btn btn--ghost btn--sm" onClick={() => setAllMatching(true)}>
+                Markera alla {total} träffar
+              </button>
+            )}
+          </span>
+          <button className="btn btn--brand btn--sm" onClick={() => setAssignOpen((o) => !o)}>
+            Tilldela {ownerField!.label.toLowerCase()}
+          </button>
+          <button className="btn btn--ghost btn--sm" onClick={() => { setSelected(new Set()); setAllMatching(false); }}>
+            Avmarkera
+          </button>
+          {assignOpen && (
+            <div className="bulk-bar__assign">
+              <p className="formfield__help" style={{ margin: 0 }}>
+                Välj en {ownerField!.label.toLowerCase()} för att ge hen alla, eller flera för att fördela jämnt.
+              </p>
+              <div className="chips">
+                {users.map((u) => (
+                  <button
+                    key={u.id} type="button" className="chip"
+                    aria-pressed={assignUsers.includes(u.id)}
+                    onClick={() => setAssignUsers((p) => p.includes(u.id) ? p.filter((x) => x !== u.id) : [...p, u.id])}
+                  >
+                    {u.name}
+                  </button>
+                ))}
+              </div>
+              <button className="btn btn--brand btn--sm" disabled={assigning || assignUsers.length === 0} onClick={() => void runAssign()}>
+                {assigning ? "Tilldelar…"
+                  : assignUsers.length > 1 ? `Fördela ${selectedCount} på ${assignUsers.length} personer`
+                  : `Tilldela ${selectedCount}`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {showSave && (
         <div className="card save-view-row">
           <input className="input" placeholder="Namn på vyn" value={saveName} onChange={(e) => setSaveName(e.target.value)} />
@@ -352,6 +492,11 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
             <table className={`rtable${columns.length > 6 ? " rtable--wide" : ""}`}>
               <thead>
                 <tr>
+                  {canAssign && (
+                    <th className="rtable__select">
+                      <input type="checkbox" aria-label="Markera alla på sidan" checked={pageAllSelected} onChange={togglePage} />
+                    </th>
+                  )}
                   {layout.map((cell) => {
                     if (cell.kind === "title") return (
                       <th key="__title">
@@ -401,7 +546,21 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
               </thead>
               <tbody>
                 {items.map((r) => (
-                  <tr key={r.id} className="rtable__row" onClick={() => onOpenRecord(r.id)}>
+                  <tr
+                    key={r.id}
+                    className={`rtable__row${isOverdue(r) ? " rtable__row--overdue" : ""}${selected.has(r.id) || allMatching ? " rtable__row--selected" : ""}`}
+                    onClick={() => onOpenRecord(r.id)}
+                  >
+                    {canAssign && (
+                      <td className="rtable__select" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Markera ${r.title ?? "post"}`}
+                          checked={allMatching || selected.has(r.id)}
+                          onChange={() => toggleRow(r.id)}
+                        />
+                      </td>
+                    )}
                     {layout.map((cell) => {
                       if (cell.kind === "title") return <td key="__title" className="rtable__title" data-label={objectDef.labelSingular}>{r.title ?? "Namnlös post"}</td>;
                       if (cell.kind === "status") return (
@@ -409,7 +568,14 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged }: P
                       );
                       const c = cell.field;
                       return (
-                        <td key={c.key} className={c.key === objectDef.titleField ? "rtable__title" : undefined} data-label={c.label}>
+                        <td
+                          key={c.key}
+                          className={[
+                            c.key === objectDef.titleField ? "rtable__title" : "",
+                            dueField && c.key === dueField.key && isOverdue(r) ? "rtable__cell--overdue" : "",
+                          ].filter(Boolean).join(" ") || undefined}
+                          data-label={c.label}
+                        >
                           {c.fieldType === "user" ? <UserBadge id={r.data[c.key] as string | null} /> : formatValue(c, r.data[c.key])}
                         </td>
                       );
