@@ -105,6 +105,43 @@ function jamforLagenheter(a: RecordRow, b: RecordRow): number {
 }
 
 // =============================================================================
+// Tillbaka till samma rad
+// =============================================================================
+
+/**
+ * När säljaren öppnar en rad (fastighet/lägenhet) och sedan går tillbaka ska
+ * listan landa på exakt den raden igen — inte högst upp. Senast öppnade rad
+ * per lista sparas (i minnet + sessionStorage, så det överlever en omladdning)
+ * och när listan laddat klart skrollas raden in mitt i vyn och blinkar till.
+ */
+const lastOpened = new Map<string, string>();
+const RETURN_KEY = "d2d:lastOpened:";
+
+function rememberRow(listKey: string, id: string) {
+  lastOpened.set(listKey, id);
+  try { sessionStorage.setItem(RETURN_KEY + listKey, id); } catch { /* privat läge m.m. */ }
+}
+
+function useReturnToRow(listKey: string, ready: boolean) {
+  useEffect(() => {
+    if (!ready) return;
+    let id = lastOpened.get(listKey) ?? null;
+    if (!id) { try { id = sessionStorage.getItem(RETURN_KEY + listKey); } catch { id = null; } }
+    if (!id) return;
+    // Vänta en bildruta så att listan hunnit ritas.
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-return-row="${CSS.escape(listKey + ":" + id)}"]`);
+      if (!el) return;
+      el.scrollIntoView({ block: "center" });
+      el.classList.add("d2d-return-flash");
+      window.setTimeout(() => el.classList.remove("d2d-return-flash"), 1600);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [listKey, ready]);
+  return (id: string) => ({ "data-return-row": `${listKey}:${id}` });
+}
+
+// =============================================================================
 // Fastighets-/adressinfo (infrastruktur, TV, tillträde)
 // =============================================================================
 
@@ -241,6 +278,8 @@ function FastighetsLista({
     })();
   }, []);
 
+  const returnRow = useReturnToRow("fastigheter", !loading);
+
   if (loading) return <div className="d2d-loading">Laddar fastigheter…</div>;
 
   return (
@@ -257,7 +296,7 @@ function FastighetsLista({
       {items.map((item) => {
         const data = item.data as Record<string, unknown>;
         return (
-          <button key={item.id} className="d2d-card" onClick={() => onOpen(item.id)}>
+          <button key={item.id} className="d2d-card" {...returnRow(item.id)} onClick={() => { rememberRow("fastigheter", item.id); onOpen(item.id); }}>
             {/* Bara fastighetsbeteckning + fastighetsägare — adressen syns
                 inne i fastigheten. */}
             <div className="d2d-card__main">
@@ -339,6 +378,8 @@ function FastighetsDetalj({
   useEffect(() => { loadData(); }, [loadData]);
 
   const total = lagenheter.length;
+  const listKey = `fastighet:${fastighetId}`;
+  const returnRow = useReturnToRow(listKey, !loading);
 
   if (loading) return <div className="d2d-loading">Laddar…</div>;
   if (!fastighet) return <div className="d2d-empty">Fastigheten hittades inte.</div>;
@@ -416,8 +457,9 @@ function FastighetsDetalj({
               return (
                 <button
                   key={lag.id}
+                  {...returnRow(lag.id)}
                   className={`d2d-lag-row ${cfg.cssClass}`}
-                  onClick={() => onOpenLagenhet(lag.id)}
+                  onClick={() => { rememberRow(listKey, lag.id); onOpenLagenhet(lag.id); }}
                   aria-label={formatLagenhetAdress(lagData, lag.title)}
                 >
                   <span className="d2d-lag-row__icon" style={{ "--st": cfg.color } as CSSProperties} aria-hidden="true">
@@ -879,6 +921,8 @@ function SigneradeLista({
     })();
   }, []);
 
+  const returnRow = useReturnToRow("signerade", !loading);
+
   if (loading) return <div className="d2d-loading">Laddar…</div>;
 
   return (
@@ -895,7 +939,7 @@ function SigneradeLista({
       {items.map((item) => {
         const data = item.data as Record<string, unknown>;
         return (
-          <button key={item.id} className="d2d-card d2d-card--signed" onClick={() => onOpenLagenhet(item.id, "")}>
+          <button key={item.id} className="d2d-card d2d-card--signed" {...returnRow(item.id)} onClick={() => { rememberRow("signerade", item.id); onOpenLagenhet(item.id, ""); }}>
             <div className="d2d-card__main">
               <span className="d2d-card__title">{formatLagenhetAdress(data, item.title)}</span>
               {!!data.kund_namn && <span className="d2d-card__sub">{String(data.kund_namn)}</span>}
@@ -934,6 +978,8 @@ function AterkopplingarLista({
     })();
   }, []);
 
+  const returnRow = useReturnToRow("aterkoppling", !loading);
+
   if (loading) return <div className="d2d-loading">Laddar…</div>;
 
   return (
@@ -950,7 +996,7 @@ function AterkopplingarLista({
       {items.map((item) => {
         const data = item.data as Record<string, unknown>;
         return (
-          <button key={item.id} className="d2d-card d2d-card--callback" onClick={() => onOpenLagenhet(item.id, "")}>
+          <button key={item.id} className="d2d-card d2d-card--callback" {...returnRow(item.id)} onClick={() => { rememberRow("aterkoppling", item.id); onOpenLagenhet(item.id, ""); }}>
             <div className="d2d-card__main">
               <span className="d2d-card__title">{formatLagenhetAdress(data, item.title)}</span>
               {!!data.kund_namn && <span className="d2d-card__sub">{String(data.kund_namn)}</span>}
