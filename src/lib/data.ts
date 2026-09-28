@@ -47,6 +47,12 @@ export type FieldDef = {
     _status_after?: boolean;
     /** D2D: kategori i panelen "Vad såldes?" som visas när status = Såld. */
     sold_panel?: boolean;
+    /** Användarfältet som är postens ägare (t.ex. Säljare på affär) — ger
+     *  snabbfiltret "Mina" och fördelning i listan. */
+    owner_field?: boolean;
+    /** Datumfält som markeras som försenat i listan när det passerats
+     *  (och ger snabbfiltren "Försenade" och "Utan datum"). */
+    _overdue?: boolean;
   };
   helpText: string | null;
   sortOrder: number;
@@ -281,12 +287,30 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 }
 
 export async function addQuickActivity(
-  recordId: string, type: "note" | "call" | "meeting", body: string
+  recordId: string, type: "note" | "call" | "meeting" | "email", body: string
 ): Promise<void> {
   const { error } = await supabase.rpc("add_quick_activity", {
     p_record_id: recordId, p_type: type, p_body: body,
   });
   if (error) asError(error);
+}
+
+/** Sätt nästa steg + datum på en post. Ersätter postens öppna
+ *  uppföljningsuppgift (hamnar i "Mina uppgifter" för ägaren). */
+export async function setNextStep(recordId: string, text: string | null, date: string | null): Promise<void> {
+  const { error } = await supabase.rpc("set_next_step", {
+    p_record_id: recordId, p_text: text, p_date: date,
+  });
+  if (error) asError(error);
+}
+
+/** Tilldela poster: en användare = alla till hen, flera = jämn fördelning. */
+export async function bulkAssign(ids: string[], userIds: string[], field = "saljare"): Promise<number> {
+  const { data, error } = await supabase.rpc("bulk_assign", {
+    p_ids: ids, p_user_ids: userIds, p_field: field,
+  });
+  if (error) asError(error);
+  return (data as number) ?? 0;
 }
 
 // -----------------------------------------------------------------------------
