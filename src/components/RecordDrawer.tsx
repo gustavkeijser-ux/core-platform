@@ -12,9 +12,14 @@ import { CommunicationTab } from "./CommunicationTab";
 import { ChecklistTab } from "./ChecklistTab";
 import { TaskTab } from "./TaskTab";
 import { LyftAffarTab } from "./LyftAffarTab";
+import { DealFollowUp } from "./DealFollowUp";
 
 /** Fält som styrs via egen UI på affärskortet, inte via det generiska formuläret. */
-const DEAL_CUSTOM_FIELDS = new Set(["affarsstatus", "lyft_affar", "signeringssteg"]);
+const DEAL_CUSTOM_FIELDS = new Set([
+  "affarsstatus", "lyft_affar", "signeringssteg",
+  // Sköts av uppföljningspanelen (DealFollowUp) högst upp på kortet.
+  "nasta_steg", "nasta_steg_datum", "senaste_kontakt",
+]);
 
 const AFFARSSTATUS_KNAPPAR: Array<{ key: string; label: string }> = [
   { key: "avvakta", label: "Avvakta" },
@@ -507,6 +512,26 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
     if (activeTab === "oversikt" || isCreate) {
       return (
         <div className="drawer__main">
+          {/* Affärskort: logga aktivitet + nästa steg, alltid överst */}
+          {isDeal && !isCreate && record && (
+            <DealFollowUp
+              record={record}
+              statuses={resolvedDef.statuses}
+              onRecord={(row) => {
+                // Merga bara in uppföljningsfälten — osparade ändringar i
+                // formuläret nedanför ska ligga kvar.
+                setLoadedRecord(row);
+                setData((d) => ({
+                  ...d,
+                  nasta_steg: row.data.nasta_steg,
+                  nasta_steg_datum: row.data.nasta_steg_datum,
+                  senaste_kontakt: row.data.senaste_kontakt,
+                }));
+                onSaved(row);
+              }}
+            />
+          )}
+
           {/* Affärskort: snabbknappar */}
           {isDeal && !isCreate && record && (
             <div className="affarsstatus-row">
