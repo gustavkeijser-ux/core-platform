@@ -27,38 +27,43 @@ type MenuGroup = {
 
 const MENU_GROUPS: MenuGroup[] = [
   {
-    id: "kunder",
-    label: "Kunder",
+    id: "salj",
+    label: "Säljprocess",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="8" cy="5" r="2.5" />
-        <path d="M3 14c0-2.76 2.24-5 5-5s5 2.24 5 5" />
+        <path d="M2 12l4-4 3 3 5-6" />
+        <path d="M10 5h4v4" />
       </svg>
     ),
-    keys: ["koncernmoder", "forvaltningsbolag", "direktagt_bolag"],
+    keys: [
+      "forvaltningsbolag", "koncernmoder", "direktagt_bolag", "property", "deal", "uppstartsmote",
+      // Ej i huvudflödet men nåbara här:
+      "customer", "contact", "agreement",
+    ],
   },
   {
-    id: "salj",
-    label: "Sälj och leverans",
+    id: "leverans",
+    label: "Leveransprocess",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 13V5l4-3 4 3v8" />
-        <path d="M1 13h14" />
-        <path d="M6.5 13V9.5h3V13" />
+        <path d="M1 3h9v7H1z" />
+        <path d="M10 6h3l2 3v4h-5" />
+        <circle cx="4" cy="13" r="1.5" />
+        <circle cx="12" cy="13" r="1.5" />
       </svg>
     ),
-    keys: ["contact", "deal", "agreement", "delivery"],
+    keys: ["onboarding", "delivery", "appleverans"],
   },
   {
     id: "d2d",
-    label: "Door 2 Door",
+    label: "Door to door",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 6l5-4 5 4v7a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" />
         <path d="M6.5 14V10h3v4" />
       </svg>
     ),
-    keys: ["d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "property"],
+    keys: ["d2d_projekt", "d2d_fastighet", "d2d_lagenhet"],
   },
 ];
 
@@ -329,7 +334,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
 
               {isOpen && (
                 <div className="sidebar__children">
-                  {/* D2D-gruppen: visa länk till säljarvy */}
+                  {/* D2D-gruppen: projektbyggaren och D2D-vyn (säljarnas vy) först */}
                   {group.id === "d2d" && (
                     <>
                       <button
@@ -337,14 +342,14 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                         aria-current={activeKey === "__d2dbuilder__"}
                         onClick={() => selectAndClose("__d2dbuilder__")}
                       >
-                        Projektbyggare
+                        Projekt
                       </button>
                       <button
                         className="sidebar__item sidebar__item--child"
                         aria-current={activeKey === "__d2d__"}
                         onClick={() => selectAndClose("__d2d__")}
                       >
-                        Säljarvy
+                        D2D-vy
                       </button>
                     </>
                   )}
