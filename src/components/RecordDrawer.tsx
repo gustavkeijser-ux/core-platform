@@ -59,6 +59,7 @@ const SECTION_LABELS: Record<string, string> = {
   kunddata: "Kunddata",
   forsaljning: "Försäljning",
   ai: "AI-data",
+  salt: "Sålda tjänster",
   // Leverans
   kund: "Kund och bolag",
   fastighet: "Fastighet och läge",
