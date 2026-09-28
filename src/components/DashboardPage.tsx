@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { rememberRow, useReturnToRow } from "@/lib/returnRow";
 import type { DashboardSummary } from "@/lib/data";
 import { getDashboardSummary, DataError } from "@/lib/data";
 
@@ -86,6 +87,7 @@ function MiniDonut({ slices, total }: { slices: Slice[]; total: number }) {
 export function DashboardPage({ onOpenObject, onOpenRecord }: Props) {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const returnRow = useReturnToRow("dashboard", !!data);
 
   useEffect(() => {
     getDashboardSummary()
@@ -223,7 +225,8 @@ export function DashboardPage({ onOpenObject, onOpenRecord }: Props) {
                   <div
                     className="due-row"
                     key={t.id}
-                    onClick={() => t.recordId && onOpenRecord(t.recordId)}
+                    {...returnRow("t:" + t.id)}
+                    onClick={() => { if (t.recordId) { rememberRow("dashboard", "t:" + t.id); onOpenRecord(t.recordId); } }}
                     style={{ cursor: t.recordId ? "pointer" : "default" }}
                   >
                     <div>
@@ -246,7 +249,7 @@ export function DashboardPage({ onOpenObject, onOpenRecord }: Props) {
             ) : (
               <div className="due-list">
                 {data.recent.map((r) => (
-                  <div className="due-row" key={r.recordId} onClick={() => onOpenRecord(r.recordId)} style={{ cursor: "pointer" }}>
+                  <div className="due-row" key={r.recordId} {...returnRow("r:" + r.recordId)} onClick={() => { rememberRow("dashboard", "r:" + r.recordId); onOpenRecord(r.recordId); }} style={{ cursor: "pointer" }}>
                     <div>
                       <div className="due-row__title">{r.title ?? "Namnlös post"}</div>
                       <div className="due-row__meta">{r.objectLabel}</div>
