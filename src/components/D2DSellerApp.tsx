@@ -630,6 +630,7 @@ function LagenhetForm({
     && f.key !== "ej_intresserad_anledning"
     && f.key !== "ej_intresserad_bindningstid"
     && !f.options.sold_panel
+    && f.key !== "salt_svar"
   ) ?? [];
   // Kategorierna i "Vad såldes?" — ett fält per kategori (select = ett val,
   // multi_select = flera). Styrs helt av fältdefinitionerna, så kategorier
@@ -646,6 +647,21 @@ function LagenhetForm({
       // Tryck igen på valt alternativ = avmarkera.
       set(f.key, 0)(data[f.key] === choice ? null : choice);
     }
+  };
+  // Ja/Nej per kategori sparas i salt_svar ({ salt_bredband: true, ... }).
+  // Saknas svar men ett alternativ redan är valt räknas det som Ja.
+  const svar = (data.salt_svar && typeof data.salt_svar === "object" ? data.salt_svar : {}) as Record<string, boolean>;
+  const answer = (f: FieldDef): boolean | undefined => {
+    if (typeof svar[f.key] === "boolean") return svar[f.key];
+    const v = data[f.key];
+    return (Array.isArray(v) ? v.length > 0 : !!v) ? true : undefined;
+  };
+  const setAnswer = (f: FieldDef, ja: boolean) => {
+    const nextSvar = { ...svar, [f.key]: ja };
+    const patch: Record<string, unknown> = { salt_svar: nextSvar };
+    if (!ja) patch[f.key] = null; // Nej = inget valt i kategorin
+    setData((d) => ({ ...d, ...patch }));
+    queueSave(patch, null, 0);
   };
   const isPicked = (f: FieldDef, choice: string) =>
     f.fieldType === "multi_select"
@@ -780,10 +796,25 @@ function LagenhetForm({
           <span className="label">Vad såldes?</span>
           {soldFields.map((f) => (
             <div key={f.key} className="d2d-sold-panel__group">
-              <span className="d2d-sold-panel__title">
-                {f.label}
-                {f.fieldType === "multi_select" && <span className="d2d-sold-panel__hint"> · välj en eller flera</span>}
-              </span>
+              <div className="d2d-sold-panel__head">
+                <span className="d2d-sold-panel__title">{f.label}</span>
+                <div className="d2d-yesno" role="group" aria-label={f.label}>
+                  <button
+                    type="button"
+                    aria-pressed={answer(f) === true}
+                    className={`d2d-yesno__btn${answer(f) === true ? " d2d-yesno__btn--ja" : ""}`}
+                    onClick={() => setAnswer(f, true)}
+                  >Ja</button>
+                  <button
+                    type="button"
+                    aria-pressed={answer(f) === false}
+                    className={`d2d-yesno__btn${answer(f) === false ? " d2d-yesno__btn--nej" : ""}`}
+                    onClick={() => setAnswer(f, false)}
+                  >Nej</button>
+                </div>
+              </div>
+              {answer(f) === true && (<>
+              {f.fieldType === "multi_select" && <span className="d2d-sold-panel__hint">Välj en eller flera</span>}
               <div className="d2d-reason-panel__chips">
                 {f.options.choices!.map((c) => (
                   <button
@@ -797,6 +828,7 @@ function LagenhetForm({
                   </button>
                 ))}
               </div>
+              </>)}
             </div>
           ))}
         </div>
