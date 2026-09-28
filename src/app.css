@@ -2563,6 +2563,35 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   gap: var(--sp-1);
 }
 
+/* ── Vad såldes? (status Såld) — samma chip-språk, grön markering ────── */
+
+.d2d-sold-panel { gap: var(--sp-4); }
+.d2d-sold-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.d2d-sold-panel__title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.d2d-sold-panel__hint {
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+/* Större träffyta än anledningschipsen — säljaren trycker med tummen. */
+.d2d-sold-chip {
+  font-size: var(--text-sm);
+  padding: var(--sp-2) var(--sp-4);
+  min-height: 40px;
+}
+.d2d-sold-chip--active {
+  border-color: var(--hue-green);
+  color: var(--hue-green);
+  background: rgba(63,195,134,.14);
+}
+
 /* ── D2D form ─────────────────────────────────────────────────────────── */
 
 .d2d-form {
