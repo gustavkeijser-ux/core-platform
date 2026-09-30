@@ -169,6 +169,7 @@
   flex-shrink: 0;
 }
 .sidebar__chevron--open { transform: rotate(180deg); }
+.sidebar__item--group .sidebar__badge + .sidebar__chevron { margin-left: 6px; }
 
 .sidebar__children {
   display: flex;
