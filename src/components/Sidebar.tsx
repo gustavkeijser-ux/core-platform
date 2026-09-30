@@ -313,46 +313,6 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           Mina uppgifter
         </button>
 
-        {canCases && (
-          <>
-            <div className="sidebar__divider" />
-            <div className="sidebar__section-label">Kundservice</div>
-            <button
-              className="sidebar__item"
-              aria-current={activeKey === "__cases__"}
-              onClick={() => selectAndClose("__cases__")}
-            >
-              {ICONS.support_case}
-              Ärenden
-            </button>
-            <button
-              className="sidebar__item"
-              aria-current={activeKey === "__cases_unassigned__"}
-              onClick={() => selectAndClose("__cases_unassigned__")}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="8" cy="5.5" r="2.5" strokeDasharray="2 1.6" />
-                <path d="M3.5 14c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" strokeDasharray="2 1.6" />
-              </svg>
-              Otilldelade
-              {!!unassignedCases && <span className="sidebar__badge">{unassignedCases}</span>}
-            </button>
-            {isAdmin && (
-              <button
-                className="sidebar__item"
-                aria-current={activeKey === "__m365__"}
-                onClick={() => selectAndClose("__m365__")}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
-                  <path d="M1.5 4.5L8 9l6.5-4.5" />
-                </svg>
-                Microsoft 365
-              </button>
-            )}
-          </>
-        )}
-
         <div className="sidebar__divider" />
 
         {/* Grupperade sektioner */}
@@ -416,6 +376,55 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
             </div>
           );
         })}
+
+        {/* Kundservice: fälls ut/ihop som övriga moduler */}
+        {canCases && (() => {
+          const caseKeys = ["__cases__", "__cases_unassigned__", "__m365__"];
+          const hasActive = caseKeys.includes(activeKey ?? "");
+          const isOpen = !!expanded.kundservice || hasActive;
+          return (
+            <div className="sidebar__group">
+              <button
+                className="sidebar__item sidebar__item--group"
+                aria-expanded={isOpen}
+                onClick={() => toggle("kundservice")}
+              >
+                {ICONS.support_case}
+                Kundservice
+                {!isOpen && !!unassignedCases && <span className="sidebar__badge">{unassignedCases}</span>}
+                <Chevron open={isOpen} />
+              </button>
+              {isOpen && (
+                <div className="sidebar__children">
+                  <button
+                    className="sidebar__item sidebar__item--child"
+                    aria-current={activeKey === "__cases__"}
+                    onClick={() => selectAndClose("__cases__")}
+                  >
+                    Ärenden
+                  </button>
+                  <button
+                    className="sidebar__item sidebar__item--child"
+                    aria-current={activeKey === "__cases_unassigned__"}
+                    onClick={() => selectAndClose("__cases_unassigned__")}
+                  >
+                    Otilldelade
+                    {!!unassignedCases && <span className="sidebar__badge">{unassignedCases}</span>}
+                  </button>
+                  {isAdmin && (
+                    <button
+                      className="sidebar__item sidebar__item--child"
+                      aria-current={activeKey === "__m365__"}
+                      onClick={() => selectAndClose("__m365__")}
+                    >
+                      Microsoft 365
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Fristående objekt (om några hamnar utanför grupperna) */}
         {standalone.map((o) => (
