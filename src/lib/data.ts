@@ -855,6 +855,20 @@ export async function d2dSetAssignment(
   if (error) asError(error);
 }
 
+/**
+ * Manuell tilldelning när flera säljare delar en fastighet: lägenhets-id →
+ * säljar-id. Delas ut vid godkännande, eller direkt om projektet redan är godkänt.
+ */
+export async function d2dSetManualAssignment(
+  fastighetId: string, tilldelning: Record<string, string>
+): Promise<{ total: number; tilldelade: number; utdelade: number; projektGodkant: boolean }> {
+  const { data, error } = await supabase.rpc("d2d_set_fastighet_manuell_tilldelning", {
+    p_fastighet_id: fastighetId, p_tilldelning: tilldelning,
+  });
+  if (error) asError(error);
+  return data as { total: number; tilldelade: number; utdelade: number; projektGodkant: boolean };
+}
+
 /** Godkänner ett D2D-projekt: delar ut adresserna till säljarna enligt tilldelningen. */
 export async function d2dApproveProject(
   projektId: string
