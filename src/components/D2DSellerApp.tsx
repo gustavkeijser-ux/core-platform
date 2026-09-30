@@ -16,12 +16,14 @@ import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShare
 const rememberRow = (listKey: string, id: string) => rememberRowShared("d2d:" + listKey, id);
 const useReturnToRow = (listKey: string, ready: boolean) => useReturnToRowShared("d2d:" + listKey, ready, "d2d-return-flash");
 import { useUserName } from "@/lib/users";
+import { D2DDashboard } from "./D2DDashboard";
 
 // =============================================================================
 // Typer & hjälpfunktioner
 // =============================================================================
 
 type D2DView =
+  | { kind: "oversikt" }
   | { kind: "fastigheter" }
   | { kind: "projekt"; id: string }
   | { kind: "signerade" }
@@ -32,6 +34,7 @@ type D2DView =
 /** URL (#/d2d/…) ↔ vy, så en omladdning stannar på samma fastighet/adress. */
 function d2dViewFromSegs(segs: string[]): D2DView {
   const [kind, id, extra, from] = segs;
+  if (kind === "fastigheter") return { kind: "fastigheter" };
   if (kind === "signerade") return { kind: "signerade" };
   if (kind === "aterkopplingar") return { kind: "aterkopplingar" };
   if (kind === "projekt" && id) return { kind: "projekt", id };
@@ -41,7 +44,8 @@ function d2dViewFromSegs(segs: string[]): D2DView {
     const src = from === "signerade" || from === "aterkopplingar" ? from : undefined;
     return { kind: "lagenhet", id, fastighetId: extra && extra !== "-" ? extra : "", from: src };
   }
-  return { kind: "fastigheter" };
+  // Startsidan när man klickar på Door to Door: dashboarden.
+  return { kind: "oversikt" };
 }
 
 function d2dSegsFromView(v: D2DView): string[] {
@@ -1144,7 +1148,9 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
   const [brandColor, setBrandColor] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [minId, setMinId] = useState<string | null>(null);
   const { theme } = useTheme();
+  useEffect(() => { supabase.auth.getSession().then(({ data }) => setMinId(data.session?.user.id ?? null)); }, []);
 
   const loadMetadata = useCallback(() =>
     getMetadata()
@@ -1167,10 +1173,14 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
   const lagDef = objects.find((o) => o.key === "d2d_lagenhet");
 
   // ── Navigering
-  const navTab = view.kind === "signerade" ? "signerade" : view.kind === "aterkopplingar" ? "aterkopplingar" : "fastigheter";
+  const navTab = view.kind === "signerade" ? "signerade" : view.kind === "aterkopplingar" ? "aterkopplingar"
+    : view.kind === "oversikt" ? "oversikt" : "fastigheter";
 
   function renderContent() {
     switch (view.kind) {
+      case "oversikt":
+        return <D2DDashboard minId={minId} />;
+
       case "fastigheter":
         return <ProjektLista onOpen={(id) => setView({ kind: "projekt", id })} />;
 
@@ -1265,6 +1275,15 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
       {/* Bottom nav (döljs i detaljvy) */}
       {!inDetail && (
         <nav className="d2d-bottom-nav">
+          <button
+            className={`d2d-nav-btn${navTab === "oversikt" ? " d2d-nav-btn--active" : ""}`}
+            onClick={() => setView({ kind: "oversikt" })}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M3 17V9M8 17V4M13 17v-6M18 17H2"/>
+            </svg>
+            Översikt
+          </button>
           <button
             className={`d2d-nav-btn${navTab === "fastigheter" ? " d2d-nav-btn--active" : ""}`}
             onClick={() => setView({ kind: "fastigheter" })}
