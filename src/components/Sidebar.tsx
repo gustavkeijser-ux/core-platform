@@ -13,6 +13,11 @@ type Props = {
    *  fälls ut som ett överlägg via hamburgerknappen i toppfältet. */
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
+  /** Kundservice: visas när användaren får läsa ärenden. */
+  canCases?: boolean;
+  isAdmin?: boolean;
+  /** Antal otilldelade öppna ärenden (badge i menyn). */
+  unassignedCases?: number;
 };
 
 /* ── Menygrupper ─────────────────────────────────────────────────────── */
@@ -69,7 +74,9 @@ const MENU_GROUPS: MenuGroup[] = [
 
 /** Nycklar som inte grupperas utan visas fristående */
 const GROUPED_KEYS = new Set(MENU_GROUPS.flatMap((g) => g.keys));
-const HIDDEN_SPECIAL = new Set(["case", "partner"]); // visas separat längst ner
+const HIDDEN_SPECIAL = new Set(["partner"]); // visas separat längst ner
+/** Ärenden har egen inkorg under Kundservice (inte den generiska listan). */
+const OWN_VIEW = new Set(["case"]);
 
 /* ── Inline SVG-ikoner (16 × 16, currentColor) ───────────────────────── */
 
@@ -198,7 +205,7 @@ function Chevron({ open }: { open: boolean }) {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, unassignedCases }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   function selectAndClose(key: string) {
@@ -221,7 +228,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
 
   // Fristående objekt (inte i någon grupp, inte dolda)
   const standalone = objects.filter(
-    (o) => !GROUPED_KEYS.has(o.key) && !HIDDEN_SPECIAL.has(o.key)
+    (o) => !GROUPED_KEYS.has(o.key) && !HIDDEN_SPECIAL.has(o.key) && !OWN_VIEW.has(o.key)
   );
 
   // Ärenden + Partners (visas sist, fristående)
@@ -305,6 +312,46 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           {ICONS.__tasks__}
           Mina uppgifter
         </button>
+
+        {canCases && (
+          <>
+            <div className="sidebar__divider" />
+            <div className="sidebar__section-label">Kundservice</div>
+            <button
+              className="sidebar__item"
+              aria-current={activeKey === "__cases__"}
+              onClick={() => selectAndClose("__cases__")}
+            >
+              {ICONS.support_case}
+              Ärenden
+            </button>
+            <button
+              className="sidebar__item"
+              aria-current={activeKey === "__cases_unassigned__"}
+              onClick={() => selectAndClose("__cases_unassigned__")}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="8" cy="5.5" r="2.5" strokeDasharray="2 1.6" />
+                <path d="M3.5 14c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" strokeDasharray="2 1.6" />
+              </svg>
+              Otilldelade
+              {!!unassignedCases && <span className="sidebar__badge">{unassignedCases}</span>}
+            </button>
+            {isAdmin && (
+              <button
+                className="sidebar__item"
+                aria-current={activeKey === "__m365__"}
+                onClick={() => selectAndClose("__m365__")}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
+                  <path d="M1.5 4.5L8 9l6.5-4.5" />
+                </svg>
+                Microsoft 365
+              </button>
+            )}
+          </>
+        )}
 
         <div className="sidebar__divider" />
 
