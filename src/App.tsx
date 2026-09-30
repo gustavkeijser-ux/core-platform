@@ -14,6 +14,7 @@ import { RecordDrawer } from "@/components/RecordDrawer";
 import { D2DSellerApp } from "@/components/D2DSellerApp";
 import { D2DProjectBuilder } from "@/components/D2DProjectBuilder";
 import { MyTasksPage } from "@/components/MyTasksPage";
+import { NummerbytenPage } from "@/components/NummerbytenPage";
 import { ImportPage } from "@/components/ImportPage";
 import { UserSettings } from "@/components/UserSettings";
 import { useRoute, readRoute, navigate } from "@/lib/route";
@@ -26,7 +27,8 @@ type View =
   | { kind: "import" }
   | { kind: "list"; objectType: string }
   | { kind: "d2d" }
-  | { kind: "d2dbuilder" };
+  | { kind: "d2dbuilder" }
+  | { kind: "nummerbyten" };
 
 /** URL → vy. Okänt/tomt → översikten. */
 function viewFromSegs(segs: string[]): View {
@@ -36,6 +38,7 @@ function viewFromSegs(segs: string[]): View {
     case "import": return { kind: "import" };
     case "d2d": return { kind: "d2d" };
     case "d2dbuilder": return { kind: "d2dbuilder" };
+    case "nummerbyten": return { kind: "nummerbyten" };
     case "list": if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
   }
   return { kind: "dashboard" };
@@ -168,6 +171,7 @@ export default function App() {
           : view?.kind === "tasks" ? "__tasks__"
           : view?.kind === "import" ? "__import__"
           : view?.kind === "d2dbuilder" ? "__d2dbuilder__"
+          : view?.kind === "nummerbyten" ? "nummerbyte"
           : null
         }
         onSelect={(key) =>
@@ -178,6 +182,7 @@ export default function App() {
             : key === "__import__" ? { kind: "import" }
             : key === "__d2d__" ? { kind: "d2d" }
             : key === "__d2dbuilder__" ? { kind: "d2dbuilder" }
+            : key === "nummerbyte" ? { kind: "nummerbyten" }
             : { kind: "list", objectType: key }
           )
         }
@@ -205,6 +210,7 @@ export default function App() {
                 : view?.kind === "tasks" ? "Mina uppgifter"
                 : view?.kind === "import" ? "Import"
                 : view?.kind === "d2dbuilder" ? "D2D – Projekt"
+                : view?.kind === "nummerbyten" ? "Nummerbyten"
                 : ""}
             </h1>
           </div>
@@ -235,6 +241,8 @@ export default function App() {
         {view?.kind === "import" && <ImportPage />}
 
         {view?.kind === "d2dbuilder" && <D2DProjectBuilder />}
+
+        {view?.kind === "nummerbyten" && <NummerbytenPage />}
 
         {view?.kind === "list" && objectDefFor(view.objectType) && (
           <ObjectListPage
