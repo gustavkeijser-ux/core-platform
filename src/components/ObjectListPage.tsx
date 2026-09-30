@@ -176,17 +176,39 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   });
   const selectedCount = allMatching ? total : selected.size;
 
-  async function collectMatchingIds(): Promise<string[]> {
-    const ids: string[] = [];
-    for (let offset = 0; offset < total; offset += 200) {
+  /** Alla poster som matchar aktuellt sök/filter/sortering (sidvis om 200). */
+  async function collectMatching(onProgress?: (n: number) => void): Promise<RecordRow[]> {
+    const rows: RecordRow[] = [];
+    const seen = new Set<string>();
+    for (let offset = 0; ; offset += 200) {
       const res = await listRecords({
         objectType: objectDef.key, search: search || undefined, status: status || undefined,
         filters: filters.length ? filters : undefined, sort: sort ?? undefined, limit: 200, offset,
       });
-      ids.push(...res.items.map((r) => r.id));
-      if (res.items.length < 200) break;
+      for (const r of res.items) if (!seen.has(r.id)) { seen.add(r.id); rows.push(r); }
+      onProgress?.(rows.length);
+      if (res.items.length < 200 || offset + 200 >= res.total) break;
     }
-    return ids;
+    return rows;
+  }
+  async function collectMatchingIds(): Promise<string[]> {
+    return (await collectMatching()).map((r) => r.id);
+  }
+
+  const [exporting, setExporting] = useState<number | null>(null);
+  async function runExport() {
+    if (exporting !== null) return;
+    setExporting(0);
+    try {
+      const rows = await collectMatching((n) => setExporting(n));
+      const csv = recordsToCsv(objectDef.fields, rows);
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadCsv(`${objectDef.key}_export_${stamp}.csv`, csv);
+    } catch (e) {
+      alert(e instanceof DataError ? e.message : "Kunde inte exportera.");
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function runAssign() {
@@ -415,15 +437,14 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
           </button>
         )}
 
-        {items.length > 0 && (
+        {total > 0 && (
           <button
             className="btn btn--ghost btn--sm"
-            onClick={() => {
-              const csv = recordsToCsv(objectDef.fields, items);
-              downloadCsv(`${objectDef.key}_export.csv`, csv);
-            }}
+            disabled={exporting !== null}
+            onClick={() => void runExport()}
+            title={`Exporterar alla ${total} rader som matchar sök och filter`}
           >
-            CSV-export
+            {exporting !== null ? `Exporterar… ${exporting}/${total}` : `CSV-export (${total})`}
           </button>
         )}
 
