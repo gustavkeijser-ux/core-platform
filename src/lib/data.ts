@@ -313,6 +313,24 @@ export async function bulkAssign(ids: string[], userIds: string[], field = "salj
   return (data as number) ?? 0;
 }
 
+/** Nummerbyten (admin): markera genomförd — loggar vem/när/vilka nummer. */
+export async function nummerbyteComplete(id: string): Promise<void> {
+  const { error } = await supabase.rpc("nummerbyte_complete", { p_id: id, p_confirm: true });
+  if (error) asError(error);
+}
+
+/** Nummerbyten (admin): ändra startdatum — datum och varningar räknas om. */
+export async function nummerbyteSetStart(id: string, date: string): Promise<void> {
+  const { error } = await supabase.rpc("nummerbyte_set_startdatum", { p_id: id, p_date: date });
+  if (error) asError(error);
+}
+
+/** Nummerbyten (admin): sätt ansvarig admin. */
+export async function nummerbyteSetAdmin(id: string, user: string | null): Promise<void> {
+  const { error } = await supabase.rpc("nummerbyte_set_admin", { p_id: id, p_user: user });
+  if (error) asError(error);
+}
+
 // -----------------------------------------------------------------------------
 // Uppgifter
 // -----------------------------------------------------------------------------
