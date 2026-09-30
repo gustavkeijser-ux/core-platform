@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { rememberRow, useReturnToRow } from "@/lib/returnRow";
 import type { DashboardSummary } from "@/lib/data";
 import { getDashboardSummary, DataError } from "@/lib/data";
+import { type CaseSummary, getCaseSummary } from "@/lib/cases";
 
 type Props = {
+  /** Finns när användaren får se ärenden. */
+  onOpenCases?: (filter: string) => void;
   onOpenObject: (key: string) => void;
   onOpenRecord: (id: string) => void;
 };
@@ -84,7 +87,41 @@ function MiniDonut({ slices, total }: { slices: Slice[]; total: number }) {
   );
 }
 
-export function DashboardPage({ onOpenObject, onOpenRecord }: Props) {
+function CaseOverview({ s, onOpen }: { s: CaseSummary; onOpen: (f: string) => void }) {
+  const Tile = ({ label, value, filter, alert }: { label: string; value: number; filter: string; alert?: boolean }) => (
+    <button className={`case-kpi${alert && value > 0 ? " case-kpi--alert" : ""}`} onClick={() => onOpen(filter)}>
+      <span className="case-kpi__value">{value}</span>
+      <span className="case-kpi__label">{label}</span>
+    </button>
+  );
+  return (
+    <div className="case-overview">
+      <div className="card case-overview__block">
+        <div className="section-title">Ärenden idag</div>
+        <div className="case-overview__tiles">
+          <Tile label="Nya" value={s.today.new} filter="new" />
+          <Tile label="Pågående" value={s.today.inProgress} filter="in_progress" />
+          <Tile label="Väntar" value={s.today.waiting} filter="waiting_customer" />
+          <Tile label="Försenade" value={s.today.overdue} filter="overdue" alert />
+          <Tile label="Otilldelade" value={s.today.unassigned} filter="unassigned" alert />
+        </div>
+      </div>
+      <div className="card case-overview__block">
+        <div className="section-title">Mina ärenden</div>
+        <div className="case-overview__tiles">
+          <Tile label="Nya" value={s.mine.new} filter="mine" />
+          <Tile label="Pågående" value={s.mine.inProgress} filter="mine" />
+          <Tile label="SLA idag" value={s.mine.slaToday} filter="mine" alert />
+          <Tile label="Försenade" value={s.mine.overdue} filter="mine" alert />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DashboardPage({ onOpenObject, onOpenRecord, onOpenCases }: Props) {
+  const [caseSummary, setCaseSummary] = useState<CaseSummary | null>(null);
+  useEffect(() => { if (onOpenCases) getCaseSummary().then(setCaseSummary); }, [onOpenCases ? 1 : 0]);
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const returnRow = useReturnToRow("dashboard", !!data);
@@ -113,6 +150,8 @@ export function DashboardPage({ onOpenObject, onOpenRecord }: Props) {
             : ""}
         </p>
       </div>
+
+      {caseSummary && onOpenCases && <CaseOverview s={caseSummary} onOpen={onOpenCases} />}
 
       {/* KPI-rad */}
       {withPipeline.length > 0 && (
