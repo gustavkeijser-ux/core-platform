@@ -9,6 +9,7 @@ import { FieldInput } from "@/lib/fields";
 import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { FieldConfigPanel } from "./FieldConfigPanel";
+import { MobilNummerPanel } from "./MobilNummer";
 import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
 
@@ -563,6 +564,13 @@ function LagenhetForm({
       try {
         await updateRecord(lagenhetId, Object.keys(p.data).length ? p.data : undefined, p.status);
         setSaveState(hasPending() ? "pending" : "saved");
+        // Servern skapar nummerbytesärendet i efterhand (trigger) — hämta
+        // kopplingen så att "registrerat" + låst startdatum syns direkt.
+        if (p.status || Object.keys(p.data).some((k) => k.startsWith("mobil_") || k === "salt_mobil")) {
+          const { data: row } = await supabase.from("records").select("data").eq("id", lagenhetId).maybeSingle();
+          const nb = (row?.data as Record<string, unknown> | undefined)?.mobil_nummerbyte_id ?? null;
+          setData((d) => (d.mobil_nummerbyte_id === nb ? d : { ...d, mobil_nummerbyte_id: nb }));
+        }
       } catch (e) {
         // Lägg tillbaka det som inte gick igenom (nyare väntande värden vinner)
         // så nästa försök skickar allt.
@@ -658,6 +666,8 @@ function LagenhetForm({
     && f.key !== "ej_intresserad_bindningstid"
     && !f.options.sold_panel
     && f.key !== "salt_svar"
+    // Mobilnummer/portering har egen panel under Mobil i "Vad såldes?".
+    && !["mobil_nummerval", "mobil_startdatum", "mobil_nummer", "mobil_nummerbyte_id"].includes(f.key)
   ) ?? [];
   // Kategorierna i "Vad såldes?" — ett fält per kategori (select = ett val,
   // multi_select = flera). Styrs helt av fältdefinitionerna, så kategorier
@@ -690,6 +700,8 @@ function LagenhetForm({
     const nextSvar = { ...svar, [f.key]: ja };
     const patch: Record<string, unknown> = { salt_svar: nextSvar };
     if (f.fieldType === "boolean") patch[f.key] = ja; // Ja/Nej är själva värdet
+    // Mobil = Nej → inget nummerval heller (ett ev. öppet nummerbyte makuleras).
+    if (f.key === "salt_mobil" && !ja) patch.mobil_nummerval = null;
     else if (!ja) patch[f.key] = null; // Nej = inget valt i kategorin
     setData((d) => ({ ...d, ...patch }));
     queueSave(patch, null, 0);
@@ -844,6 +856,14 @@ function LagenhetForm({
                   >Nej</button>
                 </div>
               </div>
+              {answer(f) === true && f.key === "salt_mobil" && record && (
+                <MobilNummerPanel
+                  lagenhetId={record.id}
+                  data={data}
+                  isAdmin={isAdmin}
+                  onPatch={(patch, delay) => { setData((d) => ({ ...d, ...patch })); queueSave(patch, null, delay); }}
+                />
+              )}
               {answer(f) === true && f.fieldType !== "boolean" && (<>
               {f.fieldType === "multi_select" && <span className="d2d-sold-panel__hint">Välj en eller flera</span>}
               <div className="d2d-reason-panel__chips">
