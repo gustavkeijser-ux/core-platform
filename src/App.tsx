@@ -15,9 +15,13 @@ import { D2DSellerApp } from "@/components/D2DSellerApp";
 import { D2DProjectBuilder } from "@/components/D2DProjectBuilder";
 import { MyTasksPage } from "@/components/MyTasksPage";
 import { NummerbytenPage } from "@/components/NummerbytenPage";
+import { CasesPage } from "@/components/CasesPage";
+import { CaseView } from "@/components/CaseView";
+import { M365StatusPage } from "@/components/M365StatusPage";
+import { type CaseFilter, getCaseSummary } from "@/lib/cases";
 import { ImportPage } from "@/components/ImportPage";
 import { UserSettings } from "@/components/UserSettings";
-import { useRoute, readRoute, navigate } from "@/lib/route";
+import { useRoute, readRoute, navigate, goBack } from "@/lib/route";
 import { loadAllUsers } from "@/lib/users";
 
 type View =
@@ -28,7 +32,10 @@ type View =
   | { kind: "list"; objectType: string }
   | { kind: "d2d" }
   | { kind: "d2dbuilder" }
-  | { kind: "nummerbyten" };
+  | { kind: "nummerbyten" }
+  | { kind: "cases"; filter: CaseFilter }
+  | { kind: "case"; id: string }
+  | { kind: "m365" };
 
 /** URL → vy. Okänt/tomt → översikten. */
 function viewFromSegs(segs: string[]): View {
@@ -39,12 +46,22 @@ function viewFromSegs(segs: string[]): View {
     case "d2d": return { kind: "d2d" };
     case "d2dbuilder": return { kind: "d2dbuilder" };
     case "nummerbyten": return { kind: "nummerbyten" };
+    case "arenden": return { kind: "cases", filter: (CASE_FILTERS.includes(segs[1] as CaseFilter) ? segs[1] : "open") as CaseFilter };
+    case "arende": if (segs[1]) return { kind: "case", id: segs[1] }; break;
+    case "m365": return { kind: "m365" };
     case "list": if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
   }
   return { kind: "dashboard" };
 }
 
-const segsFromView = (v: View): string[] => (v.kind === "list" ? ["list", v.objectType] : [v.kind]);
+const CASE_FILTERS: CaseFilter[] = ["open", "all", "new", "mine", "unassigned", "in_progress", "waiting_customer",
+  "waiting_internal", "waiting_contractor", "resolved", "closed", "overdue"];
+
+const segsFromView = (v: View): string[] =>
+  v.kind === "list" ? ["list", v.objectType]
+  : v.kind === "cases" ? (v.filter === "open" ? ["arenden"] : ["arenden", v.filter])
+  : v.kind === "case" ? ["arende", v.id]
+  : [v.kind];
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -66,6 +83,7 @@ export default function App() {
   const [listReloadKey, setListReloadKey] = useState(0);
   const [visaInstallningar, setVisaInstallningar] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [unassignedCases, setUnassignedCases] = useState(0);
   const { theme } = useTheme();
 
   useEffect(() => {
@@ -88,13 +106,24 @@ export default function App() {
         // säljarvyn — enklare för dem, och de har inget annat de
         // behöver i CRM:et. Alla andra hamnar där URL:en pekar
         // (översikten om den är tom), så en omladdning byter inte sida.
-        if (res.isSeller && !res.isAdmin && readRoute().segs[0] !== "d2d") {
+        const canCases = res.objects.some((o) => o.key === "case");
+        if (res.isSeller && !res.isAdmin && !canCases && readRoute().segs[0] !== "d2d") {
           navigate(["d2d"], undefined, true);
         }
         setMetaReady(true);
       })
       .catch((e) => setMetaError(e.message ?? "Kunde inte hämta metadata."));
   }, [session]);
+
+  // Antal otilldelade ärenden i menyn — uppdateras varje minut.
+  useEffect(() => {
+    if (!metaReady || !objects?.some((o) => o.key === "case")) return;
+    let on = true;
+    const tick = () => getCaseSummary().then((s) => { if (on && s) setUnassignedCases(s.today.unassigned); });
+    tick();
+    const t = window.setInterval(tick, 60_000);
+    return () => { on = false; window.clearInterval(t); };
+  }, [metaReady, objects]);
 
   /** Ladda om metadata (t.ex. efter fältändringar eller ändrad branding).
    *  OBS: måste ligga före alla villkorliga return-satser — hooks får
@@ -111,7 +140,8 @@ export default function App() {
       .catch(() => { /* tyst — behåll befintlig data */ });
   }, []);
 
-  const sellerOnly = isSeller && !isAdmin;
+  const canCases = !!objects?.some((o) => o.key === "case");
+  const sellerOnly = isSeller && !isAdmin && !canCases;
   const view: View | null = !metaReady ? null
     : sellerOnly && route.segs[0] !== "d2d" ? { kind: "d2d" }
     : viewFromSegs(route.segs);
@@ -140,7 +170,7 @@ export default function App() {
   // och logga ut, för enkelhetens skull.
   if (view?.kind === "d2d") {
     return (
-      <D2DSellerApp onExitD2D={isSeller && !isAdmin ? undefined : () => setView({ kind: "dashboard" })} />
+      <D2DSellerApp onExitD2D={sellerOnly ? undefined : () => setView({ kind: "dashboard" })} />
     );
   }
 
@@ -164,6 +194,9 @@ export default function App() {
         branding={branding}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
+        canCases={canCases}
+        isAdmin={isAdmin}
+        unassignedCases={unassignedCases}
         activeKey={
           view?.kind === "list" ? view.objectType
           : view?.kind === "dashboard" ? "__dashboard__"
@@ -172,6 +205,9 @@ export default function App() {
           : view?.kind === "import" ? "__import__"
           : view?.kind === "d2dbuilder" ? "__d2dbuilder__"
           : view?.kind === "nummerbyten" ? "nummerbyte"
+          : view?.kind === "cases" ? (view.filter === "unassigned" ? "__cases_unassigned__" : "__cases__")
+          : view?.kind === "case" ? "__cases__"
+          : view?.kind === "m365" ? "__m365__"
           : null
         }
         onSelect={(key) =>
@@ -183,6 +219,9 @@ export default function App() {
             : key === "__d2d__" ? { kind: "d2d" }
             : key === "__d2dbuilder__" ? { kind: "d2dbuilder" }
             : key === "nummerbyte" ? { kind: "nummerbyten" }
+            : key === "__cases__" ? { kind: "cases", filter: "open" }
+            : key === "__cases_unassigned__" ? { kind: "cases", filter: "unassigned" }
+            : key === "__m365__" ? { kind: "m365" }
             : { kind: "list", objectType: key }
           )
         }
@@ -211,6 +250,9 @@ export default function App() {
                 : view?.kind === "import" ? "Import"
                 : view?.kind === "d2dbuilder" ? "D2D – Projekt"
                 : view?.kind === "nummerbyten" ? "Nummerbyten"
+                : view?.kind === "cases" ? "Ärenden"
+                : view?.kind === "case" ? "Ärende"
+                : view?.kind === "m365" ? "Microsoft 365"
                 : ""}
             </h1>
           </div>
@@ -229,6 +271,7 @@ export default function App() {
 
         {view?.kind === "dashboard" && (
           <DashboardPage
+            onOpenCases={canCases ? (f) => setView({ kind: "cases", filter: f as CaseFilter }) : undefined}
             onOpenObject={(key) => setView({ kind: "list", objectType: key })}
             onOpenRecord={openRecord}
           />
@@ -243,6 +286,27 @@ export default function App() {
         {view?.kind === "d2dbuilder" && <D2DProjectBuilder />}
 
         {view?.kind === "nummerbyten" && <NummerbytenPage />}
+
+        {view?.kind === "cases" && (
+          <CasesPage
+            filter={view.filter}
+            statuses={objectDefFor("case")?.statuses ?? []}
+            onFilter={(f) => navigate(segsFromView({ kind: "cases", filter: f }), undefined, true)}
+            onOpenCase={(id) => setView({ kind: "case", id })}
+          />
+        )}
+
+        {view?.kind === "case" && (
+          <CaseView
+            key={view.id}
+            caseId={view.id}
+            statuses={objectDefFor("case")?.statuses ?? []}
+            onBack={() => goBack(() => setView({ kind: "cases", filter: "open" }))}
+            onOpenCase={(id) => setView({ kind: "case", id })}
+          />
+        )}
+
+        {view?.kind === "m365" && isAdmin && <M365StatusPage />}
 
         {view?.kind === "list" && objectDefFor(view.objectType) && (
           <ObjectListPage
