@@ -52,7 +52,7 @@ const MENU_GROUPS: MenuGroup[] = [
         <circle cx="12" cy="13" r="1.5" />
       </svg>
     ),
-    keys: ["onboarding", "delivery", "appleverans", "nummerbyte"],
+    keys: ["onboarding", "delivery", "appleverans"],
   },
   {
     id: "d2d",
@@ -63,7 +63,7 @@ const MENU_GROUPS: MenuGroup[] = [
         <path d="M6.5 14V10h3v4" />
       </svg>
     ),
-    keys: ["d2d_projekt", "d2d_fastighet", "d2d_lagenhet"],
+    keys: ["d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte"],
   },
 ];
 
