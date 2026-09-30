@@ -4,7 +4,7 @@ import { rememberRow, useReturnToRow } from "@/lib/returnRow";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listRecords, getRecord, createRecord, updateRecord, removeRelation, addRelation,
-  listSellers, d2dImportAddresses, d2dSetAssignment, d2dApproveProject,
+  listSellers, d2dImportAddresses, d2dSetAssignment, d2dSetManualAssignment, d2dApproveProject,
   d2dDeleteProjekt,
   d2dGetKartaData, d2dGeokodaNu, type KartaPunkt,
   d2dGetLeveransKartaData, d2dSkapaFastighetFranLeverans, type LeveransPunkt,
@@ -677,66 +677,121 @@ function ExcelImportPanel({
 }
 
 // =============================================================================
-// Säljartilldelning (procent)
+// Säljartilldelning
+//   En säljare  → får 100 % av fastighetens adresser.
+//   Flera säljare → admin bockar i adress för adress under varje säljare;
+//   en adress som bockas i hos en säljare försvinner från de andras listor.
 // =============================================================================
 
-type Assignment = { user_id: string; procent: number };
+type Assignment = { user_id: string; procent: number; antal?: number };
 
-/**
- * Jämn fördelning som alltid summerar till exakt 100 (en säljare → 100 %,
- * två → 50/50, tre → 34/33/33 osv. — överskottet av heltalsdivisionen läggs
- * på de första raderna så att summan aldrig hamnar under 100).
- */
-function jamnFordelning(n: number): number[] {
-  if (n <= 0) return [];
-  const bas = Math.floor(100 / n);
-  const rest = 100 - bas * n;
-  return Array.from({ length: n }, (_, i) => bas + (i < rest ? 1 : 0));
+type LagRad = { id: string; label: string; status: string | null; owner: string | null };
+
+function lagLabel(r: RecordRow): string {
+  const d = r.data as Record<string, unknown>;
+  const gata = String(d.gatunamn ?? "").trim();
+  const nr = String(d.gatunummer ?? "").trim();
+  const ing = String(d.ingang ?? "").trim();
+  const lgh = String(r.title ?? d.name ?? "").trim();
+  // Radhus/småhus där "lägenheten" är husnumret (t.ex. 60A) — visa inte numret två gånger.
+  if (lgh && nr && lgh.startsWith(nr)) return [gata, lgh].filter(Boolean).join(" ");
+  const adr = [gata, nr + (ing ? " " + ing : "")].filter(Boolean).join(" ");
+  return lgh ? `${adr} · lgh ${lgh}` : adr || "Adress";
+}
+
+function jamforLag(a: LagRad, b: LagRad) {
+  return a.label.localeCompare(b.label, "sv", { numeric: true });
 }
 
 function AssignmentEditor({
-  fastighetId, sellers, initial, onSaved,
+  fastighetId, sellers, initial, manuell, onSaved,
 }: {
-  fastighetId: string; sellers: SellerOption[]; initial: Assignment[]; onSaved: () => void;
+  fastighetId: string; sellers: SellerOption[]; initial: Assignment[];
+  manuell: Record<string, string> | null; onSaved: () => void;
 }) {
-  const [rows, setRows] = useState<Assignment[]>(initial.length ? initial : []);
+  const [valda, setValda] = useState<string[]>(() =>
+    initial.map((a) => a.user_id).filter((id) => sellers.some((s) => s.id === id)));
+  const [lagenheter, setLagenheter] = useState<LagRad[] | null>(null);
+  const [karta, setKarta] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState<string | null>(null);
+  const flera = valda.length > 1;
 
-  const sum = rows.reduce((s, r) => s + (Number(r.procent) || 0), 0);
+  // Adressraderna behövs bara när flera säljare delar fastigheten.
+  useEffect(() => {
+    if (!flera || lagenheter) return;
+    (async () => {
+      const { data: rels } = await supabase.from("relationships").select("from_record_id")
+        .eq("rel_type", "d2d_lag_fastighet").eq("to_record_id", fastighetId);
+      const ids = (rels ?? []).map((r) => r.from_record_id as string);
+      const rows: RecordRow[] = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data } = await supabase.from("records")
+          .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
+          .in("id", ids.slice(i, i + 200)).is("deleted_at", null);
+        rows.push(...((data ?? []) as RecordRow[]));
+      }
+      const lista = rows.map((r) => ({ id: r.id, label: lagLabel(r), status: r.status, owner: r.owner_user_id }))
+        .sort(jamforLag);
+      setLagenheter(lista);
+      // Utgå från sparad manuell tilldelning, annars från nuvarande ägare.
+      const start: Record<string, string> = {};
+      for (const l of lista) {
+        const m = manuell?.[l.id];
+        if (m) start[l.id] = m;
+        else if (!manuell && l.owner) start[l.id] = l.owner;
+      }
+      setKarta(start);
+    })().catch(() => setError("Kunde inte hämta adresserna."));
+  }, [flera, lagenheter, fastighetId, manuell]);
 
-  // Lägg till/ta bort säljare fördelar om procentsatserna jämnt över alla
-  // rader (default). Går alltid att skriva över manuellt i procentfältet
-  // efteråt — se input-fältets onChange nedan, som bara ändrar just den
-  // raden och inte rör de andra.
-  function addRow() {
-    const unused = sellers.find((s) => !rows.some((r) => r.user_id === s.id));
-    if (!unused) return;
-    setRows((rs) => {
-      const next = [...rs, { user_id: unused.id, procent: 0 }];
-      const split = jamnFordelning(next.length);
-      return next.map((r, i) => ({ ...r, procent: split[i] }));
+  function laggTill(id: string) {
+    if (!id || valda.includes(id)) return;
+    setValda((v) => [...v, id]); setOk(null);
+  }
+  function taBort(id: string) {
+    setValda((v) => v.filter((x) => x !== id));
+    setKarta((k) => Object.fromEntries(Object.entries(k).filter(([, u]) => u !== id)));
+    setOk(null);
+  }
+  function vaxla(lagId: string, saljareId: string) {
+    setKarta((k) => {
+      const n = { ...k };
+      if (n[lagId] === saljareId) delete n[lagId]; else n[lagId] = saljareId;
+      return n;
     });
+    setOk(null);
   }
-  function setRow(i: number, patch: Partial<Assignment>) {
-    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  }
-  function removeRow(i: number) {
-    setRows((rs) => {
-      const next = rs.filter((_, idx) => idx !== i);
-      const split = jamnFordelning(next.length);
-      return next.map((r, j) => ({ ...r, procent: split[j] }));
+  function restenTill(saljareId: string) {
+    if (!lagenheter) return;
+    setKarta((k) => {
+      const n = { ...k };
+      for (const l of lagenheter) if (!n[l.id] || !valda.includes(n[l.id])) n[l.id] = saljareId;
+      return n;
     });
+    setOk(null);
   }
+
+  const namn = (id: string) => sellers.find((s) => s.id === id)?.name ?? "Säljare";
+  // Bara tilldelningar till säljare som fortfarande är valda räknas.
+  const aktiv = Object.fromEntries(Object.entries(karta).filter(([, u]) => valda.includes(u)));
+  const antalTilldelade = Object.keys(aktiv).length;
+  const total = lagenheter?.length ?? 0;
 
   async function save() {
-    setSaving(true); setError(null); setOk(false);
+    setSaving(true); setError(null); setOk(null);
     try {
-      if (rows.length === 0) { setError("Lägg till minst en säljare."); return; }
-      if (Math.abs(sum - 100) > 0.5) { setError(`Procentsatserna måste summera till 100 (nu ${sum}).`); return; }
-      await d2dSetAssignment(fastighetId, rows.map((r) => ({ user_id: r.user_id, procent: Number(r.procent) })));
-      setOk(true);
+      if (valda.length === 0) { setError("Välj minst en säljare."); return; }
+      if (!flera) {
+        await d2dSetAssignment(fastighetId, [{ user_id: valda[0], procent: 100 }]);
+        setOk(`${namn(valda[0])} får alla adresser.`);
+      } else {
+        const res = await d2dSetManualAssignment(fastighetId, aktiv);
+        setOk(res.projektGodkant
+          ? `Sparat och utdelat — ${res.tilldelade} av ${res.total} adresser har säljare.`
+          : `Sparat — ${res.tilldelade} av ${res.total} adresser har säljare. Delas ut när projektet godkänns.`);
+      }
       onSaved();
     } catch (e) {
       setError(e instanceof DataError ? e.message : "Kunde inte spara tilldelningen.");
@@ -745,40 +800,82 @@ function AssignmentEditor({
     }
   }
 
+  const ejValda = sellers.filter((s) => !valda.includes(s.id));
+
   return (
     <div className="d2dpb-assign">
-      {rows.map((r, i) => (
-        <div key={i} className="d2dpb-assign__row">
-          <select
-            className="input"
-            value={r.user_id}
-            onChange={(e) => setRow(i, { user_id: e.target.value })}
-          >
-            {sellers.map((s) => (
-              <option key={s.id} value={s.id} disabled={rows.some((rr, idx) => idx !== i && rr.user_id === s.id)}>
-                {s.name}
-              </option>
-            ))}
+      <div className="d2dpb-assign__sellers">
+        {valda.map((id) => (
+          <span key={id} className="d2dpb-assign__chip">
+            {namn(id)}
+            <button type="button" aria-label={`Ta bort ${namn(id)}`} onClick={() => taBort(id)}>✕</button>
+          </span>
+        ))}
+        {ejValda.length > 0 && (
+          <select className="input d2dpb-assign__add" value="" onChange={(e) => laggTill(e.target.value)}>
+            <option value="">+ Lägg till säljare…</option>
+            {ejValda.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
-          <input
-            className="input"
-            type="number" min={0} max={100} step={1}
-            value={r.procent}
-            onChange={(e) => setRow(i, { procent: Number(e.target.value) })}
-          />
-          <span>%</span>
-          <button className="btn btn--ghost btn--sm" onClick={() => removeRow(i)}>✕</button>
-        </div>
-      ))}
+        )}
+      </div>
+
+      {valda.length === 1 && (
+        <p className="ink-faint d2dpb-assign__hint">{namn(valda[0])} får 100 % av adresserna i fastigheten.</p>
+      )}
+
+      {flera && !lagenheter && !error && <div className="d2d-loading">Laddar adresser…</div>}
+      {flera && lagenheter && total === 0 && (
+        <div className="d2d-empty">Fastigheten har inga adresser ännu.</div>
+      )}
+      {flera && lagenheter && total > 0 && (
+        <>
+          <p className="ink-faint d2dpb-assign__hint">
+            Bocka i vilka adresser varje säljare ska ha. En adress som bockas i hos en säljare försvinner från de andras listor.
+          </p>
+          <div className="d2dpb-manual">
+            {valda.map((sid) => {
+              const synliga = lagenheter.filter((l) => !aktiv[l.id] || aktiv[l.id] === sid);
+              const egna = synliga.filter((l) => aktiv[l.id] === sid).length;
+              return (
+                <div key={sid} className="d2dpb-manual__col">
+                  <div className="d2dpb-manual__head">
+                    <strong>{namn(sid)}</strong>
+                    <span className="d2d-card__badge">{egna} st</span>
+                    {antalTilldelade < total && (
+                      <button type="button" className="btn btn--ghost btn--sm" onClick={() => restenTill(sid)}>
+                        Resten hit
+                      </button>
+                    )}
+                  </div>
+                  <ul className="d2dpb-manual__list">
+                    {synliga.map((l) => (
+                      <li key={l.id}>
+                        <label className={`d2dpb-manual__item${aktiv[l.id] === sid ? " is-checked" : ""}`}>
+                          <input type="checkbox" checked={aktiv[l.id] === sid} onChange={() => vaxla(l.id, sid)} />
+                          <span className="d2dpb-manual__label">{l.label}</span>
+                          {l.status && l.status !== "ej_knackad" && <StatusPill status={l.status} />}
+                        </label>
+                      </li>
+                    ))}
+                    {synliga.length === 0 && <li className="ink-faint d2dpb-manual__empty">Alla adresser är fördelade.</li>}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
       <div className="d2dpb-assign__actions">
-        <button className="btn btn--ghost btn--sm" onClick={addRow} disabled={rows.length >= sellers.length}>
-          + Lägg till säljare
-        </button>
-        <span className={sum === 100 ? "d2d-save-ok" : "d2d-error"}>{sum} % av 100 %</span>
-        <button className="btn btn--brand btn--sm" onClick={save} disabled={saving}>
+        {flera && lagenheter && total > 0 && (
+          <span className={antalTilldelade === total ? "d2d-save-ok" : "ink-faint"}>
+            {antalTilldelade} av {total} adresser fördelade
+          </span>
+        )}
+        <button className="btn btn--brand btn--sm" onClick={save} disabled={saving || valda.length === 0 || (flera && !lagenheter)}>
           {saving ? "Sparar…" : "Spara tilldelning"}
         </button>
-        {ok && <span className="d2d-save-ok">✓ Sparat</span>}
+        {ok && <span className="d2d-save-ok">✓ {ok}</span>}
         {error && <span className="d2d-error">{error}</span>}
       </div>
       {sellers.length === 0 && (
@@ -852,6 +949,7 @@ function FastighetRow({
           fastighetId={fastighet.id}
           sellers={sellers}
           initial={assignment}
+          manuell={(data.manuell_tilldelning as Record<string, string> | undefined) ?? null}
           onSaved={onChanged}
         />
       )}
@@ -1085,8 +1183,8 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
           {approving ? "Godkänner…" : "Godkänn projekt och dela ut adresser"}
         </button>
         <p className="ink-faint">
-          Delar ut adresserna till respektive säljare enligt tilldelad procentandel per fastighet,
-          och gör dem synliga i säljarnas app.
+          Delar ut adresserna till säljarna enligt tilldelningen per fastighet (en säljare får alla,
+          flera säljare får de adresser du bockat i), och gör dem synliga i säljarnas app.
         </p>
         {approveMsg && <div className="d2d-save-ok">✓ {approveMsg}</div>}
         {approveErr && <div className="d2d-error">{approveErr}</div>}
