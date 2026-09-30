@@ -3219,3 +3219,120 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 .d2dpb-picker__option:hover {
   background: var(--surface-alt);
 }
+
+/* ── Mobilnummer i D2D (portering / tillfälligt nummer) ─────────────── */
+.mnr { display: flex; flex-direction: column; gap: var(--sp-2); }
+.mnr-info { margin: 0; font-size: var(--text-sm); color: var(--ink-muted); }
+.mnr-form { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-2); }
+.mnr-ok {
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--hue-green) 14%, transparent);
+  color: var(--hue-green); font-size: var(--text-sm); font-weight: 600;
+}
+.mnr-warn {
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md);
+  background: var(--warn-soft); color: var(--warn-ink);
+  font-size: var(--text-sm); line-height: var(--leading-body);
+}
+.mnr-warn--hard {
+  background: color-mix(in srgb, var(--hue-red) 12%, transparent);
+  color: var(--hue-red);
+}
+.mnr-field { display: flex; flex-direction: column; gap: var(--sp-1); }
+.mnr-field .input { width: 100%; font-size: 16px; } /* 16px: ingen zoom i iOS */
+.mnr-input--missing { border-color: var(--hue-red); }
+.mnr-card {
+  margin: 0; padding: var(--sp-3); display: grid; gap: var(--sp-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface);
+}
+.mnr-card--huvud { border-color: var(--brand); box-shadow: inset 3px 0 0 var(--brand); }
+.mnr-card__title { padding: 0 var(--sp-1); font-size: var(--text-sm); font-weight: 700; }
+.mnr-badge {
+  display: inline-block; padding: 1px var(--sp-2); border-radius: var(--r-pill);
+  background: var(--brand-soft); color: var(--brand); font-size: var(--text-xs); font-weight: 700;
+}
+.mnr-remove { grid-column: 1 / -1; justify-self: start; color: var(--hue-red); }
+@media (max-width: 640px) {
+  .mnr-card { grid-template-columns: 1fr; }
+  .mnr-form > .btn { width: 100%; min-height: 44px; }
+}
+
+/* ── Nummerbyten (admin) ─────────────────────────────────────────────── */
+.nb-page { display: flex; flex-direction: column; gap: var(--sp-4); }
+.nb-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.nb-counts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.nb-count {
+  padding: var(--sp-1) var(--sp-3); border-radius: var(--r-pill);
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: var(--text-sm); font-weight: 600; white-space: nowrap;
+}
+.nb-count__label { font-weight: 400; color: var(--ink-muted); }
+.nb-sharepoint {
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
+  background: var(--warn-soft); color: var(--warn-ink); font-size: var(--text-sm);
+}
+.nb-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.nb-card { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); border-left: 4px solid var(--border); }
+.nb-card--red    { border-left-color: var(--hue-red); }
+.nb-card--orange { border-left-color: var(--hue-orange); }
+.nb-card--yellow { border-left-color: var(--hue-amber); }
+.nb-card--green  { border-left-color: var(--hue-green); }
+.nb-card__head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-3); }
+.nb-card__who { display: flex; gap: var(--sp-2); align-items: flex-start; min-width: 0; }
+.nb-card__dot { font-size: var(--text-lg); line-height: 1.2; }
+.nb-card__kund { margin: 0; font-size: var(--text-base); font-weight: 700; }
+.nb-card__adress { font-size: var(--text-sm); color: var(--ink-muted); }
+.nb-status {
+  display: inline-block; padding: 2px var(--sp-2); border-radius: var(--r-pill);
+  font-size: var(--text-xs); font-weight: 700; white-space: nowrap;
+  background: var(--surface-sunk); color: var(--ink-muted);
+}
+.nb-card--red .nb-status--oppen    { background: color-mix(in srgb, var(--hue-red) 14%, transparent); color: var(--hue-red); }
+.nb-card--orange .nb-status--oppen { background: color-mix(in srgb, var(--hue-orange) 14%, transparent); color: var(--hue-orange); }
+.nb-card--yellow .nb-status--oppen { background: var(--warn-soft); color: var(--warn-ink); }
+.nb-card--green .nb-status--oppen  { background: color-mix(in srgb, var(--hue-green) 14%, transparent); color: var(--hue-green); }
+.nb-status--genomford { background: color-mix(in srgb, var(--hue-green) 14%, transparent); color: var(--hue-green); }
+.nb-facts {
+  margin: 0; display: grid; gap: var(--sp-3) var(--sp-4);
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+.nb-facts dt { font-size: var(--text-xs); color: var(--ink-muted); text-transform: uppercase; letter-spacing: var(--tracking-label); }
+.nb-facts dd { margin: 2px 0 0; font-size: var(--text-sm); }
+.nb-late { color: var(--hue-red); font-weight: 700; }
+.nb-start, .nb-admin { width: 100%; max-width: 200px; }
+.nb-numbers { overflow-x: auto; }
+.nb-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.nb-table th {
+  text-align: left; padding: var(--sp-2); font-size: var(--text-xs); font-weight: 600;
+  color: var(--ink-muted); border-bottom: 1px solid var(--border);
+}
+.nb-table td { padding: var(--sp-2); border-bottom: 1px solid var(--border); }
+.nb-table tr:last-child td { border-bottom: 0; }
+.nb-mono { font-family: var(--font-mono); white-space: nowrap; }
+.nb-actions { display: flex; justify-content: flex-end; }
+.nb-done { margin: 0; font-size: var(--text-sm); color: var(--ink-muted); }
+.nb-dialog {
+  width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+  padding: var(--sp-5); border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+}
+.nb-dialog h2 { margin: 0; font-size: var(--text-lg); }
+.nb-dialog__kund { margin: 0; font-size: var(--text-sm); }
+.nb-dialog__nums { margin: 0; padding-left: var(--sp-5); font-size: var(--text-sm); font-family: var(--font-mono); }
+.nb-check { display: flex; gap: var(--sp-2); align-items: flex-start; font-size: var(--text-sm); cursor: pointer; }
+.nb-check input { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
+.nb-dialog__actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
+@media (max-width: 640px) {
+  .nb-card { padding: var(--sp-3); }
+  .nb-count__label { display: none; }
+  .nb-facts { grid-template-columns: 1fr 1fr; }
+  .nb-start, .nb-admin { max-width: none; font-size: 16px; }
+  .nb-table thead { display: none; }
+  .nb-table, .nb-table tbody, .nb-table tr, .nb-table td { display: block; width: 100%; }
+  .nb-table tr { padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); }
+  .nb-table tr:last-child { border-bottom: 0; }
+  .nb-table td { display: flex; justify-content: space-between; gap: var(--sp-3); padding: 2px 0; border: 0; }
+  .nb-table td::before { content: attr(data-label); color: var(--ink-muted); font-size: var(--text-xs); }
+  .nb-actions .btn, .nb-dialog__actions .btn { flex: 1; min-height: 44px; }
+}
