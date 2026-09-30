@@ -23,6 +23,7 @@ import { useUserName } from "@/lib/users";
 
 type D2DView =
   | { kind: "fastigheter" }
+  | { kind: "projekt"; id: string }
   | { kind: "signerade" }
   | { kind: "aterkopplingar" }
   | { kind: "fastighet"; id: string }
@@ -33,6 +34,7 @@ function d2dViewFromSegs(segs: string[]): D2DView {
   const [kind, id, extra, from] = segs;
   if (kind === "signerade") return { kind: "signerade" };
   if (kind === "aterkopplingar") return { kind: "aterkopplingar" };
+  if (kind === "projekt" && id) return { kind: "projekt", id };
   if (kind === "fastighet" && id) return { kind: "fastighet", id };
   if (kind === "lagenhet" && id) {
     // from = listan man öppnade adressen från, så Tillbaka går dit igen.
@@ -44,6 +46,7 @@ function d2dViewFromSegs(segs: string[]): D2DView {
 
 function d2dSegsFromView(v: D2DView): string[] {
   switch (v.kind) {
+    case "projekt": return ["d2d", "projekt", v.id];
     case "fastighet": return ["d2d", "fastighet", v.id];
     case "lagenhet":
       if (v.from) return ["d2d", "lagenhet", v.id, v.fastighetId || "-", v.from];
@@ -214,89 +217,201 @@ function InfraBox({ title, rows, emptyText }: { title: string; rows: InfoRow[]; 
 // Fastighetslista
 // =============================================================================
 
-function FastighetsLista({
-  onOpen,
-}: {
-  onOpen: (id: string) => void;
-}) {
-  const [items, setItems] = useState<RecordRow[]>([]);
-  const [loading, setLoading] = useState(true);
+/** Projekt-id för fastigheter som inte ligger i något projekt. */
+const UTAN_PROJEKT = "utan";
+
+type D2DUrval = {
+  fastigheter: RecordRow[];
+  /** fastighet-id → projekt-id (UTAN_PROJEKT om den saknar projekt) */
+  projektFor: Map<string, string>;
+  projekt: RecordRow[];
+};
+
+/**
+ * Fastigheterna säljaren har adresser i, plus vilka projekt de hör till.
+ * Kopplingarna lägenhet → fastighet hämtas direkt. RLS på relationships
+ * kräver att båda posterna är synliga, och d2d_lagenhet är scopad till
+ * säljarens egna rader (scope "own" för dörrsäljare) — så en säljare får
+ * bara fastigheter där den har adresser, admin får alla.
+ */
+async function hamtaUrval(): Promise<D2DUrval> {
+  const PAGE = 1000;
+  const fastSet = new Set<string>();
+  for (let from = 0; ; from += PAGE) {
+    const { data: rels, error } = await supabase
+      .from("relationships")
+      .select("to_record_id")
+      .eq("rel_type", "d2d_lag_fastighet")
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    for (const r of rels ?? []) fastSet.add(r.to_record_id as string);
+    if (!rels || rels.length < PAGE) break;
+  }
+  const fastIds = Array.from(fastSet);
+  if (fastIds.length === 0) return { fastigheter: [], projektFor: new Map(), projekt: [] };
+
+  const fastigheter: RecordRow[] = [];
+  const projektFor = new Map<string, string>();
+  // .in() med många id:n blir en lång URL — hämta i omgångar.
+  for (let i = 0; i < fastIds.length; i += 200) {
+    const ids = fastIds.slice(i, i + 200);
+    const [{ data: fastData, error: fErr }, { data: projRels, error: pErr }] = await Promise.all([
+      supabase.from("records")
+        .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
+        .in("id", ids).is("deleted_at", null),
+      supabase.from("relationships").select("from_record_id,to_record_id")
+        .eq("rel_type", "d2d_fast_projekt").in("from_record_id", ids),
+    ]);
+    if (fErr) throw fErr;
+    if (pErr) throw pErr;
+    fastigheter.push(...((fastData ?? []) as RecordRow[]));
+    for (const r of projRels ?? []) projektFor.set(r.from_record_id as string, r.to_record_id as string);
+  }
+  for (const f of fastigheter) if (!projektFor.has(f.id)) projektFor.set(f.id, UTAN_PROJEKT);
+
+  const projIds = Array.from(new Set(Array.from(projektFor.values()).filter((id) => id !== UTAN_PROJEKT)));
+  let projekt: RecordRow[] = [];
+  if (projIds.length > 0) {
+    const { data } = await supabase.from("records")
+      .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
+      .in("id", projIds).is("deleted_at", null);
+    projekt = (data ?? []) as RecordRow[];
+  }
+  // Fastigheter vars projekt inte går att läsa (borttaget) hamnar under "Utan projekt".
+  const kanda = new Set(projekt.map((p) => p.id));
+  for (const [f, pid] of projektFor) if (pid !== UTAN_PROJEKT && !kanda.has(pid)) projektFor.set(f, UTAN_PROJEKT);
+  return { fastigheter, projektFor, projekt };
+}
+
+// =============================================================================
+// Projektval — första steget: välj projekt, sedan fastigheterna i det
+// =============================================================================
+
+function ProjektLista({ onOpen }: { onOpen: (id: string) => void }) {
+  const [urval, setUrval] = useState<D2DUrval | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      try {
-        // Kopplingarna lägenhet → fastighet hämtas direkt. RLS på
-        // relationships kräver att båda posterna är synliga, och
-        // d2d_lagenhet är scopad till säljarens egna rader (scope "own"
-        // för dörrsäljare) — så en säljare får bara fastigheter där den
-        // har adresser, admin får alla. (Tidigare listades lägenheterna
-        // först, men den listningen tar max 200 rader, så fastigheter vars
-        // lägenheter hamnade utanför de 200 syntes inte alls.)
-        const fastSet = new Set<string>();
-        const PAGE = 1000;
-        for (let from = 0; ; from += PAGE) {
-          const { data: rels, error } = await supabase
-            .from("relationships")
-            .select("to_record_id")
-            .eq("rel_type", "d2d_lag_fastighet")
-            .range(from, from + PAGE - 1);
-          if (error) throw error;
-          for (const r of rels ?? []) fastSet.add(r.to_record_id as string);
-          if (!rels || rels.length < PAGE) break;
-        }
-        const fastIds = Array.from(fastSet);
-        if (fastIds.length === 0) { setItems([]); return; }
-
-        const { data: fastData } = await supabase
-          .from("records")
-          .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
-          .in("id", fastIds)
-          .order("title");
-        // Sortera på fastighetsbeteckning (numeriskt, så Falken 9 < Falken 10).
-        const bet = (r: RecordRow) => String((r.data as Record<string, unknown>).fastighetsbeteckning ?? r.title ?? "");
-        setItems(((fastData ?? []) as RecordRow[]).sort((a, b) =>
-          bet(a).localeCompare(bet(b), "sv", { numeric: true })));
-      } catch {
-        // tyst
-      } finally {
-        setLoading(false);
-      }
-    })();
+    hamtaUrval().then(setUrval).catch(() => setError(true));
   }, []);
 
-  const returnRow = useReturnToRow("fastigheter", !loading);
+  const returnRow = useReturnToRow("projekt", !!urval);
 
-  if (loading) return <div className="d2d-loading">Laddar fastigheter…</div>;
+  if (error) return <div className="d2d-empty">Kunde inte hämta projekten. Försök igen.</div>;
+  if (!urval) return <div className="d2d-loading">Laddar projekt…</div>;
+
+  const antal = new Map<string, number>();
+  for (const pid of urval.projektFor.values()) antal.set(pid, (antal.get(pid) ?? 0) + 1);
+  const rader: Array<{ id: string; namn: string }> = urval.projekt
+    .map((p) => ({ id: p.id, namn: p.title ?? "Namnlöst projekt" }))
+    .sort((a, b) => a.namn.localeCompare(b.namn, "sv", { numeric: true }));
+  if (antal.has(UTAN_PROJEKT)) rader.push({ id: UTAN_PROJEKT, namn: "Utan projekt" });
 
   return (
     <div className="d2d-list">
       <div className="d2d-list__header">
-        <h2>Mina fastigheter</h2>
-        <span className="d2d-list__count">{items.length} st</span>
+        <h2>Välj projekt</h2>
+        <span className="d2d-list__count">{rader.length} st</span>
       </div>
 
-      {items.length === 0 && (
+      {rader.length === 0 && (
         <div className="d2d-empty">Inga fastigheter tilldelade ännu.</div>
       )}
 
-      {items.map((item) => {
-        const data = item.data as Record<string, unknown>;
+      {rader.map((p) => {
+        const n = antal.get(p.id) ?? 0;
         return (
-          <button key={item.id} className="d2d-card" {...returnRow(item.id)} onClick={() => { rememberRow("fastigheter", item.id); onOpen(item.id); }}>
-            {/* Bara fastighetsbeteckning + fastighetsägare — adressen syns
-                inne i fastigheten. */}
+          <button key={p.id} className="d2d-card" {...returnRow(p.id)} onClick={() => { rememberRow("projekt", p.id); onOpen(p.id); }}>
             <div className="d2d-card__main">
-              <span className="d2d-card__title">
-                {data.fastighetsbeteckning ? String(data.fastighetsbeteckning) : (item.title ?? "Namnlös")}
-              </span>
-              {!!data.fastighetsagare && (
-                <span className="d2d-card__sub">{String(data.fastighetsagare)}</span>
-              )}
+              <span className="d2d-card__title">{p.namn}</span>
+              <span className="d2d-card__sub">{n} {n === 1 ? "fastighet" : "fastigheter"}</span>
             </div>
             <svg className="d2d-card__chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 4l4 4-4 4"/></svg>
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// =============================================================================
+// Fastighetslista (inom ett projekt)
+// =============================================================================
+
+function FastighetsLista({
+  projektId,
+  onBack,
+  onOpen,
+}: {
+  projektId: string;
+  onBack: () => void;
+  onOpen: (id: string) => void;
+}) {
+  const [items, setItems] = useState<RecordRow[]>([]);
+  const [projektNamn, setProjektNamn] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    hamtaUrval()
+      .then(({ fastigheter, projektFor, projekt }) => {
+        setProjektNamn(projektId === UTAN_PROJEKT ? "Utan projekt"
+          : projekt.find((p) => p.id === projektId)?.title ?? "Projekt");
+        // Turordning först (så säljaren går i planerad ordning), sedan
+        // fastighetsbeteckning numeriskt (Falken 9 < Falken 10).
+        const tur = (r: RecordRow) => {
+          const t = Number((r.data as Record<string, unknown>).turordning);
+          return Number.isFinite(t) && t > 0 ? t : Number.MAX_SAFE_INTEGER;
+        };
+        const bet = (r: RecordRow) => String((r.data as Record<string, unknown>).fastighetsbeteckning ?? r.title ?? "");
+        setItems(fastigheter
+          .filter((f) => projektFor.get(f.id) === projektId)
+          .sort((a, b) => tur(a) - tur(b) || bet(a).localeCompare(bet(b), "sv", { numeric: true })));
+      })
+      .catch(() => { /* tyst */ })
+      .finally(() => setLoading(false));
+  }, [projektId]);
+
+  const returnRow = useReturnToRow("fastigheter:" + projektId, !loading);
+
+  if (loading) return <div className="d2d-loading">Laddar fastigheter…</div>;
+
+  return (
+    <div className="d2d-detail">
+      <div className="d2d-topbar">
+        <button className="d2d-back" onClick={onBack} aria-label="Tillbaka till projekt">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4l-6 6 6 6"/></svg>
+        </button>
+        <div className="d2d-topbar__title">
+          <h2>{projektNamn}</h2>
+          <span className="d2d-topbar__sub">{items.length} {items.length === 1 ? "fastighet" : "fastigheter"}</span>
+        </div>
+      </div>
+
+      <div className="d2d-list">
+        {items.length === 0 && (
+          <div className="d2d-empty">Inga fastigheter i det här projektet.</div>
+        )}
+
+        {items.map((item) => {
+          const data = item.data as Record<string, unknown>;
+          return (
+            <button key={item.id} className="d2d-card" {...returnRow(item.id)} onClick={() => { rememberRow("fastigheter:" + projektId, item.id); onOpen(item.id); }}>
+              <div className="d2d-card__main">
+                <span className="d2d-card__title">
+                  {data.fastighetsbeteckning ? String(data.fastighetsbeteckning) : (item.title ?? "Namnlös")}
+                </span>
+                {!!(item.title || data.fastighetsagare) && (
+                  <span className="d2d-card__sub">
+                    {[item.title, data.fastighetsagare].filter(Boolean).map(String).join(" · ")}
+                  </span>
+                )}
+              </div>
+              <svg className="d2d-card__chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 4l4 4-4 4"/></svg>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1057,7 +1172,16 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
   function renderContent() {
     switch (view.kind) {
       case "fastigheter":
-        return <FastighetsLista onOpen={(id) => setView({ kind: "fastighet", id })} />;
+        return <ProjektLista onOpen={(id) => setView({ kind: "projekt", id })} />;
+
+      case "projekt":
+        return (
+          <FastighetsLista
+            projektId={view.id}
+            onBack={() => goBack(() => setView({ kind: "fastigheter" }))}
+            onOpen={(id) => setView({ kind: "fastighet", id })}
+          />
+        );
 
       case "fastighet":
         return (
@@ -1111,6 +1235,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
 
   // Är vi i en detaljvy? Visa inte bottom-nav
   const inDetail = view.kind === "fastighet" || view.kind === "lagenhet";
+  // Projektets fastighetslista behåller bottenmenyn (den är en lista, inte en detaljvy).
 
   return (
     <div className="d2d-app" style={brandVars as CSSProperties}>
@@ -1149,7 +1274,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
               <line x1="3" y1="10" x2="17" y2="10"/>
               <line x1="10" y1="3" x2="10" y2="17"/>
             </svg>
-            Fastigheter
+            Projekt
           </button>
           <button
             className={`d2d-nav-btn${navTab === "signerade" ? " d2d-nav-btn--active" : ""}`}
