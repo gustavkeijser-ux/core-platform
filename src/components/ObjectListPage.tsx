@@ -11,6 +11,9 @@ import { KanbanBoard } from "./KanbanBoard";
 import { ColumnConfigPanel } from "./ColumnConfigPanel";
 import { FilterBar } from "./FilterBar";
 import { ColumnFilter, kolumnVal } from "./ColumnFilter";
+import { TopbarActions, SearchField, PlusIcon, FilterPills, Pager, EmptyState, SkeletonRows } from "./PageChrome";
+import { getStatusCounts, type StatusCounts } from "@/lib/statusCounts";
+import { readRoute, navigate } from "@/lib/route";
 
 type Props = {
   objectDef: ObjectDef;
@@ -100,7 +103,12 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   const [status, setStatus] = useState(saved.status ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
+  // "?ny=1" i adressen (t.ex. från Översiktens snabbåtgärder) öppnar
+  // skapa-dialogen direkt.
+  const [showCreate, setShowCreate] = useState(() => readRoute().query.get("ny") === "1");
+  useEffect(() => {
+    if (readRoute().query.get("ny") === "1") navigate(readRoute().segs, {}, true);
+  }, []);
   const [liveCount, setLiveCount] = useState(0);
   const [filters, setFilters] = useState<RecordFilter[]>(saved.filters ?? []);
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(
@@ -112,6 +120,15 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   const [showSave, setShowSave] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveShared, setSaveShared] = useState(false);
+
+  // Antal per status till filterpillren.
+  const [counts, setCounts] = useState<StatusCounts | null>(null);
+  const countsTick = useRef(0);
+  useEffect(() => {
+    let on = true;
+    getStatusCounts(objectDef.key, countsTick.current++ > 0).then((c) => { if (on) setCounts(c); });
+    return () => { on = false; };
+  }, [objectDef.key, liveCount, reloadKey]);
 
   const columns = useMemo(() => pickColumns(objectDef), [objectDef]);
   const layout = useMemo(() => columnLayout(objectDef, columns), [objectDef, columns]);
@@ -368,26 +385,75 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   const activeView = views.find((v) => v.id === activeViewId);
   const canDeleteActiveView = !!activeView; // RLS/RPC redan begränsar till egna vyer
 
+  const filtered = !!(search || status || filters.length > 0);
+  const plural = objectDef.labelPlural.toLowerCase();
+  const statusPills = hasStatuses ? [
+    { key: "", label: "Alla", count: counts?.total ?? null },
+    ...objectDef.statuses
+      .filter((s) => !counts || (counts.byStatus[s.key] ?? 0) > 0 || s.key === status)
+      .map((s) => ({
+        key: s.key, label: s.label, count: counts ? counts.byStatus[s.key] ?? 0 : null,
+        color: s.color ? (s.color.startsWith("#") ? s.color : `var(--hue-${s.color})`) : null,
+      })),
+  ] : [];
+
   return (
     <div className="page">
-      <div className="list-toolbar">
-        <input
-          className="input"
-          placeholder={`Sök ${objectDef.labelPlural.toLowerCase()}…`}
+      <TopbarActions>
+        <SearchField
           value={search}
-          onChange={(e) => { setSearch(e.target.value); setActiveViewId(""); }}
+          placeholder={`Sök ${plural}…`}
+          onChange={(v) => { setSearch(v); setActiveViewId(""); }}
         />
-        {hasStatuses && (
-          <select
-            className="input" style={{ maxWidth: 200 }} value={status}
-            onChange={(e) => { setPage(0); setStatus(e.target.value); setActiveViewId(""); }}
-          >
-            <option value="">Alla statusar</option>
-            {objectDef.statuses.map((s) => (
-              <option key={s.key} value={s.key}>{s.label}</option>
-            ))}
-          </select>
+        {objectDef.can.create && (
+          <button className="btn btn--brand" onClick={() => setShowCreate(true)}>
+            <PlusIcon />
+            <span className="btn__label">Ny {objectDef.labelSingular.toLowerCase()}</span>
+          </button>
         )}
+      </TopbarActions>
+
+      <div className="list-head">
+        {hasStatuses
+          ? <FilterPills items={statusPills} active={status} onSelect={(k) => { setPage(0); setStatus(k); setActiveViewId(""); }} />
+          : <span className="list-head__count">{total} {plural}</span>}
+        <div className="list-head__tools">
+          {liveCount > 0 && (
+            <span className="live-dot" title={`${liveCount} uppdatering${liveCount === 1 ? "" : "ar"} sedan sidan öppnades`}>
+              <span className="live-dot__pip" />
+              Live
+            </span>
+          )}
+          {hasStatuses && (
+            <div className="view-toggle">
+              <button className="view-toggle__btn" aria-current={mode === "list"} onClick={() => setMode("list")}>Lista</button>
+              <button className="view-toggle__btn" aria-current={mode === "kanban"} onClick={() => setMode("kanban")}>Kanban</button>
+            </div>
+          )}
+          {mode === "list" && (
+            <button className="btn btn--ghost btn--sm" onClick={() => setShowColumns(true)} title="Välj kolumner">
+              Kolumner
+            </button>
+          )}
+          {total > 0 && (
+            <button
+              className="btn btn--ghost btn--sm"
+              disabled={exporting !== null}
+              onClick={() => void runExport()}
+              title={`Exporterar alla ${total} rader som matchar sök och filter`}
+            >
+              {exporting !== null ? `Exporterar… ${exporting}/${total}` : `Exportera (${total})`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="list-toolbar">
+        {quickFilters.map((q) => (
+          <button key={q.key} type="button" className="chip" aria-pressed={quickActive(q)} onClick={() => toggleQuick(q)}>
+            {q.label}
+          </button>
+        ))}
 
         <FilterBar
           objectDef={objectDef}
@@ -396,7 +462,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         />
 
         {views.length > 0 && (
-          <select className="input" style={{ maxWidth: 200 }} value={activeViewId} onChange={(e) => applyView(e.target.value)}>
+          <select className="input input--sm" style={{ maxWidth: 200 }} value={activeViewId} onChange={(e) => applyView(e.target.value)}>
             <option value="">Sparade vyer…</option>
             {views.map((v) => (
               <option key={v.id} value={v.id}>{v.name}{v.is_shared ? " (delad)" : ""}</option>
@@ -404,65 +470,19 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
           </select>
         )}
 
-        {(search || status || filters.length > 0) && (
+        {filtered && (
           <button className="btn btn--ghost btn--sm" onClick={() => setShowSave((s) => !s)}>Spara vy</button>
         )}
         {canDeleteActiveView && (
           <button className="btn btn--ghost btn--sm" onClick={onDeleteView}>Ta bort vy</button>
         )}
-
-        <div className="list-toolbar__spacer" />
-
-        {liveCount > 0 && (
-          <span className="live-dot" title={`${liveCount} uppdatering${liveCount === 1 ? "" : "ar"} sedan sidan öppnades`}>
-            <span className="live-dot__pip" />
-            Live
-          </span>
-        )}
-
-        {hasStatuses && (
-          <div className="view-toggle">
-            <button className="view-toggle__btn" aria-current={mode === "list"} onClick={() => setMode("list")}>Lista</button>
-            <button className="view-toggle__btn" aria-current={mode === "kanban"} onClick={() => setMode("kanban")}>Kanban</button>
-          </div>
-        )}
-
-        {mode === "list" && (
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={() => setShowColumns(true)}
-            title="Välj kolumner"
-          >
-            Kolumner
-          </button>
-        )}
-
-        {total > 0 && (
-          <button
-            className="btn btn--ghost btn--sm"
-            disabled={exporting !== null}
-            onClick={() => void runExport()}
-            title={`Exporterar alla ${total} rader som matchar sök och filter`}
-          >
-            {exporting !== null ? `Exporterar… ${exporting}/${total}` : `CSV-export (${total})`}
-          </button>
-        )}
-
-        {objectDef.can.create && (
-          <button className="btn btn--brand" onClick={() => setShowCreate(true)}>
-            + Ny {objectDef.labelSingular.toLowerCase()}
-          </button>
-        )}
       </div>
 
-      {quickFilters.length > 0 && (
-        <div className="quick-filters" role="group" aria-label="Snabbfilter">
-          {quickFilters.map((q) => (
-            <button key={q.key} type="button" className="chip" aria-pressed={quickActive(q)} onClick={() => toggleQuick(q)}>
-              {q.label}
-            </button>
-          ))}
-        </div>
+      {canAssign && selectedCount === 0 && mode === "list" && items.length > 0 && (
+        <label className="bulk-hint">
+          <input type="checkbox" checked={false} onChange={togglePage} />
+          Markera {plural} för att tilldela {ownerField!.label.toLowerCase()} på flera samtidigt
+        </label>
       )}
 
       {canAssign && selectedCount > 0 && (
@@ -520,22 +540,33 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         </div>
       )}
 
-      {error && <div className="card"><div className="empty-state">{error}</div></div>}
+      {error && (
+        <div className="card">
+          <EmptyState kind="error" title="Kunde inte hämta listan" text={error}
+            action={<button className="btn btn--danger btn--sm" onClick={() => void load()}>Försök igen</button>} />
+        </div>
+      )}
 
       {!error && mode === "kanban" && (
         loading
-          ? <div className="card"><div className="empty-state">Laddar…</div></div>
+          ? <div className="card"><SkeletonRows /></div>
           : <KanbanBoard objectDef={objectDef} records={items} onOpenRecord={onOpenRecord} onMoved={load} />
       )}
 
       {!error && mode === "list" && (
         <div className="card" style={{ padding: 0 }}>
-          {loading && <div className="empty-state">Laddar…</div>}
-          {!loading && items.length === 0 && (
-            <div className="empty-state">Inga {objectDef.labelPlural.toLowerCase()} ännu.</div>
-          )}
-          {!loading && items.length > 0 && (
-            <div className="rtable-scroll">
+          {loading && items.length === 0 && <SkeletonRows />}
+          {!loading && items.length === 0 && (filtered ? (
+            <EmptyState kind="filtered" title="Inga träffar"
+              text={search ? `Inget matchar "${search}". Prova ett bredare sökord eller rensa filtren.` : "Inget matchar filtren. Rensa dem för att se alla."}
+              action={<button className="btn btn--ghost btn--sm" onClick={() => { setSearch(""); setStatus(""); setFilters([]); setActiveViewId(""); }}>Rensa filter</button>} />
+          ) : (
+            <EmptyState title={`Inga ${plural} än`}
+              text={`Lägg till den första för att komma igång.`}
+              action={objectDef.can.create ? <button className="btn btn--brand btn--sm" onClick={() => setShowCreate(true)}><PlusIcon /> Ny {objectDef.labelSingular.toLowerCase()}</button> : undefined} />
+          ))}
+          {items.length > 0 && (
+            <div className={`rtable-scroll${loading ? " is-loading" : ""}`}>
             <table className={`rtable${columns.length > 6 ? " rtable--wide" : ""}`}>
               <thead>
                 <tr>
@@ -642,12 +673,8 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         </div>
       )}
 
-      {mode === "list" && total > PAGE_SIZE && (
-        <div className="pagination">
-          <span>{page * PAGE_SIZE + 1}–{Math.min(total, (page + 1) * PAGE_SIZE)} av {total}</span>
-          <button className="btn btn--ghost btn--sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Föregående</button>
-          <button className="btn btn--ghost btn--sm" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage((p) => p + 1)}>Nästa</button>
-        </div>
+      {mode === "list" && !error && total > 0 && (
+        <Pager page={page} pageSize={PAGE_SIZE} total={total} unit={plural} onPage={setPage} />
       )}
 
       {showCreate && (
