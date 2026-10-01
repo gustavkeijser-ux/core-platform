@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTenantUsers } from "@/lib/users";
 import type { ObjectDef, FieldDef, RecordFilter, FilterOp } from "@/lib/data";
 
 type Props = {
@@ -46,6 +47,9 @@ function operatorer(typ: string): Array<{ op: FilterOp; label: string }> {
       { op: "in", label: "är någon av" }, ...tomhet,
     ];
   }
+  if (typ === "user") {
+    return [{ op: "eq", label: "är" }, { op: "neq", label: "är inte" }, ...tomhet];
+  }
   return [
     { op: "contains", label: "innehåller" },
     { op: "not_contains", label: "innehåller inte" },
@@ -58,6 +62,7 @@ const UTAN_VARDE = new Set<FilterOp>(["empty", "not_empty"]);
 
 export function FilterBar({ objectDef, filters, onChange }: Props) {
   const [open, setOpen] = useState(false);
+  const users = useTenantUsers();
 
   /** Alla filtrerbara fält: systemkolumner först, sedan objektets egna */
   const falt = useMemo(() => {
@@ -141,6 +146,17 @@ export function FilterBar({ objectDef, filters, onChange }: Props) {
           <option value="">Välj…</option>
           <option value="true">Ja</option>
           <option value="false">Nej</option>
+        </select>
+      );
+    }
+
+    // Användarfält (t.ex. Säljare): välj på namn, filtrera på id.
+    if (typ === "user") {
+      return (
+        <select className="input input--sm" value={String(f.value ?? "")}
+                onChange={(e) => andra(i, { value: e.target.value })}>
+          <option value="">Välj…</option>
+          {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
       );
     }
