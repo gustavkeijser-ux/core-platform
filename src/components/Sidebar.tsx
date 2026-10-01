@@ -26,6 +26,8 @@ type Props = {
   /** Öppna AI-panelen (ikonen ovanför Import). */
   onOpenAi?: () => void;
   aiOpen?: boolean;
+  /** Antal nya (ohanterade) feedback, visas som siffra vid menyvalet. */
+  newFeedback?: number;
 };
 
 function initialer(namn: string) {
@@ -107,6 +109,13 @@ const ICONS: Record<string, JSX.Element> = {
       <rect x="2.5" y="2" width="11" height="12.5" rx="1.5" />
       <path d="M5.5 6.5l1.2 1.2 2.3-2.3" />
       <line x1="5.5" y1="10.5" x2="10.5" y2="10.5" />
+    </svg>
+  ),
+  __feedback__: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.3 3.9 1.8 18.2A2 2 0 0 0 3.5 21h17a2 2 0 0 0 1.7-2.8L13.7 3.9a2 2 0 0 0-3.4 0z" />
+      <line x1="12" y1="9" x2="12" y2="13.5" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   ),
   __import__: (
@@ -209,7 +218,7 @@ function Chevron({ open }: { open: boolean }) {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, unassignedCases, user, onOpenSettings, onSignOut, onOpenAi, aiOpen }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, unassignedCases, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -420,7 +429,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           );
         })()}
 
-        {(bottomItems.length > 0 || standalone.length > 0) && <div className="sidebar__section-label">Övrigt</div>}
+        {(bottomItems.length > 0 || standalone.length > 0 || isAdmin) && <div className="sidebar__section-label">Övrigt</div>}
         {/* Fristående objekt (om några hamnar utanför grupperna) */}
         {standalone.map((o) => (
           <button
@@ -433,6 +442,19 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
             {o.labelPlural}
           </button>
         ))}
+
+        {/* Feedback från knappen längst ned till höger (administratörer) */}
+        {isAdmin && (
+          <button
+            className="sidebar__item"
+            aria-current={activeKey === "__feedback__"}
+            onClick={() => selectAndClose("__feedback__")}
+          >
+            {ICONS.__feedback__}
+            Feedback
+            {!!newFeedback && <span className="sidebar__badge">{newFeedback}</span>}
+          </button>
+        )}
 
         {/* Ärenden & Partners */}
         {bottomItems.map((o) => (
