@@ -33,7 +33,7 @@ function operatorer(typ: string): Array<{ op: FilterOp; label: string }> {
             { op: "between", label: "mellan" }, ...tom];
   }
   if (typ === "boolean") return [{ op: "eq", label: "är" }, ...tom];
-  if (typ === "select") {
+  if (typ === "select" || typ === "user") {
     return [{ op: "eq", label: "är" }, { op: "neq", label: "är inte" }, ...tom];
   }
   return [{ op: "contains", label: "innehåller" },
@@ -183,10 +183,12 @@ export function ColumnFilter({
   );
 }
 
-/** Hjälpare: plocka fram val för en kolumn */
+/** Hjälpare: plocka fram val för en kolumn. Användarfält (t.ex. Säljare)
+ *  visar namnen — värdet som filtreras på är fortfarande användarens id. */
 export function kolumnVal(
-  field: string, def?: FieldDef, statusar?: StatusDef[]
+  field: string, def?: FieldDef, statusar?: StatusDef[], users?: Array<{ id: string; name: string }>
 ): Array<{ key: string; label: string }> | undefined {
   if (field === "__status") return statusar?.map((s) => ({ key: s.key, label: s.label }));
+  if (def?.fieldType === "user") return users?.map((u) => ({ key: u.id, label: u.name }));
   return def?.options?.choices;
 }
