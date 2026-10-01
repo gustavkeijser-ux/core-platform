@@ -426,7 +426,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                       aria-current={activeKey === "__m365__"}
                       onClick={() => selectAndClose("__m365__")}
                     >
-                      Microsoft 365
+                      E-post & signatur
                     </button>
                   )}
                 </div>
