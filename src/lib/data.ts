@@ -725,11 +725,6 @@ export async function sendAiMessage(
   return data;
 }
 
-/** @deprecated Tas bort — bara kvar tills AiChatPage är borttagen. */
-export type Agent = { id: string; key: string; name: string; department_id: string | null };
-/** @deprecated */
-export async function listAgents(): Promise<Agent[]> { return []; }
-
 // -----------------------------------------------------------------------------
 // Skrivning — alltid via rpc
 // -----------------------------------------------------------------------------
