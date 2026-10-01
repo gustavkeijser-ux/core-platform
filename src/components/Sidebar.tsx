@@ -286,6 +286,11 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
             </svg>
           </button>
         </div>
+        {/* Organisationen man arbetar i — som i förvaltarpanelen. */}
+        <div className="sidebar__org">
+          <span className="sidebar__org-label">Organisation</span>
+          <span className="sidebar__org-name">{branding?.name || "ConnectEstate"}</span>
+        </div>
         <nav className="sidebar__nav">
         {/* Översikt */}
         <button
@@ -430,6 +435,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           );
         })()}
 
+        {(bottomItems.length > 0 || standalone.length > 0) && <div className="sidebar__section-label">Övrigt</div>}
         {/* Fristående objekt (om några hamnar utanför grupperna) */}
         {standalone.map((o) => (
           <button
@@ -444,7 +450,6 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         ))}
 
         {/* Ärenden & Partners */}
-        {bottomItems.length > 0 && <div className="sidebar__divider" />}
         {bottomItems.map((o) => (
           <button
             key={o.key}
@@ -466,6 +471,15 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           {ICONS.__import__}
           Import
         </button>
+        {onOpenSettings && (
+          <button className="sidebar__item" onClick={() => { onOpenSettings(); onCloseMobile?.(); }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+            </svg>
+            Inställningar
+          </button>
+        )}
         {user && (
           <div className="sidebar__user">
             <button
