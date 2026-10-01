@@ -272,15 +272,18 @@ export function formatBytes(n: number | null | undefined) {
 
 /** Gemensam e-postsignatur för alla svar från ärendehanteringen (migration 0037). */
 export type MailSettings = {
-  signature: string; preview: string; updatedAt: string | null; updatedBy: string | null; canEdit: boolean;
+  signature: string; signatureHtml: string; preview: string; previewHtml: string;
+  updatedAt: string | null; updatedBy: string | null; canEdit: boolean;
 };
 export async function getMailSettings(): Promise<MailSettings | null> {
   const { data, error } = await supabase.rpc("get_mail_settings");
   if (error) return null;
   return data as MailSettings;
 }
-export async function setMailSignature(signature: string): Promise<MailSettings> {
-  const { data, error } = await supabase.rpc("set_mail_signature", { p_signature: signature });
+export async function setMailSignature(signature: string, signatureHtml?: string): Promise<MailSettings> {
+  const { data, error } = await supabase.rpc("set_mail_signature", {
+    p_signature: signature, p_signature_html: signatureHtml ?? null,
+  });
   if (error) fail(error);
   return data as MailSettings;
 }
