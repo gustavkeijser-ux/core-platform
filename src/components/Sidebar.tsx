@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ObjectDef, TenantBranding } from "@/lib/data";
-import { inkFor } from "@/lib/color";
+import { useUserName } from "@/lib/users";
 
 type Props = {
   objects: ObjectDef[];
@@ -18,7 +18,16 @@ type Props = {
   isAdmin?: boolean;
   /** Antal otilldelade öppna ärenden (badge i menyn). */
   unassignedCases?: number;
+  /** Inloggad användare (kortet längst ner i menyn). */
+  user?: { id: string; email: string; role: string };
+  onOpenSettings?: () => void;
+  onSignOut?: () => void;
 };
+
+function initialer(namn: string) {
+  const delar = namn.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+  return ((delar[0]?.[0] ?? "") + (delar[1]?.[0] ?? "")).toUpperCase() || "?";
+}
 
 /* ── Menygrupper ─────────────────────────────────────────────────────── */
 
@@ -205,9 +214,11 @@ function Chevron({ open }: { open: boolean }) {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, unassignedCases }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, unassignedCases, user, onOpenSettings, onSignOut }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
+  const hamtatNamn = useUserName(user?.id);
+  const userName = hamtatNamn && hamtatNamn !== "…" && hamtatNamn !== user?.id.slice(0, 8) ? hamtatNamn : user?.email ?? "";
   function selectAndClose(key: string) {
     onSelect(key);
     onCloseMobile?.();
@@ -242,14 +253,6 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
     expanded[activeGroup.id] = true;
   }
 
-  const brandColor = branding?.brandColor ?? null;
-  const sidebarStyle = brandColor
-    ? ({
-        "--sidebar-brand": brandColor,
-        "--sidebar-ink": inkFor(brandColor),
-      } as React.CSSProperties)
-    : undefined;
-
   return (
     <>
       {/* Skärm bakom menyn i mobilt läge — klick stänger, som en vanlig
@@ -257,19 +260,20 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
       {mobileOpen && <div className="sidebar-scrim" onClick={onCloseMobile} />}
 
       <aside
-        className={`sidebar${brandColor ? " sidebar--branded" : ""}${mobileOpen ? " sidebar--mobile-open" : ""}`}
-        style={sidebarStyle}
+        className={`sidebar${mobileOpen ? " sidebar--mobile-open" : ""}`}
       >
         <div className="sidebar__brand">
           {branding?.logoUrl ? (
             <img className="sidebar__logo" src={branding.logoUrl} alt={branding.name || "Logotyp"} />
           ) : (
             <>
-              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="18" height="18" rx="4" />
-                <path d="M7 8h8M7 11h5M7 14h8" />
-              </svg>
-              ConnectEstate
+              <span className="sidebar__mark">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 11l9-8 9 8" />
+                  <path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10" />
+                </svg>
+              </span>
+              {branding?.name || "ConnectEstate"}
             </>
           )}
           <button
@@ -313,7 +317,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           Mina uppgifter
         </button>
 
-        <div className="sidebar__divider" />
+        <div className="sidebar__section-label">Moduler</div>
 
         {/* Grupperade sektioner */}
         {MENU_GROUPS.map((group) => {
@@ -454,7 +458,6 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         ))}
       </nav>
       <div className="sidebar__bottom">
-        <div className="sidebar__divider" />
         <button
           className="sidebar__item"
           aria-current={activeKey === "__import__"}
@@ -463,8 +466,29 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           {ICONS.__import__}
           Import
         </button>
+        {user && (
+          <div className="sidebar__user">
+            <button
+              className="sidebar__user-main"
+              onClick={() => { onOpenSettings?.(); onCloseMobile?.(); }}
+              title="Inställningar och lösenord"
+            >
+              <span className="avatar">{initialer(userName)}</span>
+              <span className="sidebar__user-text">
+                <span className="sidebar__user-name">{userName}</span>
+                <span className="sidebar__user-role">{user.role}</span>
+              </span>
+            </button>
+            <button className="sidebar__logout" onClick={onSignOut} aria-label="Logga ut" title="Logga ut">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="M16 17l5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
-      <div className="sidebar__footer">{branding?.name || "ConnectEstate"} v0.2</div>
       </aside>
     </>
   );
