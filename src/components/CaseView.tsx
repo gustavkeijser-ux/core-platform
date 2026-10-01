@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import type { StatusDef } from "@/lib/data";
 import { DataError } from "@/lib/data";
@@ -64,25 +64,47 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   // Första gången ärendet visas: se till att senaste meddelandet syns, men
   // bara om det ligger utanför skärmen ("nearest" rör inte sidan annars).
   // Görs en gång per ärende — automatisk uppdatering var 30:e s scrollar aldrig.
+  // Konversationsfliken: ärendehuvudet och svarsrutan står still, bara
+  // tråden scrollar. Sidan får exakt den höjd som ryms i fönstret.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const nearBottom = useRef(true);
+  const loaded = d != null;
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    if (tab !== "conv") { el.style.height = ""; return; }
+    const scroller = el.closest(".app-shell__content") as HTMLElement | null;
+    const fit = () => {
+      if (scroller) scroller.scrollTop = 0;
+      const top = el.getBoundingClientRect().top;
+      el.style.height = `${Math.max(360, window.innerHeight - top)}px`;
+      const over = scroller ? scroller.scrollHeight - scroller.clientHeight : 0;
+      if (over > 0) el.style.height = `${Math.max(360, window.innerHeight - top - over)}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => { window.removeEventListener("resize", fit); el.style.height = ""; };
+  }, [tab, loaded]);
+
+  // Tråden börjar längst ner (senaste meddelandet). Nya meddelanden följs bara
+  // om man redan står längst ner — automatisk uppdatering rycker aldrig.
   const scrolled = useRef<string | null>(null);
-  useEffect(() => {
-    if (d && tab === "conv" && scrolled.current !== caseId) {
+  useLayoutEffect(() => {
+    const t = threadRef.current;
+    if (!d || tab !== "conv" || !t) return;
+    if (scrolled.current !== caseId || nearBottom.current) {
       scrolled.current = caseId;
-      requestAnimationFrame(() => {
-        const last = document.querySelector(".case .tl > li:last-child");
-        last?.scrollIntoView({ block: "nearest" });
-      });
+      t.scrollTop = t.scrollHeight;
     }
   }, [d, caseId, tab]);
+  useEffect(() => { if (tab !== "conv") scrolled.current = null; }, [tab]);
 
   /** Gå till svarsrutan: byt till Konversation, scrolla dit och sätt markören där. */
   const focusComposer = useCallback(() => {
     setTab("conv");
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const el = composerRef.current;
-      if (!el) return;
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
-      el.focus({ preventScroll: true });
+      composerRef.current?.focus({ preventScroll: true });
     }));
   }, [setTab]);
 
@@ -161,7 +183,7 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   }
 
   return (
-    <div className="page case">
+    <div className={`page case${tab === "conv" ? " case--conv" : ""}`} ref={rootRef}>
       <div className="case__head card">
         <div className="case__crumbs">
           <button className="btn btn--ghost btn--sm" onClick={onBack} aria-label="Tillbaka till ärenden">← Ärenden</button>
@@ -313,6 +335,10 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
         </div>
       ) : (
         <section className="case__conv" aria-label="Konversation">
+          <div className="case__thread" ref={threadRef} onScroll={(e) => {
+            const t = e.currentTarget;
+            nearBottom.current = t.scrollHeight - t.scrollTop - t.clientHeight < 80;
+          }}>
           <ol className="tl">
             {timeline.map((it) => it.kind === "event"
               ? <li key={`e${it.id}`} className="tl__event"><span>{it.body}</span> · <EventActor id={it.actor} kind={it.actorKind} /> · {fmtDateTime(it.at)}</li>
@@ -321,6 +347,7 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
                   if (!r.sent) throw new DataError("unknown", r.message ?? "Kunde inte skicka.");
                 })} />)}
           </ol>
+          </div>
           {d.canUpdate && (
             <Composer
               ref={composerRef}
