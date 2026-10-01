@@ -38,23 +38,20 @@ function hoverShade(rgb: { r: number; g: number; b: number }, lightTheme: boolea
 }
 
 /**
- * Alla CSS-variabler som --brand-familjen och --canvas-glow (glöden i
- * sidans övre hörn) består av, härledda från en enda hex-färg. Sprids
- * som inline style på .app-shell, vilket gör att den ärvs av allt under
- * den — inklusive ::before-glöden — utan att röra document.documentElement
+ * Alla CSS-variabler som --brand-familjen består av, härledda från en
+ * enda hex-färg. Sprids som inline style på .app-shell, vilket gör att
+ * den ärvs av allt under den utan att röra document.documentElement
  * (LoginPage, som renderas innan branding är inläst, ska inte påverkas).
  */
 export function brandCssVars(hex: string, lightTheme: boolean): Record<string, string> | undefined {
   const rgb = hexToRgb(hex);
   if (!rgb) return undefined;
   const { r, g, b } = rgb;
-  const glowAlpha = lightTheme ? 0.14 : 0.3;
   return {
     "--brand": hex,
     "--brand-hover": hoverShade(rgb, lightTheme),
-    "--brand-soft": `rgba(${r}, ${g}, ${b}, .16)`,
+    "--brand-soft": `rgba(${r}, ${g}, ${b}, ${lightTheme ? .12 : .2})`,
     "--brand-on": inkFor(hex),
-    "--shadow-brand": `0 6px 20px rgba(${r}, ${g}, ${b}, .38)`,
-    "--canvas-glow": `radial-gradient(46% 38% at 82% 6%, rgba(${r}, ${g}, ${b}, ${glowAlpha}), transparent 70%)`,
+    "--shadow-brand": `0 8px 16px rgba(${r}, ${g}, ${b}, .28)`,
   };
 }
