@@ -36,7 +36,6 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   const [cats, setCats] = useState<CaseCategory[]>([]);
   const [mode, setMode] = useState<"reply" | "note">("reply");
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null)); }, []);
   useEffect(() => { assignableUsers().then(setUsers); caseCategories().then(setCats); }, []);
@@ -51,14 +50,27 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
     return () => window.clearInterval(t);
   }, [load]);
 
-  // Scrolla till senaste meddelandet första gången ärendet visas.
+  // Första gången ärendet visas: se till att senaste meddelandet syns, men
+  // bara om det ligger utanför skärmen ("nearest" rör inte sidan annars).
+  // Görs en gång per ärende — automatisk uppdatering var 30:e s scrollar aldrig.
   const scrolled = useRef<string | null>(null);
   useEffect(() => {
     if (d && scrolled.current !== caseId) {
       scrolled.current = caseId;
-      requestAnimationFrame(() => endRef.current?.scrollIntoView({ block: "end" }));
+      requestAnimationFrame(() => {
+        const last = document.querySelector(".case .tl > li:last-child");
+        last?.scrollIntoView({ block: "nearest" });
+      });
     }
   }, [d, caseId]);
+
+  /** Gå till svarsrutan: scrolla dit och sätt markören där. */
+  const focusComposer = useCallback(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.focus({ preventScroll: true });
+  }, []);
 
   // Tangentbord: r = svara, i = intern kommentar, Esc = tillbaka
   useEffect(() => {
@@ -66,13 +78,13 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
       const t = e.target as HTMLElement;
       const typing = t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT";
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "r") { e.preventDefault(); setMode("reply"); composerRef.current?.focus(); }
-      else if (e.key === "i") { e.preventDefault(); setMode("note"); composerRef.current?.focus(); }
+      if (e.key === "r") { e.preventDefault(); setMode("reply"); focusComposer(); }
+      else if (e.key === "i") { e.preventDefault(); setMode("note"); focusComposer(); }
       else if (e.key === "Escape") { e.preventDefault(); onBack(); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onBack]);
+  }, [onBack, focusComposer]);
 
   async function act(fn: () => Promise<unknown>) {
     setActionError(null);
@@ -101,6 +113,7 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   const lagenhet = d.related.find((r) => r.relType === "case_lagenhet");
   const fastighet = d.related.find((r) => r.relType === "case_property");
   const lastEmail = [...d.messages].reverse().find((m) => m.channel === "email");
+  const lastMsgId = [...timeline].reverse().flatMap((it) => (it.kind === "msg" ? [it.msg.id] : []))[0];
   const closed = c.status === "resolved" || c.status === "closed";
   const firstDue = data.first_response_due_at as string | undefined;
   const resDue = data.resolution_due_at as string | undefined;
@@ -116,7 +129,7 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   } else if (!closed && lastEmail?.direction === "inbound") {
     const due = !data.first_response_at ? firstDue : resDue;
     next = { text: `Svara kunden${due ? ` — ${!data.first_response_at ? "första svar" : "lösning"} senast ${fmtDateTime(due)} (${relTime(due)})` : ""}.`,
-      tone: "action", cta: { label: "Svara", run: () => { setMode("reply"); composerRef.current?.focus(); } } };
+      tone: "action", cta: { label: "Svara", run: () => { setMode("reply"); focusComposer(); } } };
   } else if (c.status === "waiting_customer") {
     next = { text: `Väntar på kundens svar sedan ${fmtDateTime(lastEmail?.occurredAt)}.`, tone: "wait" };
   } else if (c.status === "waiting_internal") {
@@ -183,12 +196,11 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
           <ol className="tl">
             {timeline.map((it) => it.kind === "event"
               ? <li key={`e${it.id}`} className="tl__event"><span>{it.body}</span> · <EventActor id={it.actor} kind={it.actorKind} /> · {fmtDateTime(it.at)}</li>
-              : <MessageItem key={it.msg.id} m={it.msg} onRetry={() => void act(async () => {
+              : <MessageItem key={it.msg.id} m={it.msg} latest={it.msg.id === lastMsgId} onRetry={() => void act(async () => {
                   const r = await sendQueued(it.msg.id);
                   if (!r.sent) throw new DataError("unknown", r.message ?? "Kunde inte skicka.");
                 })} />)}
           </ol>
-          <div ref={endRef} />
           {d.canUpdate && (
             <Composer
               ref={composerRef}
@@ -314,7 +326,39 @@ function EventActor({ id, kind }: { id: string | null; kind: string }) {
   return <>{kind === "integration" ? "Microsoft 365" : "Systemet"}</>;
 }
 
-function MessageItem({ m, onRetry }: { m: CaseMessage; onRetry: () => void }) {
+/** Mejltext från HTML-mejl har ofta tiotals tomrader (en per <p>/<div>).
+ *  Tryck ihop dem till högst en tomrad så tråden går att läsa utan att scrolla. */
+function tidyBody(text: string | null | undefined): string {
+  return (text ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t\u00a0]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+const CLAMP_LINES = 14;
+
+/** Meddelandetext. Långa meddelanden visas förkortade med "Visa hela";
+ *  det senaste meddelandet visas alltid helt. */
+function MessageBody({ text, defaultOpen }: { text: string | null | undefined; defaultOpen: boolean }) {
+  const body = useMemo(() => tidyBody(text), [text]);
+  const long = body.split("\n").length > CLAMP_LINES + 4 || body.length > 1400;
+  const [open, setOpen] = useState(defaultOpen);
+  if (!body) return <div className="tl__body"><span className="ink-faint">(Tomt meddelande)</span></div>;
+  const clamped = long && !open;
+  return (
+    <>
+      <div className={`tl__body${clamped ? " tl__body--clamped" : ""}`}>{body}</div>
+      {long && (
+        <button className="linklike tl__more" onClick={() => setOpen((v) => !v)}>
+          {open ? "Visa mindre" : "Visa hela meddelandet"}
+        </button>
+      )}
+    </>
+  );
+}
+
+function MessageItem({ m, onRetry, latest = false }: { m: CaseMessage; onRetry: () => void; latest?: boolean }) {
   const author = useUserName(m.authorUserId);
   const [html, setHtml] = useState<string | null>(null);
   const [showHtml, setShowHtml] = useState(false);
@@ -341,7 +385,7 @@ function MessageItem({ m, onRetry }: { m: CaseMessage; onRetry: () => void }) {
       {isNote && <div className="tl__note-flag">Syns bara internt — skickas aldrig till kunden</div>}
       {!isNote && m.subject && <div className="tl__subject">{m.subject}</div>}
       {!isNote && !inbound && m.to?.length > 0 && <div className="tl__to ink-faint">Till: {m.to.join(", ")}</div>}
-      <div className="tl__body">{m.bodyText || <span className="ink-faint">(Tomt meddelande)</span>}</div>
+      <MessageBody text={m.bodyText} defaultOpen={latest} />
 
       {m.attachments.length > 0 && (
         <ul className="tl__atts">
@@ -380,7 +424,22 @@ function SafeHtml({ html, allowImages }: { html: string; allowImages: boolean })
   const csp = `default-src 'none'; img-src data: cid:${allowImages ? " https:" : ""}; style-src 'unsafe-inline'; font-src data:`;
   const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}">`
     + `<base target="_blank"><style>body{font:14px/1.5 system-ui,sans-serif;margin:12px;color:#222;word-wrap:break-word}img{max-width:100%;height:auto}</style></head><body>${clean}</body></html>`;
-  return <iframe className="tl__frame" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} title="Originalmejl" />;
+  // Ramen får samma höjd som mejlet, så sidan scrollar som vanligt i stället
+  // för att mushjulet fastnar inne i ramen. allow-same-origin behövs för att
+  // kunna mäta höjden; skript är fortfarande avstängda (ingen allow-scripts).
+  const fit = (f: HTMLIFrameElement) => {
+    const h = f.contentDocument?.documentElement.scrollHeight;
+    if (h) f.style.height = `${Math.min(h + 2, 4000)}px`;
+  };
+  return (
+    <iframe className="tl__frame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc}
+      title="Originalmejl" scrolling="no" onLoad={(e) => {
+        const f = e.currentTarget;
+        fit(f);
+        // Bilder som laddas in efteråt ändrar höjden.
+        f.contentDocument?.querySelectorAll("img").forEach((img) => img.addEventListener("load", () => fit(f)));
+      }} />
+  );
 }
 
 function AttachmentChip({ a }: { a: CaseAttachment }) {
