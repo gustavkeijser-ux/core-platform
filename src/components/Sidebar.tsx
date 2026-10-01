@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ObjectDef, TenantBranding } from "@/lib/data";
 import { useUserName } from "@/lib/users";
+import { AiMascot } from "./AiAssistant";
 
 type Props = {
   objects: ObjectDef[];
@@ -22,6 +23,9 @@ type Props = {
   user?: { id: string; email: string; role: string };
   onOpenSettings?: () => void;
   onSignOut?: () => void;
+  /** Öppna AI-panelen (ikonen ovanför Import). */
+  onOpenAi?: () => void;
+  aiOpen?: boolean;
 };
 
 function initialer(namn: string) {
@@ -96,15 +100,6 @@ const ICONS: Record<string, JSX.Element> = {
       <rect x="9.5" y="1.5" width="5" height="5" rx="1" />
       <rect x="1.5" y="9.5" width="5" height="5" rx="1" />
       <rect x="9.5" y="9.5" width="5" height="5" rx="1" />
-    </svg>
-  ),
-  __ai__: (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="10" height="8" rx="2" />
-      <circle cx="6" cy="8" r="1" fill="currentColor" stroke="none" />
-      <circle cx="10" cy="8" r="1" fill="currentColor" stroke="none" />
-      <line x1="5" y1="2" x2="5" y2="4" />
-      <line x1="11" y1="2" x2="11" y2="4" />
     </svg>
   ),
   __tasks__: (
@@ -214,7 +209,7 @@ function Chevron({ open }: { open: boolean }) {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, unassignedCases, user, onOpenSettings, onSignOut }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, unassignedCases, user, onOpenSettings, onSignOut, onOpenAi, aiOpen }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -300,16 +295,6 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         >
           {ICONS.__dashboard__}
           Översikt
-        </button>
-
-        {/* AI-assistent */}
-        <button
-          className="sidebar__item"
-          aria-current={activeKey === "__ai__"}
-          onClick={() => selectAndClose("__ai__")}
-        >
-          {ICONS.__ai__}
-          AI-assistent
         </button>
 
         {/* Mina uppgifter */}
@@ -463,6 +448,18 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         ))}
       </nav>
       <div className="sidebar__bottom">
+        {/* AI-assistenten öppnas som en panel nere till vänster (AiPanel). */}
+        {onOpenAi && (
+          <button
+            className="sidebar__item sidebar__item--ai"
+            aria-pressed={!!aiOpen}
+            onClick={() => { onOpenAi(); onCloseMobile?.(); }}
+            title="Fråga AI-assistenten om allt i CRM:et"
+          >
+            <AiMascot size={22} />
+            AI-assistent
+          </button>
+        )}
         <button
           className="sidebar__item"
           aria-current={activeKey === "__import__"}
