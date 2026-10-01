@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { TopbarActions, SearchField, PlusIcon, FilterPills } from "./PageChrome";
 import type { StatusDef } from "@/lib/data";
 import { DataError } from "@/lib/data";
 import {
@@ -132,30 +133,23 @@ export function CasesPage({ filter, statuses, onFilter, onOpenCase }: Props) {
 
   return (
     <div className="page cases">
-      <div className="cases__bar">
-        <div className="cases__search">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>
-          <input
-            ref={searchRef}
-            className="input"
-            placeholder="Sök ärendenummer, e-post, ämne, text, fastighet, lägenhet …   ( / )"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Sök ärenden"
-          />
-          {search && <button className="cases__clear" onClick={() => setSearch("")} aria-label="Rensa sökning">×</button>}
-        </div>
-        <button className="btn btn--ghost btn--sm" onClick={() => setCreating(true)}>+ Nytt ärende</button>
-      </div>
+      <TopbarActions>
+        <SearchField
+          inputRef={searchRef}
+          value={search}
+          onChange={setSearch}
+          placeholder="Sök ärenden …  ( / )"
+        />
+        <button className="btn btn--brand" onClick={() => setCreating(true)}>
+          <PlusIcon /><span className="btn__label">Nytt ärende</span>
+        </button>
+      </TopbarActions>
 
-      <div className="cases__filters chips" role="tablist" aria-label="Filter">
-        {FILTERS.map((f) => (
-          <button key={f.key} role="tab" className="chip" aria-pressed={filter === f.key} onClick={() => onFilter(f.key)}>
-            {f.label}
-            {counts && f.key !== "all" && counts[f.key] > 0 && <span className="cases__count">{counts[f.key]}</span>}
-          </button>
-        ))}
-      </div>
+      <FilterPills
+        items={FILTERS.map((f) => ({ key: f.key, label: f.label, count: counts ? counts[f.key] ?? null : null }))}
+        active={filter}
+        onSelect={(k) => onFilter(k as CaseFilter)}
+      />
 
       {filter !== "unassigned" && unassignedNew > 0 && (
         <button className="cases__queue" onClick={() => onFilter("unassigned")}>
