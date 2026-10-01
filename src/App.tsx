@@ -189,7 +189,7 @@ export default function App() {
     : view?.kind === "import" ? "Läs in data från fil"
     : view?.kind === "d2dbuilder" ? "Projekt, adresser och tilldelning"
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
-    : view?.kind === "m365" ? "Kopplingen till e-postlådan"
+    : view?.kind === "m365" ? "Signatur och kopplingen till Microsoft 365"
     : tenantName;
 
   /** Öppna en post som redigerbart kort */
@@ -272,7 +272,7 @@ export default function App() {
                 : view?.kind === "nummerbyten" ? "Nummerbyten"
                 : view?.kind === "cases" ? "Ärenden"
                 : view?.kind === "case" ? "Ärende"
-                : view?.kind === "m365" ? "Microsoft 365"
+                : view?.kind === "m365" ? "E-post & signatur"
                 : ""}
             </h1>
             <div className="topbar__sub">{subtitle}</div>
