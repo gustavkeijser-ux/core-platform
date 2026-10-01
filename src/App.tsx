@@ -13,6 +13,7 @@ import { AiPanel } from "@/components/AiAssistant";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { FeedbackPage } from "@/components/FeedbackPage";
 import { ObjectListPage } from "@/components/ObjectListPage";
+import { D2DLagenheterPage } from "@/components/D2DLagenheterPage";
 import { RecordDrawer } from "@/components/RecordDrawer";
 import { D2DSellerApp } from "@/components/D2DSellerApp";
 import { D2DProjectBuilder } from "@/components/D2DProjectBuilder";
@@ -81,7 +82,11 @@ export default function App() {
 
   // ── Öppna post som redigerbart kort ─────────────────────────────────
   const openRecordId = route.query.get("post");
-  const setOpenRecordId = (id: string | null) => navigate(readRoute().segs, { post: id });
+  // Övriga parametrar (t.ex. valt D2D-projekt) ligger kvar när en post öppnas/stängs.
+  const setOpenRecordId = (id: string | null) => {
+    const r = readRoute();
+    navigate(r.segs, { ...Object.fromEntries(r.query), post: id });
+  };
   const setView = (v: View) => navigate(segsFromView(v));
   const [listReloadKey, setListReloadKey] = useState(0);
   const [visaInstallningar, setVisaInstallningar] = useState(false);
@@ -375,7 +380,18 @@ export default function App() {
 
         {view?.kind === "feedback" && <FeedbackPage isAdmin={isAdmin} />}
 
-        {view?.kind === "list" && objectDefFor(view.objectType) && (
+        {view?.kind === "list" && view.objectType === "d2d_lagenhet" && objectDefFor(view.objectType) && (
+          <D2DLagenheterPage
+            key={view.objectType}
+            reloadKey={listReloadKey}
+            objectDef={objectDefFor(view.objectType)!}
+            projektDef={objectDefFor("d2d_projekt")}
+            onOpenRecord={openRecord}
+            onMetadataChanged={reloadMetadata}
+          />
+        )}
+
+        {view?.kind === "list" && view.objectType !== "d2d_lagenhet" && objectDefFor(view.objectType) && (
           <ObjectListPage
             key={view.objectType}
             reloadKey={listReloadKey}
