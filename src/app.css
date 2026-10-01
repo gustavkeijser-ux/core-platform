@@ -3750,7 +3750,9 @@ kbd {
 .case__next-label { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-label); }
 .case__next-text { flex: 1; min-width: 200px; }
 .case__grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--sp-4); align-items: start; }
-.case__side { display: flex; flex-direction: column; gap: var(--sp-4); position: sticky; top: var(--sp-4); }
+/* Sidopanelen följer sidan (inte sticky): den är ofta högre än skärmen, och
+   då gick nedre delen inte att nå förrän man scrollat förbi hela tråden. */
+.case__side { display: flex; flex-direction: column; gap: var(--sp-4); }
 .case__side .card + .card { margin-top: 0; }
 .case__panel { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
 .case__panel-title { font-weight: 700; font-size: var(--text-sm); margin-bottom: var(--sp-1); }
@@ -3797,6 +3799,12 @@ kbd {
 .tl__subject { font-weight: 600; font-size: var(--text-sm); margin-bottom: 4px; }
 .tl__to { font-size: var(--text-xs); margin-bottom: 4px; }
 .tl__body { white-space: pre-wrap; word-wrap: break-word; font-size: var(--text-sm); line-height: var(--leading-body); }
+.tl__body--clamped {
+  max-height: calc(14 * 1.5em); overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent);
+  mask-image: linear-gradient(to bottom, #000 75%, transparent);
+}
+.tl__more { margin-top: 6px; font-size: var(--text-xs); font-weight: 600; }
 .tl__atts { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .att {
   display: grid; grid-template-columns: auto 1fr; grid-template-areas: "ext name" "ext meta" "ext blocked";
@@ -3815,7 +3823,7 @@ kbd {
 .att__blocked { grid-area: blocked; font-size: 11px; color: var(--hue-red); }
 .tl__html { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; }
 .tl__img-btn { font-size: var(--text-xs); }
-.tl__frame { width: 100%; height: 420px; border: 1px solid var(--border); border-radius: var(--r-md); background: #fff; }
+.tl__frame { width: 100%; height: 160px; border: 1px solid var(--border); border-radius: var(--r-md); background: #fff; display: block; }
 .tl__send { margin-top: var(--sp-2); font-size: var(--text-xs); font-weight: 600; }
 .tl__send--failed, .tl__send--pending { color: var(--hue-red); }
 .tl__send--sending { color: var(--ink-faint); }
@@ -3823,8 +3831,11 @@ kbd {
 /* Svar / intern kommentar */
 .composer {
   background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-md);
-  padding: var(--sp-3) var(--sp-4) var(--sp-4); position: sticky; bottom: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
   border-top: 3px solid var(--brand);
+  /* Inte sticky längre: den tog upp en tredjedel av skärmen och skymde
+     tråden medan man scrollade. "Svara" / r scrollar hit i stället. */
+  scroll-margin: var(--sp-6);
 }
 .composer--note { border-top-color: var(--hue-amber); }
 .composer__tabs { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-2); }
@@ -3922,8 +3933,7 @@ kbd {
   .case__facts { grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
   .case__next .btn { width: 100%; min-height: 40px; }
   .tl__msg { max-width: 100%; padding: var(--sp-3); }
-  .tl__frame { height: 320px; }
-  .composer { bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; margin: 0 calc(-1 * var(--sp-4)); }
+
   .composer__input { font-size: 16px; min-height: 90px; }
   .composer__actions .btn { flex: 1; min-height: 42px; }
   .case__panel .input, .linkpick .input { font-size: 16px; }
