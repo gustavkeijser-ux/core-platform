@@ -42,7 +42,28 @@ type Props = {
   onSaved: (row: RecordRow) => void;
   onNavigate?: (id: string) => void;
   onMetadataChanged?: () => void;
+  /** "page" = posten som egen sida (brödsmulor, rubrik, flikar med antal,
+   *  kort) som i förvaltarpanelen. "drawer" (standard) = panelen från höger,
+   *  används för att skapa nya poster. */
+  variant?: "drawer" | "page";
+  /** Brödsmulans första led → objektets lista. */
+  onOpenList?: (objectKey: string) => void;
 };
+
+const SVG_PROPS = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+/** Ikon i rubrikens ikonruta, per objekttyp. */
+function ObjectIcon({ objectKey }: { objectKey: string }) {
+  switch (objectKey) {
+    case "deal": return <svg {...SVG_PROPS}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
+    case "property": case "d2d_fastighet": return <svg {...SVG_PROPS}><rect x="4" y="3" width="16" height="18" rx="1.5" /><path d="M8 7.5h.01M12 7.5h.01M16 7.5h.01M8 11.5h.01M12 11.5h.01M16 11.5h.01M10 21v-4h4v4" /></svg>;
+    case "d2d_lagenhet": return <svg {...SVG_PROPS}><path d="M3 21h18" /><path d="M6 21V8l6-4 6 4v13" /><rect x="10" y="13" width="4" height="8" /></svg>;
+    case "contact": return <svg {...SVG_PROPS}><circle cx="12" cy="8" r="3.4" /><path d="M5 20c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4" /></svg>;
+    case "delivery": return <svg {...SVG_PROPS}><path d="M1 4h13v10H1z" /><path d="M14 8h4l3 3v3h-7" /><circle cx="5.5" cy="17.5" r="2" /><circle cx="17.5" cy="17.5" r="2" /></svg>;
+    case "agreement": return <svg {...SVG_PROPS}><path d="M6 3h9l3 3v15H6z" /><path d="M15 3v3h3" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" /></svg>;
+    case "case": return <svg {...SVG_PROPS}><path d="M4 4h16v12H8l-4 4z" /></svg>;
+    default: return <svg {...SVG_PROPS}><path d="M4 7h16M4 12h16M4 17h10" /></svg>;
+  }
+}
 
 /** Sektionsrubriker */
 const SECTION_LABELS: Record<string, string> = {
@@ -299,7 +320,8 @@ function RelationTab({
 
 // ── Huvud-komponent ──────────────────────────────────────────────────────────
 
-export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, recordId, objectDefFor, onClose, onSaved, onNavigate, onMetadataChanged }: Props) {
+export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, recordId, objectDefFor, onClose, onSaved, onNavigate, onMetadataChanged, variant = "drawer", onOpenList }: Props) {
+  const isPage = variant === "page";
   const isCreate = !recordProp && !recordId;
 
   // ── Laddning av post via ID
@@ -609,7 +631,7 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
           {/* Fält */}
           {hasSections ? (
             fieldGroups.map((group, gi) => (
-              <div key={group.section ?? gi} className="form-section">
+              <div key={group.section ?? gi} className={`form-section${isPage ? " card" : ""}`}>
                 {group.label && (
                   <div className="form-section__header">
                     <span className="form-section__title">{group.label}</span>
@@ -631,7 +653,7 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
           )}
 
           {/* Ägare */}
-          {record?.owner_user_id && (
+          {record?.owner_user_id && !isPage && (
             <div className="detail-owner">
               <span className="detail-owner__label">Ägare</span>
               <UserBadge id={record.owner_user_id} />
@@ -655,7 +677,7 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
 
           <div className="detail-save-row">
             {!isCreate && (
-              <button className="btn btn--ghost" onClick={onClose}>Stäng</button>
+              <button className="btn btn--ghost" onClick={onClose}>{isPage ? "Tillbaka" : "Stäng"}</button>
             )}
             {isCreate && (
               <button className="btn btn--ghost" onClick={onClose} disabled={saving}>Avbryt</button>
@@ -731,59 +753,55 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
     return null;
   }
 
-  return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="drawer drawer--wide">
-        {/* Header */}
-        <div className="drawer__header">
-          <h2>
-            {isCreate
-              ? `Ny ${resolvedDef.labelSingular.toLowerCase()}`
-              : (record?.title ?? "Namnlös post")}
-          </h2>
-          {dirty && !isCreate && <span className="drawer__unsaved-dot" title="Osparade ändringar" />}
-          {!isCreate && (
-            <button
-              className="btn btn--ghost btn--sm drawer__config-btn"
-              onClick={() => setShowFieldConfig(true)}
-              title="Konfigurera fält"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="8" cy="8" r="2" />
-                <path d="M13.7 10a1.2 1.2 0 00.2 1.3l.04.04a1.44 1.44 0 11-2.04 2.04l-.04-.04a1.2 1.2 0 00-1.3-.2 1.2 1.2 0 00-.72 1.1v.12a1.44 1.44 0 11-2.88 0v-.06a1.2 1.2 0 00-.78-1.1 1.2 1.2 0 00-1.3.2l-.04.04a1.44 1.44 0 11-2.04-2.04l.04-.04a1.2 1.2 0 00.2-1.3 1.2 1.2 0 00-1.1-.72h-.12a1.44 1.44 0 110-2.88h.06a1.2 1.2 0 001.1-.78 1.2 1.2 0 00-.2-1.3l-.04-.04A1.44 1.44 0 114.8 2.24l.04.04a1.2 1.2 0 001.3.2h.06a1.2 1.2 0 00.72-1.1V1.28a1.44 1.44 0 112.88 0v.06a1.2 1.2 0 00.72 1.1 1.2 1.2 0 001.3-.2l.04-.04a1.44 1.44 0 112.04 2.04l-.04.04a1.2 1.2 0 00-.2 1.3v.06a1.2 1.2 0 001.1.72h.12a1.44 1.44 0 110 2.88h-.06a1.2 1.2 0 00-1.1.72z" />
-              </svg>
-            </button>
-          )}
-          <button className="close-btn" onClick={onClose} aria-label="Stäng">×</button>
-        </div>
+  const tabCount = (t: TabDef) => t.objectType ? related.filter((r) => r.record.objectType === t.objectType).length : null;
+  const statusDef = resolvedDef.statuses.find((x) => x.key === (record?.status ?? null));
+  const updated = record ? new Date(record.updated_at).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" }) : "";
 
-        {/* Flikrad (bara vid redigering, ej skapa-ny) */}
-        {!isCreate && !fetchLoading && !fetchError && (
-          <div className="tab-bar">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                className={`tab-bar__tab${activeTab === tab.key ? " tab-bar__tab--active" : ""}`}
-                onClick={() => setActiveTab(tab.key)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
+  /** Kopplade objekt i högerkolumnen (sidvarianten): upp till fyra per typ. */
+  const relatedGroups = useMemo(() => {
+    const g = new Map<string, RelatedRecord[]>();
+    for (const r of related) {
+      const k = r.record.objectType;
+      if (!g.has(k)) g.set(k, []);
+      g.get(k)!.push(r);
+    }
+    return [...g.entries()];
+  }, [related]);
 
-        {/* Laddning */}
-        {fetchLoading && <div className="empty-state">Laddar…</div>}
-        {fetchError && <div className="empty-state">{fetchError}</div>}
+  const configBtn = !isCreate && (
+    <button
+      className="btn btn--ghost btn--sm drawer__config-btn"
+      onClick={() => setShowFieldConfig(true)}
+      title="Konfigurera fält"
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="8" cy="8" r="2" />
+        <path d="M13.7 10a1.2 1.2 0 00.2 1.3l.04.04a1.44 1.44 0 11-2.04 2.04l-.04-.04a1.2 1.2 0 00-1.3-.2 1.2 1.2 0 00-.72 1.1v.12a1.44 1.44 0 11-2.88 0v-.06a1.2 1.2 0 00-.78-1.1 1.2 1.2 0 00-1.3.2l-.04.04a1.44 1.44 0 11-2.04-2.04l.04-.04a1.2 1.2 0 00.2-1.3 1.2 1.2 0 00-1.1-.72h-.12a1.44 1.44 0 110-2.88h.06a1.2 1.2 0 001.1-.78 1.2 1.2 0 00-.2-1.3l-.04-.04A1.44 1.44 0 114.8 2.24l.04.04a1.2 1.2 0 001.3.2h.06a1.2 1.2 0 00.72-1.1V1.28a1.44 1.44 0 112.88 0v.06a1.2 1.2 0 00.72 1.1 1.2 1.2 0 001.3-.2l.04-.04a1.44 1.44 0 112.04 2.04l-.04.04a1.2 1.2 0 00-.2 1.3v.06a1.2 1.2 0 001.1.72h.12a1.44 1.44 0 110 2.88h-.06a1.2 1.2 0 00-1.1.72z" />
+      </svg>
+      {isPage && <span className="btn__label">Anpassa fält</span>}
+    </button>
+  );
 
-        {/* Flikinnehåll */}
-        {!fetchLoading && !fetchError && (
-          <div className="drawer__body drawer__body--tabs">
-            {renderTabContent()}
-          </div>
-        )}
-      </div>
+  const tabBar = !isCreate && !fetchLoading && !fetchError && (
+    <div className="tab-bar">
+      {tabs.map((tab) => {
+        const n = tabCount(tab);
+        return (
+          <button
+            key={tab.key}
+            className={`tab-bar__tab${activeTab === tab.key ? " tab-bar__tab--active" : ""}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+            {n != null && n > 0 && <span className="tab-bar__count">{n}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
 
+  const dialogs = (
+    <>
       {/* Skapa affär-dialog */}
       {showDealDialog && record && (
         <CreateDealDialog
@@ -852,6 +870,127 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
           onChanged={() => { if (onMetadataChanged) onMetadataChanged(); }}
         />
       )}
+    </>
+  );
+
+  if (isPage) {
+    const main = renderTabContent();
+    return (
+      <div className="page record-page">
+        <nav className="crumbs" aria-label="Brödsmulor">
+          <button className="crumbs__link" onClick={() => (onOpenList ? onOpenList(resolvedDef.key) : onClose())}>
+            {resolvedDef.labelPlural}
+          </button>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+          <span className="crumbs__current">{record?.title ?? (fetchLoading ? "…" : "Namnlös post")}</span>
+        </nav>
+
+        <div className="record-head">
+          <div className="record-head__icon"><ObjectIcon objectKey={resolvedDef.key} /></div>
+          <div className="record-head__text">
+            <div className="record-head__title-row">
+              <h1>{record?.title ?? (fetchLoading ? "Laddar…" : "Namnlös post")}</h1>
+              {record?.status && <StatusPill status={record.status} def={statusDef} />}
+              {dirty && <span className="drawer__unsaved-dot" title="Osparade ändringar" />}
+            </div>
+            <div className="record-head__sub">
+              {resolvedDef.labelSingular}{updated && ` · Uppdaterad ${updated}`}
+            </div>
+          </div>
+          <div className="record-head__actions">
+            {configBtn}
+            {activeTab === "oversikt" && !fetchLoading && !fetchError && (
+              <button className="btn btn--brand" onClick={save} disabled={saving || !dirty}>
+                {saving ? "Sparar…" : saveOk ? "✓ Sparat" : "Spara"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {tabBar}
+
+        {fetchLoading && <div className="card"><div className="skeleton" role="status"><div className="skeleton__row"><span className="skeleton__bar" style={{ width: "60%" }} /></div><div className="skeleton__row"><span className="skeleton__bar" style={{ width: "80%" }} /></div><div className="skeleton__row"><span className="skeleton__bar" style={{ width: "45%" }} /></div></div></div>}
+        {fetchError && <div className="card"><div className="empty-state">{fetchError}</div></div>}
+
+        {!fetchLoading && !fetchError && (activeTab === "oversikt" ? (
+          <div className="record-page__grid">
+            <div className="record-page__main">{main}</div>
+            <aside className="record-page__side">
+              <div className="card side-card">
+                <div className="side-card__title">Ansvarig</div>
+                {record?.owner_user_id
+                  ? <div className="side-card__person"><UserBadge id={record.owner_user_id} /></div>
+                  : <div className="side-card__empty">Ingen ansvarig</div>}
+                <div className="side-card__meta">
+                  Skapad {record ? new Date(record.created_at).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" }) : ""}
+                </div>
+              </div>
+              {relatedGroups.map(([type, rows]) => {
+                const def = objectDefFor?.(type);
+                const tab = tabs.find((t) => t.objectType === type);
+                return (
+                  <div className="card side-card" key={type}>
+                    <div className="side-card__title">
+                      <span className="side-card__chip"><ObjectIcon objectKey={type} /></span>
+                      {def?.labelPlural ?? type}
+                      <span className="side-card__count">{rows.length}</span>
+                    </div>
+                    <div className="side-list">
+                      {rows.slice(0, 4).map((r) => (
+                        <button key={r.record.id + r.relType} className="side-list__item" onClick={() => onNavigate?.(r.record.id)}>
+                          <span className="side-list__title">{r.record.title ?? "Namnlös post"}</span>
+                          {r.record.status && (
+                            <StatusPill status={r.record.status} def={def?.statuses.find((x) => x.key === r.record.status)} />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    {tab && rows.length > 4 && (
+                      <button className="side-card__more" onClick={() => setActiveTab(tab.key)}>Visa alla {rows.length} →</button>
+                    )}
+                  </div>
+                );
+              })}
+            </aside>
+          </div>
+        ) : (
+          <div className="card record-page__tab">{main}</div>
+        ))}
+
+        {dialogs}
+      </div>
+    );
+  }
+
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="drawer drawer--wide">
+        {/* Header */}
+        <div className="drawer__header">
+          <h2>
+            {isCreate
+              ? `Ny ${resolvedDef.labelSingular.toLowerCase()}`
+              : (record?.title ?? "Namnlös post")}
+          </h2>
+          {dirty && !isCreate && <span className="drawer__unsaved-dot" title="Osparade ändringar" />}
+          {configBtn}
+          <button className="close-btn" onClick={onClose} aria-label="Stäng">×</button>
+        </div>
+
+        {tabBar}
+
+        {/* Laddning */}
+        {fetchLoading && <div className="empty-state">Laddar…</div>}
+        {fetchError && <div className="empty-state">{fetchError}</div>}
+
+        {/* Flikinnehåll */}
+        {!fetchLoading && !fetchError && (
+          <div className="drawer__body drawer__body--tabs">
+            {renderTabContent()}
+          </div>
+        )}
+      </div>
+      {dialogs}
     </div>
   );
 }
