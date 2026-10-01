@@ -177,6 +177,21 @@ export default function App() {
 
   const objectDefFor = (key: string) => objects.find((o) => o.key === key);
 
+  const tenantName = branding?.name || "ConnectEstate";
+  const listDef = view?.kind === "list" ? objectDefFor(view.objectType) : undefined;
+  const subtitle =
+    listDef ? `Alla ${listDef.labelPlural.toLowerCase()} i ${tenantName}`
+    : view?.kind === "dashboard" ? `${tenantName} · ${new Date().toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}`
+    : view?.kind === "cases" ? "Följ upp kundernas ärenden"
+    : view?.kind === "case" ? "Ärende från kundtjänst"
+    : view?.kind === "tasks" ? "Dina uppgifter i alla moduler"
+    : view?.kind === "ai" ? "Fråga om allt i CRM:et"
+    : view?.kind === "import" ? "Läs in data från fil"
+    : view?.kind === "d2dbuilder" ? "Projekt, adresser och tilldelning"
+    : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
+    : view?.kind === "m365" ? "Kopplingen till e-postlådan"
+    : tenantName;
+
   /** Öppna en post som redigerbart kort */
   function openRecord(id: string) {
     setOpenRecordId(id);
@@ -231,7 +246,7 @@ export default function App() {
         }
       />
       <div className="app-shell__content">
-        <div className="topbar">
+        <div className={`topbar${openRecordId ? " topbar--detail" : ""}`}>
           <div className="topbar__left">
             {/* Bara synlig under 860px (se app.css) — öppnar sidomenyn som
              *  ett överlägg, eftersom den annars ligger dold utanför skärmen. */}
@@ -260,24 +275,26 @@ export default function App() {
                 : view?.kind === "m365" ? "Microsoft 365"
                 : ""}
             </h1>
-            <div className="topbar__sub">
-              {branding?.name || "ConnectEstate"} · {new Date().toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}
-            </div>
+            <div className="topbar__sub">{subtitle}</div>
             </div>
           </div>
           <div className="topbar__user">
-            <div className="topbar__search">
-              <GlobalSearch objects={objects} onOpenRecord={openRecord} />
-            </div>
+            {/* Sidans egna åtgärder (sök + primärknapp) portas hit, se PageChrome. */}
+            <div className="topbar__actions" id="topbar-actions" />
+            <GlobalSearch objects={objects} onOpenRecord={openRecord} />
             <ThemeToggle />
           </div>
         </div>
+
+        <div className="view-host" hidden={!!openRecordId}>
 
         {view?.kind === "dashboard" && (
           <DashboardPage
             onOpenCases={canCases ? (f) => setView({ kind: "cases", filter: f as CaseFilter }) : undefined}
             onOpenObject={(key) => setView({ kind: "list", objectType: key })}
             onOpenRecord={openRecord}
+            onOpenCase={(id) => setView({ kind: "case", id })}
+            objects={objects}
           />
         )}
 
@@ -321,6 +338,29 @@ export default function App() {
             onMetadataChanged={reloadMetadata}
           />
         )}
+        </div>
+
+        {/* Posten som egen sida (brödsmulor, rubrik, flikar) — vyn bakom
+         *  ligger kvar monterad men dold, så lista/filter/sida är oförändrade
+         *  när man går tillbaka. */}
+        {openRecordId && (
+          <RecordDrawer
+            key={openRecordId}
+            variant="page"
+            objectDef={objects[0]}
+            recordId={openRecordId}
+            objectDefFor={objectDefFor}
+            onClose={() => goBack(() => setOpenRecordId(null))}
+            onOpenList={(key) => navigate(["list", key])}
+            onSaved={() => {
+              setListReloadKey((k) => k + 1);
+            }}
+            onNavigate={(id) => {
+              setOpenRecordId(id);
+            }}
+            onMetadataChanged={reloadMetadata}
+          />
+        )}
       </div>
 
       {visaInstallningar && (
@@ -333,22 +373,6 @@ export default function App() {
         />
       )}
 
-      {/* Redigeringskort — visas ovanpå vilken vy som helst */}
-      {openRecordId && (
-        <RecordDrawer
-          objectDef={objects[0]}
-          recordId={openRecordId}
-          objectDefFor={objectDefFor}
-          onClose={() => setOpenRecordId(null)}
-          onSaved={() => {
-            setListReloadKey((k) => k + 1);
-          }}
-          onNavigate={(id) => {
-            setOpenRecordId(id);
-          }}
-          onMetadataChanged={reloadMetadata}
-        />
-      )}
     </div>
   );
 }
