@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ObjectDef, RecordRow, ListView, RecordFilter, FieldDef } from "@/lib/data";
 import { listRecords, deleteRecord, listSavedViews, saveListView, deleteListView, bulkAssign, DataError, supabase } from "@/lib/data";
 import { formatValue } from "@/lib/fields";
@@ -22,6 +22,17 @@ type Props = {
   /** Ökas när en post sparats någon annanstans → ladda om listan utan att
    *  tappa sida, filter eller skrollläge. */
   reloadKey?: number;
+  /** Fasta filter som alltid gäller (syns inte i filterpanelen), t.ex.
+   *  "lägenheter i projekt X" i D2D. */
+  baseFilters?: RecordFilter[];
+  /** Eget sparat listläge per urval (t.ex. per D2D-projekt). */
+  stateKeySuffix?: string;
+  /** Antal per status för urvalet (annars hela objekttypen). */
+  countsOverride?: StatusCounts | null;
+  /** Rad överst på sidan, t.ex. "← Alla projekt · Gävle". */
+  banner?: ReactNode;
+  /** Anropas när data i listan ändrats (live eller efter tilldelning). */
+  onDataChanged?: () => void;
 };
 
 type SavedListState = {
@@ -89,10 +100,10 @@ function columnLayout(def: ObjectDef, columns: FieldDef[]): Cell[] {
   return out;
 }
 
-export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, reloadKey }: Props) {
+export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, reloadKey, baseFilters, stateKeySuffix, countsOverride, banner, onDataChanged }: Props) {
   // Listans läge (sida, sök, filter, sortering, vy) sparas per objekttyp så
   // man kommer tillbaka till exakt samma läge efter menybyte/omladdning.
-  const stateKey = `list:${objectDef.key}`;
+  const stateKey = `list:${objectDef.key}${stateKeySuffix ?? ""}`;
   const [saved] = useState(() => loadListState<SavedListState>(stateKey));
   const [mode, setMode] = useState<"list" | "kanban">(saved.mode ?? "list");
   const [showColumns, setShowColumns] = useState(false);
@@ -122,7 +133,8 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   const [saveShared, setSaveShared] = useState(false);
 
   // Antal per status till filterpillren.
-  const [counts, setCounts] = useState<StatusCounts | null>(null);
+  const [globalCounts, setCounts] = useState<StatusCounts | null>(null);
+  const counts = countsOverride !== undefined ? countsOverride : globalCounts;
   const countsTick = useRef(0);
   useEffect(() => {
     let on = true;
@@ -130,6 +142,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
     return () => { on = false; };
   }, [objectDef.key, liveCount, reloadKey]);
 
+  const allFilters = useMemo(() => [...(baseFilters ?? []), ...filters], [baseFilters, filters]);
   const columns = useMemo(() => pickColumns(objectDef), [objectDef]);
   const layout = useMemo(() => columnLayout(objectDef, columns), [objectDef, columns]);
   const hasStatuses = objectDef.statuses.length > 0;
@@ -200,7 +213,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
     for (let offset = 0; ; offset += 200) {
       const res = await listRecords({
         objectType: objectDef.key, search: search || undefined, status: status || undefined,
-        filters: filters.length ? filters : undefined, sort: sort ?? undefined, limit: 200, offset,
+        filters: allFilters.length ? allFilters : undefined, sort: sort ?? undefined, limit: 200, offset,
       });
       for (const r of res.items) if (!seen.has(r.id)) { seen.add(r.id); rows.push(r); }
       onProgress?.(rows.length);
@@ -236,6 +249,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       const n = await bulkAssign(ids, assignUsers, ownerField.key);
       setAssignOpen(false); setAssignUsers([]); setSelected(new Set()); setAllMatching(false);
       await load();
+      onDataChanged?.();
       alert(`${n} ${n === 1 ? objectDef.labelSingular.toLowerCase() : objectDef.labelPlural.toLowerCase()} ${assignUsers.length > 1 ? "fördelade" : "tilldelade"}.`);
     } catch (e) {
       alert(e instanceof DataError ? e.message : "Kunde inte tilldela.");
@@ -252,7 +266,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         objectType: objectDef.key,
         search: search || undefined,
         status: status || undefined,
-        filters: filters.length ? filters : undefined,
+        filters: allFilters.length ? allFilters : undefined,
         sort: sort ?? undefined,
         limit: mode === "kanban" ? KANBAN_LIMIT : PAGE_SIZE,
         offset: mode === "kanban" ? 0 : page * PAGE_SIZE,
@@ -302,6 +316,8 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
    * vi ändå hade fått läsa. Vi laddar om listan i stället för att patcha
    * den lokalt — sortering, filter och sidbrytning ska fortsätta stämma.
    */
+  const onDataChangedRef = useRef(onDataChanged);
+  onDataChangedRef.current = onDataChanged;
   useEffect(() => {
     const kanal = supabase
       .channel(`records:${objectDef.key}`)
@@ -316,6 +332,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         () => {
           setLiveCount((n) => n + 1);
           load();
+          onDataChangedRef.current?.();
         }
       )
       .subscribe();
@@ -399,6 +416,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
 
   return (
     <div className="page">
+      {banner}
       <TopbarActions>
         <SearchField
           value={search}
@@ -481,7 +499,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       {canAssign && selectedCount === 0 && mode === "list" && items.length > 0 && (
         <label className="bulk-hint">
           <input type="checkbox" checked={false} onChange={togglePage} />
-          Markera {plural} för att tilldela {ownerField!.label.toLowerCase()} på flera samtidigt
+          Markera {plural} för att byta {ownerField!.label.toLowerCase()} på flera samtidigt
         </label>
       )}
 
@@ -496,7 +514,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
             )}
           </span>
           <button className="btn btn--brand btn--sm" onClick={() => setAssignOpen((o) => !o)}>
-            Tilldela {ownerField!.label.toLowerCase()}
+            Byt {ownerField!.label.toLowerCase()}
           </button>
           <button className="btn btn--ghost btn--sm" onClick={() => { setSelected(new Set()); setAllMatching(false); }}>
             Avmarkera
@@ -520,7 +538,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
               <button className="btn btn--brand btn--sm" disabled={assigning || assignUsers.length === 0} onClick={() => void runAssign()}>
                 {assigning ? "Tilldelar…"
                   : assignUsers.length > 1 ? `Fördela ${selectedCount} på ${assignUsers.length} personer`
-                  : `Tilldela ${selectedCount}`}
+                  : `Byt till vald ${ownerField!.label.toLowerCase()} (${selectedCount})`}
               </button>
             </div>
           )}
@@ -610,7 +628,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
                           <span className="rtable__th-label">{c.label}</span>
                           <ColumnFilter
                             field={c.key} label={c.label} typ={c.fieldType}
-                            val={kolumnVal(c.key, c)}
+                            val={kolumnVal(c.key, c, undefined, users)}
                             aktivt={filterFor(c.key)} sortering={sortFor(c.key)}
                             onFilter={(f) => satKolumnfilter(c.key, f)}
                             onSortera={(dir) => setSort({ field: c.key, dir })}
