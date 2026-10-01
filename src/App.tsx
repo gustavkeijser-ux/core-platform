@@ -5,6 +5,7 @@ import { getMetadata, type ObjectDef, type TenantBranding } from "@/lib/data";
 import { LoginPage } from "@/components/LoginPage";
 import { ForcedPasswordChangePage } from "@/components/ForcedPasswordChangePage";
 import { Sidebar } from "@/components/Sidebar";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { DashboardPage } from "@/components/DashboardPage";
@@ -197,6 +198,9 @@ export default function App() {
         canCases={canCases}
         isAdmin={isAdmin}
         unassignedCases={unassignedCases}
+        user={{ id: session.user.id, email: session.user.email ?? "", role: isAdmin ? "Administratör" : isSeller ? "Säljare" : "Användare" }}
+        onOpenSettings={() => setVisaInstallningar(true)}
+        onSignOut={() => supabase.auth.signOut()}
         activeKey={
           view?.kind === "list" ? view.objectType
           : view?.kind === "dashboard" ? "__dashboard__"
@@ -242,6 +246,7 @@ export default function App() {
                 <line x1="2" y1="12" x2="14" y2="12" />
               </svg>
             </button>
+            <div className="topbar__titles">
             <h1>
               {view?.kind === "list" ? objectDefFor(view.objectType)?.labelPlural
                 : view?.kind === "dashboard" ? "Översikt"
@@ -255,17 +260,16 @@ export default function App() {
                 : view?.kind === "m365" ? "Microsoft 365"
                 : ""}
             </h1>
+            <div className="topbar__sub">
+              {branding?.name || "ConnectEstate"} · {new Date().toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}
+            </div>
+            </div>
           </div>
           <div className="topbar__user">
+            <div className="topbar__search">
+              <GlobalSearch objects={objects} onOpenRecord={openRecord} />
+            </div>
             <ThemeToggle />
-            <button
-              className="btn btn--ghost btn--sm topbar__email-btn"
-              onClick={() => setVisaInstallningar(true)}
-              title="Inställningar och lösenord"
-            >
-              {session.user.email}
-            </button>
-            <button className="btn btn--ghost btn--sm" onClick={() => supabase.auth.signOut()}>Logga ut</button>
           </div>
         </div>
 
