@@ -115,8 +115,9 @@ export function CasesPage({ filter, statuses, onFilter, onOpenCase }: Props) {
       if (e.key === "/" && !typing) { e.preventDefault(); searchRef.current?.focus(); return; }
       if (typing) { if (e.key === "Escape") (t as HTMLInputElement).blur(); return; }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); setSel((s) => Math.min(s + 1, items.length - 1)); }
-      else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
+      // Bara j/k flyttar markeringen — piltangenterna scrollar sidan som vanligt.
+      if (e.key === "j") { e.preventDefault(); keyMoved.current = true; setSel((s) => Math.min(s + 1, items.length - 1)); }
+      else if (e.key === "k") { e.preventDefault(); keyMoved.current = true; setSel((s) => Math.max(s - 1, 0)); }
       else if (e.key === "Enter" && items[sel]) { e.preventDefault(); open(items[sel].id); }
       else if (e.key === "t" && items[sel] && me) { e.preventDefault(); void assign(items[sel].id, me); }
     }
@@ -124,7 +125,12 @@ export function CasesPage({ filter, statuses, onFilter, onOpenCase }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // Följ markeringen bara när den flyttats med tangentbordet — annars ryckte
+  // listan upp till första raden (t.ex. när man kom tillbaka från ett ärende).
+  const keyMoved = useRef(false);
   useEffect(() => {
+    if (!keyMoved.current) return;
+    keyMoved.current = false;
     document.querySelector(`[data-case-idx="${sel}"]`)?.scrollIntoView({ block: "nearest" });
   }, [sel]);
 
