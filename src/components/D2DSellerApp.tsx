@@ -10,6 +10,8 @@ import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { FieldConfigPanel } from "./FieldConfigPanel";
 import { MobilNummerPanel } from "./MobilNummer";
+import { AvtalsSammanfattning } from "./D2DAvtal";
+import { UTAN_NETFLIX_FALT } from "@/lib/d2dPris";
 import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
 
@@ -785,6 +787,7 @@ function LagenhetForm({
     && f.key !== "ej_intresserad_bindningstid"
     && !f.options.sold_panel
     && f.key !== "salt_svar"
+    && f.key !== UTAN_NETFLIX_FALT // eget val under Sport i "Vad såldes?"
     // Mobilnummer/portering har egen panel under Mobil i "Vad såldes?".
     && !["mobil_nummerval", "mobil_startdatum", "mobil_nummer", "mobil_nummerbyte_id"].includes(f.key)
   ) ?? [];
@@ -998,9 +1001,20 @@ function LagenhetForm({
                   </button>
                 ))}
               </div>
+              {f.key === "salt_streaming_sport" && !!data[f.key] && (
+                <button
+                  type="button"
+                  aria-pressed={data[UTAN_NETFLIX_FALT] === true}
+                  className={`d2d-reason-chip d2d-sold-chip d2d-sold-chip--toggle${data[UTAN_NETFLIX_FALT] === true ? " d2d-sold-chip--active" : ""}`}
+                  onClick={() => set(UTAN_NETFLIX_FALT, 0)(data[UTAN_NETFLIX_FALT] === true ? null : true)}
+                >
+                  {data[UTAN_NETFLIX_FALT] === true ? "✓ " : ""}Utan Netflix (lägre pris)
+                </button>
+              )}
               </>)}
             </div>
           ))}
+          <AvtalsSammanfattning data={data} soldFields={soldFields} isAdmin={isAdmin} />
         </div>
       )}
 
