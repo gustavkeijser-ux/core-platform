@@ -11,6 +11,7 @@ import { brandCssVars } from "@/lib/color";
 import { FieldConfigPanel } from "./FieldConfigPanel";
 import { MobilNummerPanel } from "./MobilNummer";
 import { AvtalsSammanfattning } from "./D2DAvtal";
+import { ScriveSignering } from "./D2DScrive";
 import { UTAN_NETFLIX_FALT } from "@/lib/d2dPris";
 import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
@@ -1015,6 +1016,7 @@ function LagenhetForm({
             </div>
           ))}
           <AvtalsSammanfattning data={data} soldFields={soldFields} isAdmin={isAdmin} />
+          <ScriveSignering lagenhetId={record.id} data={data} sparaForst={flush} />
         </div>
       )}
 
