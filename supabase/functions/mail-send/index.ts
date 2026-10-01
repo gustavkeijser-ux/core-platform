@@ -60,6 +60,12 @@ Deno.serve(async (req: Request) => {
   if (!claimed) return json({ error: "Svaret håller redan på att skickas" }, 409);
 
   const mailbox = encodeURIComponent(m.mailbox);
+  // Svarstext + signatur. Med HTML-signatur (migration 0038) står själva svaret
+  // i headers.replyText och signaturen i headers.signatureHtml; body_text har en
+  // textversion av signaturen för tråden i CRM:et.
+  const replyText = (m.headers?.replyText as string | undefined) ?? m.body_text ?? "";
+  const sigHtml = (m.headers?.signatureHtml as string | undefined) ?? "";
+  const bodyHtml = textToHtml(replyText) + (sigHtml ? `<br><div>${sigHtml}</div>` : "");
   const to = (m.to_addresses ?? []) as string[];
   try {
     // 2) Utkast — återanvänd om ett tidigare försök redan skapat det.
@@ -78,7 +84,7 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify({
             subject: m.subject,
             toRecipients: to.map((a) => ({ emailAddress: { address: a } })),
-            body: { contentType: "HTML", content: textToHtml(m.body_text ?? "") + "<br>" + (draft.body?.content ?? "") },
+            body: { contentType: "HTML", content: bodyHtml + "<br>" + (draft.body?.content ?? "") },
           }),
         });
       } else {
@@ -87,7 +93,7 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify({
             subject: m.subject,
             toRecipients: to.map((a) => ({ emailAddress: { address: a } })),
-            body: { contentType: "HTML", content: textToHtml(m.body_text ?? "") },
+            body: { contentType: "HTML", content: bodyHtml },
           }),
         });
       }
