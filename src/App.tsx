@@ -9,7 +9,7 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { DashboardPage } from "@/components/DashboardPage";
-import { AiChatPage } from "@/components/AiChatPage";
+import { AiPanel } from "@/components/AiAssistant";
 import { ObjectListPage } from "@/components/ObjectListPage";
 import { RecordDrawer } from "@/components/RecordDrawer";
 import { D2DSellerApp } from "@/components/D2DSellerApp";
@@ -23,11 +23,10 @@ import { type CaseFilter, getCaseSummary } from "@/lib/cases";
 import { ImportPage } from "@/components/ImportPage";
 import { UserSettings } from "@/components/UserSettings";
 import { useRoute, readRoute, navigate, goBack } from "@/lib/route";
-import { loadAllUsers } from "@/lib/users";
+import { loadAllUsers, useUserName } from "@/lib/users";
 
 type View =
   | { kind: "dashboard" }
-  | { kind: "ai" }
   | { kind: "tasks" }
   | { kind: "import" }
   | { kind: "list"; objectType: string }
@@ -41,7 +40,6 @@ type View =
 /** URL → vy. Okänt/tomt → översikten. */
 function viewFromSegs(segs: string[]): View {
   switch (segs[0]) {
-    case "ai": return { kind: "ai" };
     case "tasks": return { kind: "tasks" };
     case "import": return { kind: "import" };
     case "d2d": return { kind: "d2d" };
@@ -85,6 +83,9 @@ export default function App() {
   const [visaInstallningar, setVisaInstallningar] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [unassignedCases, setUnassignedCases] = useState(0);
+  // AI-assistenten: panel nere till vänster, öppnas från ikonen ovanför Import.
+  const [aiOpen, setAiOpen] = useState(false);
+  const myName = useUserName(session?.user.id);
   const { theme } = useTheme();
 
   useEffect(() => {
@@ -185,12 +186,19 @@ export default function App() {
     : view?.kind === "cases" ? "Följ upp kundernas ärenden"
     : view?.kind === "case" ? "Ärende från kundtjänst"
     : view?.kind === "tasks" ? "Dina uppgifter i alla moduler"
-    : view?.kind === "ai" ? "Fråga om allt i CRM:et"
     : view?.kind === "import" ? "Läs in data från fil"
     : view?.kind === "d2dbuilder" ? "Projekt, adresser och tilldelning"
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
     : view?.kind === "m365" ? "Kopplingen till e-postlådan och e-postsignatur"
     : tenantName;
+
+  // Vad användaren tittar på — skickas med till AI-assistenten.
+  const aiContext = openRecordId
+    ? `en post (recordId ${openRecordId}) — hämta den med get_record om frågan gäller "den här posten"`
+    : view?.kind === "list" ? `listan ${listDef?.labelPlural ?? view.objectType} (objectType ${view.objectType})`
+    : view?.kind === "case" ? `ärendet med caseId ${view.id}`
+    : view?.kind === "cases" ? `ärendelistan (filter ${view.filter})`
+    : view?.kind ?? "";
 
   /** Öppna en post som redigerbart kort */
   function openRecord(id: string) {
@@ -216,10 +224,11 @@ export default function App() {
         user={{ id: session.user.id, email: session.user.email ?? "", role: isAdmin ? "Administratör" : isSeller ? "Säljare" : "Användare" }}
         onOpenSettings={() => setVisaInstallningar(true)}
         onSignOut={() => supabase.auth.signOut()}
+        onOpenAi={() => setAiOpen((o) => !o)}
+        aiOpen={aiOpen}
         activeKey={
           view?.kind === "list" ? view.objectType
           : view?.kind === "dashboard" ? "__dashboard__"
-          : view?.kind === "ai" ? "__ai__"
           : view?.kind === "tasks" ? "__tasks__"
           : view?.kind === "import" ? "__import__"
           : view?.kind === "d2dbuilder" ? "__d2dbuilder__"
@@ -232,7 +241,6 @@ export default function App() {
         onSelect={(key) =>
           setView(
             key === "__dashboard__" ? { kind: "dashboard" }
-            : key === "__ai__" ? { kind: "ai" }
             : key === "__tasks__" ? { kind: "tasks" }
             : key === "__import__" ? { kind: "import" }
             : key === "__d2d__" ? { kind: "d2d" }
@@ -265,7 +273,6 @@ export default function App() {
             <h1>
               {view?.kind === "list" ? objectDefFor(view.objectType)?.labelPlural
                 : view?.kind === "dashboard" ? "Översikt"
-                : view?.kind === "ai" ? "AI-assistent"
                 : view?.kind === "tasks" ? "Mina uppgifter"
                 : view?.kind === "import" ? "Import"
                 : view?.kind === "d2dbuilder" ? "D2D – Projekt"
@@ -297,8 +304,6 @@ export default function App() {
             objects={objects}
           />
         )}
-
-        {view?.kind === "ai" && <AiChatPage />}
 
         {view?.kind === "tasks" && <MyTasksPage onOpenRecord={openRecord} />}
 
@@ -362,6 +367,14 @@ export default function App() {
           />
         )}
       </div>
+
+      <AiPanel
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        userName={myName && myName !== "…" && myName !== session.user.id.slice(0, 8) ? myName : ""}
+        context={aiContext}
+        hasOpenRecord={!!openRecordId || view?.kind === "case"}
+      />
 
       {visaInstallningar && (
         <UserSettings
