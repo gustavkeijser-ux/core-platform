@@ -676,40 +676,16 @@ export async function deleteListView(id: string): Promise<void> {
 }
 
 // -----------------------------------------------------------------------------
-// AI-agenter
+// AI-assistenten (ConnectEstate AI) — en assistent för hela systemet
 // -----------------------------------------------------------------------------
-
-export type Agent = {
-  id: string; key: string; name: string; department_id: string | null;
-};
-
-export type AiMessage = { role: "user" | "assistant"; content: { text: string } };
 
 export type AiProposal = {
   id: string; actions: Array<{ tool: string; args: Record<string, unknown> }>;
   rationale: string | null; state: string; created_at: string;
+  result?: { error?: string } | Array<Record<string, unknown>> | null;
 };
 
-export async function listAgents(): Promise<Agent[]> {
-  const { data, error } = await supabase
-    .from("ai_agents")
-    .select("id,key,name,department_id")
-    .eq("is_active", true)
-    .order("name");
-  if (error) asError(error);
-  return (data ?? []) as Agent[];
-}
-
-export async function listThreadMessages(threadId: string): Promise<AiMessage[]> {
-  const { data, error } = await supabase
-    .from("ai_messages")
-    .select("role,content")
-    .eq("thread_id", threadId)
-    .order("created_at");
-  if (error) asError(error);
-  return (data ?? []) as AiMessage[];
-}
-
+/** Användarens egna förslag som väntar på godkännande. */
 export async function listPendingProposals(): Promise<AiProposal[]> {
   const { data, error } = await supabase
     .from("ai_proposals")
@@ -726,16 +702,17 @@ export async function decideProposal(id: string, approve: boolean): Promise<AiPr
   return data as AiProposal;
 }
 
+/** Skicka en fråga. context = vad användaren tittar på just nu (sida/post). */
 export async function sendAiMessage(
-  agentKey: string, message: string, threadId?: string
+  message: string, threadId?: string, context?: string
 ): Promise<{ threadId: string; reply: string; pendingProposals: string[] }> {
   const { data, error } = await supabase.functions.invoke("ai-chat", {
-    body: { agentKey, message, threadId },
+    body: { message, threadId, context },
   });
   if (error) {
     // supabase-js ger bara ett generiskt "non-2xx status code" i .message —
     // det riktiga felet ligger i själva svarskroppen (error.context).
-    let detail = error.message ?? "Kunde inte nå AI-agenten.";
+    let detail = error.message ?? "Kunde inte nå AI-assistenten.";
     try {
       const body = await (error as { context?: Response }).context?.json();
       if (body?.error) detail = body.error;
@@ -747,6 +724,11 @@ export async function sendAiMessage(
   if (data?.error) throw new DataError("unknown", data.error);
   return data;
 }
+
+/** @deprecated Tas bort — bara kvar tills AiChatPage är borttagen. */
+export type Agent = { id: string; key: string; name: string; department_id: string | null };
+/** @deprecated */
+export async function listAgents(): Promise<Agent[]> { return []; }
 
 // -----------------------------------------------------------------------------
 // Skrivning — alltid via rpc
