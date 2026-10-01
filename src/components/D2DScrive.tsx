@@ -89,12 +89,10 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
   if (!String(data.kund_namn ?? "").trim()) saknas.push("namn");
   const pnrSiffror = String(data.personnummer ?? "").replace(/\D/g, "");
   if (pnrSiffror.length !== 10 && pnrSiffror.length !== 12) saknas.push("personnummer");
+  if (!String(data.kund_epost ?? "").includes("@")) saknas.push("e-post");
 
   async function starta(leverans: "plats" | "skickat", nytt = false) {
     setFel(null); setInfo(null);
-    if (leverans === "skickat" && !data.kund_epost && !data.kund_telefon) {
-      setFel("Fyll i kundens e-post eller telefon för att skicka avtalet."); return;
-    }
     // Öppna fönstret direkt vid klicket (annars stoppas det av popup-skyddet på mobilen).
     const flik = leverans === "plats" ? window.open("", "_blank") : null;
     setBusy(leverans);
@@ -195,7 +193,7 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
             </button>
           </div>
           {kopplad === false && <p className="d2d-scrive__hint">Scrive är inte kopplat än. När kopplingen är klar fungerar knapparna direkt.</p>}
-          {kopplad && saknas.length > 0 && <p className="d2d-scrive__hint">Fyll i kundens {saknas.join(" och ")} nedan för att kunna signera.</p>}
+          {kopplad && saknas.length > 0 && <p className="d2d-scrive__hint">Fyll i kundens {saknas.length > 1 ? `${saknas.slice(0, -1).join(", ")} och ${saknas[saknas.length - 1]}` : saknas[0]} nedan för att kunna signera.</p>}
         </>
       )}
 
