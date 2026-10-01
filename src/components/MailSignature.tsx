@@ -1,32 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import DOMPurify from "dompurify";
 import { DataError } from "@/lib/data";
 import { type MailSettings, getMailSettings, setMailSignature, fmtDateTime } from "@/lib/cases";
 
-/** Delad hämtning av signaturen (ärendevyn + inställningssidan). */
+/** Delad hämtning av signaturen (ärendevyn + Microsoft 365-sidan). */
 export function useMailSettings(): [MailSettings | null, (s: MailSettings) => void] {
   const [s, setS] = useState<MailSettings | null>(null);
   useEffect(() => { let on = true; getMailSettings().then((x) => { if (on) setS(x); }); return () => { on = false; }; }, []);
   return [s, setS];
 }
 
+/** Signaturens HTML så som mejlet visar den (städad: inga script/händelser). */
+function SafeHtml({ html, className }: { html: string; className?: string }) {
+  const clean = useMemo(() => DOMPurify.sanitize(html, { ADD_ATTR: ["target"] }), [html]);
+  return <div className={className} dangerouslySetInnerHTML={{ __html: clean }} />;
+}
+
 /**
  * Redigera den gemensamma signaturen. Gäller alla svar som skickas från
- * ärendehanteringen, oavsett handläggare. {namn} och {e-post} byts mot den
- * som skickar svaret.
+ * ärendehanteringen. Signaturen skrivs som HTML (logotyp, färger, länkar —
+ * som i Outlook) med förhandsvisning bredvid. {namn} och {e-post} byts mot
+ * den som skickar svaret. Bilder måste ligga på en publik adress.
  */
 export function SignatureEditor({ settings, onSaved, onCancel }: {
   settings: MailSettings; onSaved: (s: MailSettings) => void; onCancel?: () => void;
 }) {
-  const [v, setV] = useState(settings.signature);
+  const [html, setHtml] = useState(settings.signatureHtml);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => setV(settings.signature), [settings.signature]);
-  const dirty = v.trim() !== settings.signature.trim();
+  useEffect(() => setHtml(settings.signatureHtml), [settings.signatureHtml]);
+  const dirty = html.trim() !== settings.signatureHtml.trim();
 
   async function save() {
     setBusy(true); setMsg(null);
     try {
-      const s = await setMailSignature(v);
+      const s = await setMailSignature(settings.signature, html);
       onSaved(s);
       setMsg({ ok: true, text: "Signaturen sparades." });
     } catch (e) {
@@ -36,19 +44,29 @@ export function SignatureEditor({ settings, onSaved, onCancel }: {
 
   return (
     <div className="sig-editor">
-      <label className="label" htmlFor="sig-text">Signatur</label>
-      <textarea
-        id="sig-text"
-        className="input input--area sig-editor__input"
-        value={v}
-        maxLength={2000}
-        disabled={!settings.canEdit || busy}
-        placeholder={"Med vänliga hälsningar\n{namn}\nConnectEstate Kundtjänst\n010-123 45 67 · hyresgast@connectestate.se"}
-        onChange={(e) => setV(e.target.value)}
-      />
+      <div className="sig-editor__cols">
+        <div className="sig-editor__col">
+          <div className="label">Så här ser den ut i mejlet</div>
+          <div className="sig-editor__preview">
+            {html.trim() ? <SafeHtml html={html} /> : <span className="ink-faint">Ingen signatur.</span>}
+          </div>
+        </div>
+        <div className="sig-editor__col">
+          <label className="label" htmlFor="sig-html">HTML</label>
+          <textarea
+            id="sig-html"
+            className="input input--area sig-editor__code"
+            value={html}
+            spellCheck={false}
+            disabled={!settings.canEdit || busy}
+            placeholder={'<p>Med vänliga hälsningar,<br><b>{namn}</b></p>'}
+            onChange={(e) => setHtml(e.target.value)}
+          />
+        </div>
+      </div>
       <p className="formfield__help">
         Läggs automatiskt till under alla svar som skickas till kunder. <code>{"{namn}"}</code> och <code>{"{e-post}"}</code> byts
-        mot den som skickar svaret. Lämna tomt för ingen signatur.
+        mot den som skickar svaret. Bilder måste ligga på en publik adress. Lämna tomt för ingen signatur.
       </p>
       {settings.canEdit ? (
         <div className="sig-editor__actions">
@@ -69,7 +87,8 @@ export function SignatureEditor({ settings, onSaved, onCancel }: {
 /** Förhandsvisning under svarsrutan: så här slutar mejlet till kunden. */
 export function SignaturePreview({ settings, onEdit }: { settings: MailSettings | null; onEdit?: () => void }) {
   if (!settings) return null;
-  if (!settings.preview) {
+  const hasHtml = !!settings.previewHtml;
+  if (!hasHtml && !settings.preview) {
     return settings.canEdit ? (
       <div className="sig-preview sig-preview--empty">
         Ingen signatur läggs till. <button className="linklike" onClick={onEdit}>Lägg till signatur</button>
@@ -82,7 +101,9 @@ export function SignaturePreview({ settings, onEdit }: { settings: MailSettings 
         <span>Signatur läggs till automatiskt</span>
         {settings.canEdit && onEdit && <button className="linklike" onClick={onEdit}>Ändra</button>}
       </div>
-      <div className="sig-preview__text">{settings.preview}</div>
+      {hasHtml
+        ? <SafeHtml html={settings.previewHtml} className="sig-preview__html" />
+        : <div className="sig-preview__text">{settings.preview}</div>}
     </div>
   );
 }
