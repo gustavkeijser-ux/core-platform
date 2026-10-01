@@ -4244,3 +4244,9 @@ kbd {
 .sig-editor__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2); flex-wrap: wrap; }
 .sig-editor__meta { font-size: 11.5px; margin-right: auto; }
 .sig-editor code { font-size: 11.5px; padding: 1px 5px; border-radius: 5px; background: var(--surface-alt); }
+.sig-preview__html { background: #FFFFFF; color: #222222; border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+.sig-editor__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-4); }
+.sig-editor__col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sig-editor__preview { background: #FFFFFF; color: #222222; border: 1px solid var(--border); border-radius: 12px; padding: 16px; overflow-x: auto; min-height: 120px; }
+.sig-editor__code { min-height: 320px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; line-height: 1.45; white-space: pre; }
+@media (max-width: 900px) { .sig-editor__cols { grid-template-columns: 1fr; } }
