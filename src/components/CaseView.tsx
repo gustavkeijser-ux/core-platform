@@ -1,5 +1,4 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMailSettings, SignatureEditor, SignaturePreview } from "./MailSignature";
 import DOMPurify from "dompurify";
 import type { StatusDef } from "@/lib/data";
 import { DataError } from "@/lib/data";
@@ -418,8 +417,6 @@ const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Compose
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const reply = mode === "reply";
-  const [sig, setSig] = useMailSettings();
-  const [editSig, setEditSig] = useState(false);
 
   async function submit(nextStatus: string | null = null) {
     const t = text.trim();
@@ -457,9 +454,6 @@ const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Compose
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submit(); } }}
       />
-      {reply && (editSig && sig
-        ? <div className="sig-inline"><SignatureEditor settings={sig} onSaved={(x) => { setSig(x); setEditSig(false); }} onCancel={() => setEditSig(false)} /></div>
-        : <SignaturePreview settings={sig} onEdit={() => setEditSig(true)} />)}
       <div className="composer__actions">
         {msg && <span className={msg.ok ? "detail-save-ok" : "formfield__error"}>{msg.ok ? "✓ " : ""}{msg.text}</span>}
         <span className="composer__hint ink-faint">Cmd/Ctrl+Enter</span>
