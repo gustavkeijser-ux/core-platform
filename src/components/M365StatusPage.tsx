@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DataError } from "@/lib/data";
 import { type MailAccountStatus, fmtDateTime, mailIntegrationStatus, relTime, triggerMailSync } from "@/lib/cases";
+import { useMailSettings, SignatureEditor } from "./MailSignature";
 
 /**
  * Admin: driftstatus för Microsoft 365-kopplingen (hyresgast@connectestate.se).
@@ -11,6 +12,7 @@ export function M365StatusPage() {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [sig, setSig] = useMailSettings();
 
   const load = useCallback(async () => {
     try { setRows(await mailIntegrationStatus()); setError(null); }
@@ -37,6 +39,15 @@ export function M365StatusPage() {
 
   return (
     <div className="page m365">
+      <div className="card m365__card">
+        <div className="m365__head">
+          <div>
+            <div className="m365__title">E-postsignatur</div>
+            <div className="m365__mailbox">Gäller alla svar som skickas från ärendehanteringen</div>
+          </div>
+        </div>
+        {sig ? <SignatureEditor settings={sig} onSaved={setSig} /> : <div className="empty-state">Laddar…</div>}
+      </div>
       {rows.length === 0 && <div className="card"><div className="empty-state">Ingen brevlåda är konfigurerad.</div></div>}
       {rows.map((a) => {
         const notConfigured = a.lastRun?.status === "not_configured";
