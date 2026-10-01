@@ -101,9 +101,34 @@ const KRYSS: Record<string, string> = {
 const KATEGORI: Record<string, string> = {
   salt_bredband: "bb", salt_tv: "tv", salt_streaming_film: "film", salt_streaming_sport: "sport", salt_mobil: "mobil", salt_trygghet: "trygghet",
 };
+// Fältnamn som de heter i ConnectEstates mall i Scrive (Lukas mall, okt 2026)
+// → nycklarna ovan. Namnen jämförs utan stora/små bokstäver och å/ä/ö.
+const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+const ALIAS: Record<string, string> = {
+  kampanjpris_bredband: "bb_kampanj", ordinariepris_bredband: "bb_ordinarie",
+  kampanjpris_tv_paket: "tv_kampanj", ordinariepris_tv_paket: "tv_ordinarie",
+  kostnad_router: "router_kostnad", kostnad_tv_box: "tvbox_kostnad",
+  kampanjpris_streaming: "film_kampanj", ordinariepris_streaming: "film_ordinarie",
+  kampanjpris_sportpaket: "sport_kampanj", ordinariepris_sportpaket: "sport_ordinarie",
+  antal: "mobil_antal", kampanjpris_mobilabonnemang: "mobil_kampanj", ordinariepris_mobilabonnemang: "mobil_ordinarie",
+  kampanjpris_trygghetspaket: "trygghet_kampanj", ordinariepris_trygghetspaket: "trygghet_ordinarie",
+  total_manadskostnad_kampanjpris: "total_kampanj", total_manadskostnad_ord_pris: "total_ordinarie",
+  tjansteleverantor: "leverantor",
+  // Kryssrutorna i mallen heter "checkbox 1" … "checkbox 24" (i den ordning de lades ut).
+  checkbox_1: "bb150", checkbox_2: "bb300", checkbox_3: "bb600", checkbox_4: "bb1000",
+  checkbox_5: "tv_mini", checkbox_6: "tv_mellan", checkbox_7: "tv_mycket",
+  checkbox_8: "router_ja", checkbox_9: "router_nej", checkbox_10: "tvbox_ja", checkbox_11: "tvbox_nej",
+  checkbox_12: "film_mer", checkbox_14: "film_maxad", checkbox_13: "film_mest",
+  checkbox_15: "sport_lilla", checkbox_17: "sport_stora", checkbox_16: "sport_storsta",
+  checkbox_18: "mobil_10gb", checkbox_21: "mobil_20gb", checkbox_22: "mobil_obegransad",
+  checkbox_19: "mobil_obegransad_plus", checkbox_23: "mobil_plus_streaming", checkbox_20: "mobil_extra",
+  checkbox_24: "trygghet",
+};
+const faltnyckel = (namn: string) => { const n = norm(namn); return ALIAS[n] ?? n; };
+
 const kr = (n: number | null) => (n == null ? "" : `${n.toLocaleString("sv-SE")} kr`);
 
-function avtalsfalt(data: Record<string, any>, a: ReturnType<typeof berakna>): Record<string, string> {
+function avtalsfalt(data: Record<string, any>, a: ReturnType<typeof berakna>, lista: any): Record<string, string> {
   const v: Record<string, string> = {};
   const summa: Record<string, number> = {};
   for (const r of a.manad) {
@@ -116,6 +141,7 @@ function avtalsfalt(data: Record<string, any>, a: ReturnType<typeof berakna>): R
     }
   }
   for (const [k, n] of Object.entries(summa)) v[k] = kr(n);
+  if (v.mobil_plus_1_streaming || v.mobil_plus_3_streaming) v.mobil_plus_streaming = "X";
   const mobil = a.manad.filter((r) => r.falt === "salt_mobil").length;
   if (mobil) v.mobil_antal = String(mobil);
   const router = a.engang.find((r) => r.falt === "salt_router");
@@ -128,7 +154,8 @@ function avtalsfalt(data: Record<string, any>, a: ReturnType<typeof berakna>): R
   v.bindningstid = `${a.bindningManader} månader`;
   v.kampanjperiod = `${a.kampanjManader} månader`;
   const start = data.startdatum_tjanst ?? data.mobil_startdatum;
-  if (start) v.startdatum = String(start).slice(0, 10);
+  v.startdatum = start ? String(start).slice(0, 10) : "Enligt orderbekräftelse";
+  v.leverantor = String(lista?.leverantor ?? "Telia");
   // Kunduppgifter som textfält (utöver Scrives standardfält för namn m.m.)
   const adress = [data.gatunamn, data.gatunummer].filter(Boolean).join(" ") + (data.ingang ? ` ${data.ingang}` : "");
   if (adress.trim()) v.gatuadress = adress.trim();
@@ -223,7 +250,7 @@ Deno.serve(async (req: Request) => {
     const saknas: string[] = [];
     if (!String(data.kund_namn ?? "").trim()) saknas.push("namn");
     if (!pnr(String(data.personnummer ?? ""))) saknas.push("personnummer (10 eller 12 siffror)");
-    if (leverans === "skickat" && !data.kund_epost && !data.kund_telefon) saknas.push("e-post eller telefon");
+    if (!String(data.kund_epost ?? "").includes("@")) saknas.push("e-post (avtalet skickas dit när det är signerat)");
     if (saknas.length) return json({ error: `Fyll i kundens ${saknas.join(", ")} först.` }, 400);
 
     // Pågår redan en signering? Återanvänd den i stället för att skapa en till.
@@ -247,7 +274,7 @@ Deno.serve(async (req: Request) => {
     const { data: lista } = await db.from("d2d_prislista").select("data").eq("tenant_id", lag.tenant_id).maybeSingle();
     const a = berakna(data, sold, lista?.data ?? {});
     if (a.manad.length === 0) return json({ error: "Välj vad kunden köper under \"Vad såldes?\" först." }, 400);
-    const falt = avtalsfalt(data, a);
+    const falt = avtalsfalt(data, a, lista?.data ?? {});
 
     const { data: me } = await userDb.auth.getUser();
     const { data: row, error: insErr } = await db.from("d2d_avtal").insert({
@@ -269,10 +296,15 @@ Deno.serve(async (req: Request) => {
       const hittade = new Set<string>();
       for (const p of doc.parties ?? []) {
         for (const f of p.fields ?? []) {
-          if ((f.type === "text" || f.type === "checkbox") && f.name in falt) {
-            hittade.add(f.name);
-            if (f.type === "checkbox") f.is_checked = falt[f.name] === "X";
-            else f.value = falt[f.name];
+          if (f.type !== "text" && f.type !== "checkbox") continue;
+          const k = faltnyckel(String(f.name ?? ""));
+          if (f.type === "checkbox") {
+            // Alla kryssrutor sätts: ikryssad om tjänsten valts, annars tom.
+            f.is_checked = falt[k] === "X";
+            if (k in falt) hittade.add(k);
+          } else if (k in falt) {
+            hittade.add(k);
+            f.value = falt[k];
           }
         }
         if (p.is_signatory && !p.is_author) {
@@ -298,6 +330,10 @@ Deno.serve(async (req: Request) => {
           p.delivery_method = leverans === "plats" ? "api"
             : data.kund_epost && data.kund_telefon ? "email_mobile" : data.kund_epost ? "email" : "mobile";
         }
+      }
+      // Bara kunden signerar: ConnectEstate (avsändaren) blir mottagare av kopian.
+      for (const p of doc.parties ?? []) {
+        if (p.is_author && p.is_signatory) { p.signatory_role = "viewer"; p.is_signatory = false; }
       }
       for (const k of Object.keys(falt)) if (!hittade.has(k)) ej.push(k);
       doc.title = `Avtalsförslag – ${String(data.kund_namn).trim()}`;
