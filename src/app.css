@@ -4567,3 +4567,54 @@ kbd {
   .d2dov-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .d2dov-grid { grid-template-columns: 1fr; }
 }
+
+/* ── D2D: avtalsförslag (priser) under "Vad såldes?" ─────────────────── */
+.d2d-avtal {
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  margin-top: var(--sp-1); padding: var(--sp-4);
+  border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border);
+}
+.d2d-avtal--fel { color: var(--hue-red); font-size: var(--text-sm); }
+.d2d-avtal__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.d2d-avtal__title { font-size: var(--text-sm); font-weight: 800; color: var(--ink); text-transform: uppercase; letter-spacing: var(--tracking-label); }
+.d2d-avtal__tom { margin: 0; font-size: var(--text-sm); color: var(--ink-faint); }
+.d2d-avtal__tabell { display: flex; flex-direction: column; }
+.d2d-avtal__rad {
+  display: grid; grid-template-columns: minmax(0, 1fr) 5.5rem 5.5rem; gap: var(--sp-2);
+  padding: 6px 0; font-size: var(--text-sm); color: var(--ink); align-items: baseline;
+  border-top: 1px solid var(--border);
+}
+.d2d-avtal__rad > span:not(:first-child) { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+.d2d-avtal__rad--rubrik { border-top: 0; font-size: var(--text-xs); color: var(--ink-faint); text-transform: uppercase; letter-spacing: var(--tracking-label); }
+.d2d-avtal__rad--rubrik > span:not(:first-child) { font-family: inherit; }
+.d2d-avtal__rad--total { font-weight: 800; border-top: 2px solid var(--ink); }
+.d2d-avtal__namn { min-width: 0; overflow-wrap: anywhere; }
+.d2d-avtal__namn small { color: var(--ink-faint); font-weight: 500; }
+.d2d-avtal__ord { color: var(--ink-muted); }
+.d2d-avtal__villkor { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--text-xs); color: var(--ink-muted); }
+.d2d-avtal__villkor b { color: var(--ink); }
+.d2d-avtal__varning { margin: 0; font-size: var(--text-xs); color: var(--warn-ink); background: var(--warn-soft); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); }
+.d2d-sold-chip--toggle { align-self: flex-start; }
+
+.d2d-prislista { width: min(760px, calc(100vw - 24px)); }
+.d2d-prislista__villkor { display: flex; flex-wrap: wrap; gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.d2d-prislista__villkor label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-xs); color: var(--ink-muted); font-weight: 600; }
+.d2d-prislista__villkor .input { width: 7rem; }
+.d2d-prislista__grupp + .d2d-prislista__grupp { margin-top: var(--sp-5); }
+.d2d-prislista__grupp h3 { margin: 0 0 var(--sp-2); font-size: var(--text-sm); font-weight: 700; color: var(--ink); }
+.d2d-prislista__tabell {
+  display: grid; grid-template-columns: minmax(8rem, 1.4fr) repeat(var(--kol), minmax(4.5rem, 1fr));
+  gap: 6px var(--sp-2); align-items: center; overflow-x: auto;
+}
+.d2d-prislista__rad { display: contents; }
+.d2d-prislista__th { font-size: var(--text-xs); color: var(--ink-faint); font-weight: 600; }
+.d2d-prislista__namn { font-size: var(--text-sm); color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.d2d-prislista__tabell .input { width: 100%; min-width: 0; text-align: right; font-family: var(--font-mono); }
+.d2d-prislista__fot { display: flex; justify-content: flex-end; gap: var(--sp-2); padding: var(--sp-4) var(--sp-6); border-top: 1px solid var(--border); }
+@media (max-width: 640px) {
+  .d2d-avtal__rad { grid-template-columns: minmax(0, 1fr) 4.6rem 4.6rem; }
+  .d2d-prislista__tabell { grid-template-columns: minmax(5rem, 1fr) repeat(var(--kol), minmax(3.2rem, 1fr)); gap: 6px; }
+  .d2d-prislista__tabell .input { padding-left: 6px; padding-right: 6px; }
+  .d2d-prislista__namn { font-size: var(--text-xs); }
+  .d2d-prislista__fot { padding: var(--sp-3) var(--sp-4); }
+}
