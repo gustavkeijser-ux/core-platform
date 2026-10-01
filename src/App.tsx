@@ -11,6 +11,7 @@ import { brandCssVars } from "@/lib/color";
 import { DashboardPage } from "@/components/DashboardPage";
 import { AiPanel } from "@/components/AiAssistant";
 import { FeedbackButton } from "@/components/FeedbackButton";
+import { FeedbackPage } from "@/components/FeedbackPage";
 import { ObjectListPage } from "@/components/ObjectListPage";
 import { RecordDrawer } from "@/components/RecordDrawer";
 import { D2DSellerApp } from "@/components/D2DSellerApp";
@@ -36,7 +37,8 @@ type View =
   | { kind: "nummerbyten" }
   | { kind: "cases"; filter: CaseFilter }
   | { kind: "case"; id: string }
-  | { kind: "m365" };
+  | { kind: "m365" }
+  | { kind: "feedback" };
 
 /** URL → vy. Okänt/tomt → översikten. */
 function viewFromSegs(segs: string[]): View {
@@ -49,6 +51,7 @@ function viewFromSegs(segs: string[]): View {
     case "arenden": return { kind: "cases", filter: (CASE_FILTERS.includes(segs[1] as CaseFilter) ? segs[1] : "open") as CaseFilter };
     case "arende": if (segs[1]) return { kind: "case", id: segs[1] }; break;
     case "m365": return { kind: "m365" };
+    case "feedback": return { kind: "feedback" };
     case "list": if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
   }
   return { kind: "dashboard" };
@@ -84,6 +87,7 @@ export default function App() {
   const [visaInstallningar, setVisaInstallningar] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [unassignedCases, setUnassignedCases] = useState(0);
+  const [newFeedback, setNewFeedback] = useState(0);
   // AI-assistenten: panel nere till vänster, öppnas från ikonen ovanför Import.
   const [aiOpen, setAiOpen] = useState(false);
   const myName = useUserName(session?.user.id);
@@ -127,6 +131,17 @@ export default function App() {
     const t = window.setInterval(tick, 60_000);
     return () => { on = false; window.clearInterval(t); };
   }, [metaReady, objects]);
+
+  // Antal nya feedback (siffran vid Övrigt → Feedback, bara för administratörer).
+  useEffect(() => {
+    if (!metaReady || !isAdmin) return;
+    let on = true;
+    const tick = () => supabase.from("feedback").select("id", { count: "exact", head: true }).eq("status", "new")
+      .then(({ count }) => { if (on) setNewFeedback(count ?? 0); });
+    tick();
+    const t = window.setInterval(tick, 60_000);
+    return () => { on = false; window.clearInterval(t); };
+  }, [metaReady, isAdmin, route.segs[0]]);
 
   /** Ladda om metadata (t.ex. efter fältändringar eller ändrad branding).
    *  OBS: måste ligga före alla villkorliga return-satser — hooks får
@@ -191,6 +206,7 @@ export default function App() {
     : view?.kind === "d2dbuilder" ? "Projekt, adresser och tilldelning"
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
     : view?.kind === "m365" ? "Kopplingen till e-postlådan och e-postsignatur"
+    : view?.kind === "feedback" ? "Fel, idéer och önskemål från användarna"
     : tenantName;
 
   // Feedbackknappen: menyns moduler, och den man står i (förval).
@@ -240,6 +256,7 @@ export default function App() {
         canCases={canCases}
         isAdmin={isAdmin}
         unassignedCases={unassignedCases}
+        newFeedback={newFeedback}
         user={{ id: session.user.id, email: session.user.email ?? "", role: isAdmin ? "Administratör" : isSeller ? "Säljare" : "Användare" }}
         onOpenSettings={() => setVisaInstallningar(true)}
         onSignOut={() => supabase.auth.signOut()}
@@ -255,6 +272,7 @@ export default function App() {
           : view?.kind === "cases" ? (view.filter === "unassigned" ? "__cases_unassigned__" : "__cases__")
           : view?.kind === "case" ? "__cases__"
           : view?.kind === "m365" ? "__m365__"
+          : view?.kind === "feedback" ? "__feedback__"
           : null
         }
         onSelect={(key) =>
@@ -268,6 +286,7 @@ export default function App() {
             : key === "__cases__" ? { kind: "cases", filter: "open" }
             : key === "__cases_unassigned__" ? { kind: "cases", filter: "unassigned" }
             : key === "__m365__" ? { kind: "m365" }
+            : key === "__feedback__" ? { kind: "feedback" }
             : { kind: "list", objectType: key }
           )
         }
@@ -299,6 +318,7 @@ export default function App() {
                 : view?.kind === "cases" ? "Ärenden"
                 : view?.kind === "case" ? "Ärende"
                 : view?.kind === "m365" ? "Microsoft 365"
+                : view?.kind === "feedback" ? "Feedback"
                 : ""}
             </h1>
             <div className="topbar__sub">{subtitle}</div>
@@ -352,6 +372,8 @@ export default function App() {
         )}
 
         {view?.kind === "m365" && isAdmin && <M365StatusPage />}
+
+        {view?.kind === "feedback" && <FeedbackPage isAdmin={isAdmin} />}
 
         {view?.kind === "list" && objectDefFor(view.objectType) && (
           <ObjectListPage
