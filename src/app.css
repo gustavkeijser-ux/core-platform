@@ -3765,6 +3765,18 @@ kbd {
   mask-image: linear-gradient(to bottom, #000 70%, transparent);
 }
 .case__latest-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-1); }
+
+/* Konversationsfliken: huvudet och svarsrutan låsta, bara tråden scrollar.
+   Höjden sätts i CaseView så att sidan exakt fyller fönstret. */
+.case--conv { padding-bottom: var(--sp-4); overflow: hidden; }
+.case--conv > .case__head, .case--conv > .case__tabs { flex: none; }
+.case--conv .case__conv { flex: 1; min-height: 0; gap: var(--sp-3); }
+.case__thread {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 2px var(--sp-2) var(--sp-2) 2px; margin-right: calc(-1 * var(--sp-2));
+}
+.case--conv .composer { flex: none; }
+.case--conv .composer__input { min-height: 72px; max-height: 30vh; }
 .case__panel { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
 .case__panel-title { font-weight: 700; font-size: var(--text-sm); margin-bottom: var(--sp-1); }
 .case__panel .label { margin-top: var(--sp-2); }
@@ -3936,6 +3948,11 @@ kbd {
   .cases-row__assign .input { max-width: 140px; font-size: 16px; }
 
   .case__head { padding: var(--sp-4); }
+  /* Liten skärm: i konversationen räcker rubrik och nästa steg i huvudet —
+     fakta finns under Översikt — så tråden får plats. */
+  .case--conv .case__facts { display: none; }
+  .case--conv .case__head { gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+  .case--conv .case__title { font-size: var(--text-base); }
   .case__title { font-size: var(--text-lg); }
   .case__facts { grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
   .case__next .btn { width: 100%; min-height: 40px; }
