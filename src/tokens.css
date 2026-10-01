@@ -77,6 +77,10 @@
   --shadow-lg: 0 24px 48px rgba(20,33,61,.12);
   --shadow-brand: 0 8px 16px rgba(30,122,140,.28);
 
+  /* --- AI-maskoten (skärm och ansikte) --------------------------------- */
+  --ai-screen: #14213D;
+  --ai-glow:   #8EEFF0;
+
   /* --- Typografi ---------------------------------------------------------- */
   --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-body:    "Work Sans", ui-sans-serif, system-ui, sans-serif;
@@ -115,6 +119,7 @@
    Samma familj: djup navy botten (från textfärgen #14213D) och samma teal
    ljusare för kontrast. Toggla med data-theme="dark" på <html>.          */
 :root[data-theme="dark"] {
+  --ai-screen: #0A111E;
   --canvas:       #0E1626;
   --canvas-glow:  none;
   --surface:      #162033;
