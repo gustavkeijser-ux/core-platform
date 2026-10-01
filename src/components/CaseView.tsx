@@ -27,6 +27,9 @@ type TimelineItem =
   | { kind: "msg"; at: string; msg: CaseMessage }
   | { kind: "event"; at: string; id: string; body: string; actor: string | null; actorKind: string };
 
+type CaseTab = "overview" | "conv";
+const TAB_KEY = "ce.case.tab";
+
 export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   const [d, setD] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +38,14 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([]);
   const [cats, setCats] = useState<CaseCategory[]>([]);
   const [mode, setMode] = useState<"reply" | "note">("reply");
+  // Flikar: Översikt och Konversation. Senast valda flik minns under sessionen.
+  const [tab, setTabState] = useState<CaseTab>(() => {
+    try { return sessionStorage.getItem(TAB_KEY) === "conv" ? "conv" : "overview"; } catch { return "overview"; }
+  });
+  const setTab = useCallback((t: CaseTab) => {
+    setTabState(t);
+    try { sessionStorage.setItem(TAB_KEY, t); } catch { /* privat läge */ }
+  }, []);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null)); }, []);
@@ -55,22 +66,25 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   // Görs en gång per ärende — automatisk uppdatering var 30:e s scrollar aldrig.
   const scrolled = useRef<string | null>(null);
   useEffect(() => {
-    if (d && scrolled.current !== caseId) {
+    if (d && tab === "conv" && scrolled.current !== caseId) {
       scrolled.current = caseId;
       requestAnimationFrame(() => {
         const last = document.querySelector(".case .tl > li:last-child");
         last?.scrollIntoView({ block: "nearest" });
       });
     }
-  }, [d, caseId]);
+  }, [d, caseId, tab]);
 
-  /** Gå till svarsrutan: scrolla dit och sätt markören där. */
+  /** Gå till svarsrutan: byt till Konversation, scrolla dit och sätt markören där. */
   const focusComposer = useCallback(() => {
-    const el = composerRef.current;
-    if (!el) return;
-    el.scrollIntoView({ block: "center", behavior: "smooth" });
-    el.focus({ preventScroll: true });
-  }, []);
+    setTab("conv");
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = composerRef.current;
+      if (!el) return;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.focus({ preventScroll: true });
+    }));
+  }, [setTab]);
 
   // Tangentbord: r = svara, i = intern kommentar, Esc = tillbaka
   useEffect(() => {
@@ -113,7 +127,8 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   const lagenhet = d.related.find((r) => r.relType === "case_lagenhet");
   const fastighet = d.related.find((r) => r.relType === "case_property");
   const lastEmail = [...d.messages].reverse().find((m) => m.channel === "email");
-  const lastMsgId = [...timeline].reverse().flatMap((it) => (it.kind === "msg" ? [it.msg.id] : []))[0];
+  const lastMsg = d.messages.length ? [...d.messages].sort((x, y) => x.occurredAt.localeCompare(y.occurredAt))[d.messages.length - 1] : undefined;
+  const lastMsgId = lastMsg?.id;
   const closed = c.status === "resolved" || c.status === "closed";
   const firstDue = data.first_response_due_at as string | undefined;
   const resDue = data.resolution_due_at as string | undefined;
@@ -191,33 +206,33 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
         {actionError && <div className="formfield__error">{actionError}</div>}
       </div>
 
-      <div className="case__grid">
-        <section className="case__conv" aria-label="Konversation">
-          <ol className="tl">
-            {timeline.map((it) => it.kind === "event"
-              ? <li key={`e${it.id}`} className="tl__event"><span>{it.body}</span> · <EventActor id={it.actor} kind={it.actorKind} /> · {fmtDateTime(it.at)}</li>
-              : <MessageItem key={it.msg.id} m={it.msg} latest={it.msg.id === lastMsgId} onRetry={() => void act(async () => {
-                  const r = await sendQueued(it.msg.id);
-                  if (!r.sent) throw new DataError("unknown", r.message ?? "Kunde inte skicka.");
-                })} />)}
-          </ol>
-          {d.canUpdate && (
-            <Composer
-              ref={composerRef}
-              mode={mode}
-              setMode={setMode}
-              canReply={!!data.kund_epost}
-              onReply={async (text, nextStatus) => {
-                const r = await caseReply(c.id, text, nextStatus);
-                await load();
-                return r;
-              }}
-              onNote={async (text) => { await caseAddNote(c.id, text); await load(); }}
-            />
-          )}
-        </section>
+      <div className="tab-bar case__tabs" role="tablist">
+        <button role="tab" aria-selected={tab === "overview"} className={`tab-bar__tab${tab === "overview" ? " tab-bar__tab--active" : ""}`}
+          onClick={() => setTab("overview")}>Översikt</button>
+        <button role="tab" aria-selected={tab === "conv"} className={`tab-bar__tab${tab === "conv" ? " tab-bar__tab--active" : ""}`}
+          onClick={() => setTab("conv")}>
+          Konversation{d.messages.length > 0 && <span className="tab-bar__count">{d.messages.length}</span>}
+        </button>
+      </div>
 
-        <aside className="case__side">
+      {tab === "overview" ? (
+        <div className="case__overview">
+          <div className="card case__panel case__latest">
+            <div className="case__panel-title">Senaste meddelandet</div>
+            {lastMsg ? (
+              <>
+                <div className="case__latest-head">
+                  <span className="tl__who">{lastMsg.channel === "internal_note" ? "Intern kommentar" : lastMsg.direction === "inbound" ? `Hyresgäst · ${lastMsg.from ?? ""}` : "ConnectEstate"}</span>
+                  <span className="tl__when">{fmtDateTime(lastMsg.occurredAt)}</span>
+                </div>
+                <div className="tl__body case__latest-body">{tidyBody(lastMsg.bodyText) || "(Tomt meddelande)"}</div>
+              </>
+            ) : <div className="ink-faint">Inga meddelanden ännu.</div>}
+            <div className="case__latest-actions">
+              <button className="btn btn--ghost btn--sm" onClick={() => setTab("conv")}>Öppna konversationen ({d.messages.length})</button>
+              {d.canUpdate && <button className="btn btn--brand btn--sm" onClick={() => { setMode("reply"); focusComposer(); }}>Svara</button>}
+            </div>
+          </div>
           <div className="card case__panel">
             <div className="case__panel-title">Hantera</div>
             <label className="label" htmlFor="cs-status">Status</label>
@@ -295,8 +310,33 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
             <div><span>Brevlåda</span><span>{data.mailbox ?? "—"}</span></div>
             <p className="ink-faint case__keys">Tangentbord: <kbd>r</kbd> svara · <kbd>i</kbd> intern kommentar · <kbd>Esc</kbd> tillbaka</p>
           </div>
-        </aside>
-      </div>
+        </div>
+      ) : (
+        <section className="case__conv" aria-label="Konversation">
+          <ol className="tl">
+            {timeline.map((it) => it.kind === "event"
+              ? <li key={`e${it.id}`} className="tl__event"><span>{it.body}</span> · <EventActor id={it.actor} kind={it.actorKind} /> · {fmtDateTime(it.at)}</li>
+              : <MessageItem key={it.msg.id} m={it.msg} latest={it.msg.id === lastMsgId} onRetry={() => void act(async () => {
+                  const r = await sendQueued(it.msg.id);
+                  if (!r.sent) throw new DataError("unknown", r.message ?? "Kunde inte skicka.");
+                })} />)}
+          </ol>
+          {d.canUpdate && (
+            <Composer
+              ref={composerRef}
+              mode={mode}
+              setMode={setMode}
+              canReply={!!data.kund_epost}
+              onReply={async (text, nextStatus) => {
+                const r = await caseReply(c.id, text, nextStatus);
+                await load();
+                return r;
+              }}
+              onNote={async (text) => { await caseAddNote(c.id, text); await load(); }}
+            />
+          )}
+        </section>
+      )}
     </div>
   );
 }
