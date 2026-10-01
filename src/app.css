@@ -4417,3 +4417,65 @@ kbd {
 .sig-editor__preview { background: #FFFFFF; color: #222222; border: 1px solid var(--border); border-radius: 12px; padding: 16px; overflow-x: auto; min-height: 120px; }
 .sig-editor__code { min-height: 320px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; line-height: 1.45; white-space: pre; }
 @media (max-width: 900px) { .sig-editor__cols { grid-template-columns: 1fr; } }
+
+/* --- Feedbackknappen (längst ned till höger) ------------------------------------
+   Fast knapp med varningstriangel + "Feedback". Öppnar en ruta ovanför sig.
+   Se FeedbackButton.tsx. */
+.fb-btn {
+  position: fixed; right: var(--sp-4); bottom: var(--sp-4); z-index: 60;
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  padding: 7px 14px 7px 8px; border-radius: var(--r-pill);
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md); cursor: pointer;
+  font-family: var(--font-display); font-weight: 700; font-size: var(--text-sm);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.fb-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); border-color: var(--hue-amber); }
+.fb-btn--open { border-color: var(--hue-amber); }
+.fb-btn__icon {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--warn-soft); color: var(--warn-ink);
+}
+.fb-scrim { display: none; }
+.fb-panel {
+  position: fixed; right: var(--sp-4); bottom: calc(var(--sp-4) + 52px); z-index: 72;
+  width: min(420px, calc(100vw - var(--sp-8)));
+  max-height: calc(100vh - 96px); overflow-y: auto; overscroll-behavior: contain;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-lg);
+  animation: fb-in .18s var(--ease);
+}
+@keyframes fb-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.fb-panel__head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border);
+}
+.fb-panel__badge {
+  width: 38px; height: 38px; flex: none; border-radius: var(--r-sm);
+  display: grid; place-items: center; background: var(--warn-soft); color: var(--warn-ink);
+}
+.fb-panel__titles { flex: 1; min-width: 0; }
+.fb-panel__title { font-family: var(--font-display); font-weight: 800; font-size: 15px; }
+.fb-panel__sub { font-size: var(--text-xs); color: var(--ink-muted); }
+.fb-panel__body { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+.fb-field { display: flex; flex-direction: column; gap: 6px; }
+.fb-field .label { margin: 0; }
+.fb-panel__text { min-height: 110px; resize: vertical; }
+.fb-panel__actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
+.fb-panel__done { padding: var(--sp-8) var(--sp-5); text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
+.fb-panel__check {
+  width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--hue-green) 14%, transparent); color: var(--hue-green);
+  font-size: 22px; font-weight: 800;
+}
+.fb-panel__done-title { font-family: var(--font-display); font-weight: 800; font-size: var(--text-lg); }
+/* Konversationen i ärenden: lämna plats så knappen inte täcker "Skicka". */
+.case--conv { padding-bottom: 64px; }
+
+@media (max-width: 860px) {
+  .fb-btn { right: var(--sp-3); bottom: var(--sp-3); padding: 6px; }
+  .fb-btn__label { display: none; }
+  .fb-scrim { display: block; position: fixed; inset: 0; z-index: 71; background: var(--scrim); }
+  .fb-panel { left: var(--sp-2); right: var(--sp-2); bottom: var(--sp-2); width: auto; max-height: calc(100dvh - var(--sp-12)); }
+  .fb-panel .input { font-size: 16px; }
+}
