@@ -4226,3 +4226,21 @@ kbd {
   .record-page { padding-top: var(--sp-8); }
   .record-page .crumbs { min-height: 20px; padding-right: 120px; }
 }
+
+/* ── E-postsignatur (ärendehantering) ─────────────────────────────────── */
+.sig-preview {
+  margin-top: var(--sp-2); padding: 10px 12px; border-radius: 12px;
+  background: var(--surface-sunk); border: 1px dashed var(--border-strong);
+  font-size: 12.5px; color: var(--ink-muted);
+}
+.sig-preview--empty { border-style: dashed; color: var(--ink-faint); }
+.sig-preview__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: 4px; }
+.sig-preview__head > span { font-family: var(--font-display); font-weight: 700; font-size: 10.5px; letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--ink-faint); }
+.sig-preview__text { white-space: pre-line; line-height: 1.5; color: var(--ink); }
+.sig-preview .linklike, .sig-preview--empty .linklike { font-size: 12.5px; }
+.sig-inline { margin-top: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.sig-editor { display: flex; flex-direction: column; gap: 6px; }
+.sig-editor__input { min-height: 120px; font-family: var(--font-body); line-height: 1.5; }
+.sig-editor__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2); flex-wrap: wrap; }
+.sig-editor__meta { font-size: 11.5px; margin-right: auto; }
+.sig-editor code { font-size: 11.5px; padding: 1px 5px; border-radius: 5px; background: var(--surface-alt); }
