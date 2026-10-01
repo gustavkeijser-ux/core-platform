@@ -1,105 +1,106 @@
 /* =============================================================================
    Designtokens — dark/light
    =============================================================================
-   Uppdaterad efter Connectestates boendeapp ("Allt för ditt boende") som
-   stilreferens: ljus gråbotten, djupt tealgrön accentfärg, generöst
-   rundade kort och piller-knappar, mjuk vänlig typografi (Nunito), lugna
-   neutrala skuggor i stället för kalla blåsvarta eller varmt bruna. Mörkt
-   läge är en spegelvänd variant i samma familj (kolmörk botten, samma
-   teal-accent) så att appen känns som en enda produkt oavsett tema.
+   Designsystemet från ConnectEstates nya boendeapp/förvaltarpanel
+   ("ConnectEstate UI-förslag", Utvecklardokumentation v1):
+
+   - Typografi: Manrope 700–800 för rubriker, knappar och siffror,
+     Work Sans 400–600 för brödtext och tabellinnehåll.
+   - Bakgrund: kall off-white (#F4F6F9) i panelen, vita kort med tunn ram.
+   - Primärfärg: teal #1E7A8C för CTA och aktiva lägen, navy #14213D för text.
+   - Statusfärger konsekventa överallt: grön = klar/aktiv, amber = väntande,
+     röd = fel/destruktiv, blå = pågående/info, grå = inaktiv.
+   - Hörnradier: 9–10 ikonchip, 11 fält/knapp, 12 nästlad ruta, 16 kort,
+     20 dialog.
 
    En regel: komponenter refererar bara till variabler härifrån. Byt tema
-   genom att sätta data-theme="light" på <html> — allt annat följer med
-   automatiskt eftersom ingen komponent känner till en enda hexkod.
+   genom att sätta data-theme på <html> — allt annat följer med.
    ========================================================================== */
 
-@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Work+Sans:wght@400;500;600&display=swap");
 
 :root {
-  /* --- Varumärkesfärg (temaoberoende default — tenant kan ersätta via
-     Inställningar → Utseende, se brandCssVars()) ------------------------ */
-  --teal-50:  #EAF4F2;
-  --teal-100: #D2E9E5;
-  --teal-200: #A7D5CD;
-  --teal-300: #78BDB1;
-  --teal-400: #48A294;
-  --teal-500: #16766A;
-  --teal-600: #106B60;
-  --teal-700: #0C5750;
-  --teal-800: #0A423D;
-  --teal-900: #072E2B;
+  /* --- Varumärkesfärg (default — tenant kan ersätta via Inställningar →
+     Utseende, se brandCssVars()) ----------------------------------------- */
+  --teal-50:  #E3F3F2;
+  --teal-100: #CFE7E5;
+  --teal-200: #A6D4D2;
+  --teal-300: #6FBBB8;
+  --teal-400: #3FAFA0;
+  --teal-500: #2A8E9F;
+  --teal-600: #1E7A8C;
+  --teal-700: #186878;
+  --teal-800: #134F5C;
+  --teal-900: #0D3640;
 
   --brand:        var(--teal-600);
-  --brand-hover:  var(--teal-500);
-  --brand-soft:   rgba(16,107,96,.14);
+  --brand-hover:  var(--teal-700);
+  --brand-soft:   rgba(30,122,140,.12);
   --brand-on:     #FFFFFF;
 
-  /* --- Ljust läge (default) — ljus gråbotten, vita rundade kort -------- */
-  --canvas:       radial-gradient(120% 90% at 100% 0%, #FAFBFB 0%, #F2F4F4 48%, #E7EBEB 100%);
-  --canvas-glow:  radial-gradient(46% 38% at 82% 6%, rgba(16,107,96,.08), transparent 70%);
+  /* --- Ljust läge (default) — kall off-white botten, vita kort --------- */
+  --canvas:       #F4F6F9;
+  --canvas-glow:  none;
   --surface:      #FFFFFF;
-  --surface-sunk: #EEF1F1;
-  --surface-alt:  #E9F3F1;
+  --surface-sunk: #F8F9FB;
+  --surface-alt:  #F4F6F9;
 
-  --ink:            #1E2A2E;
-  --ink-muted:      #5C6469;
-  --ink-faint:      #8A9195;
-  --ink-on-canvas:  #1E2A2E;
+  --ink:            #14213D;
+  --ink-muted:      #6B7280;
+  --ink-faint:      #9AA4B2;
+  --ink-on-canvas:  #14213D;
 
-  --overlay-soft:   rgba(30,42,46,.05);
-  --overlay-hover:  rgba(30,42,46,.045);
-  --overlay-solid:  rgba(255,255,255,.94);
-  --scrim:          rgba(20,24,26,.4);
+  --overlay-soft:   rgba(20,33,61,.04);
+  --overlay-hover:  rgba(20,33,61,.04);
+  --overlay-solid:  #FFFFFF;
+  --scrim:          rgba(20,33,61,.35);
 
-  --border:        #E0E5E5;
-  --border-strong: #CBD3D4;
+  --border:        #E4E9EF;
+  --border-strong: #D7DEE6;
 
-  --warn-soft: #FBEEDA;
-  --warn-ink:  #93650F;
+  --warn-soft: #FEF3E2;
+  --warn-ink:  #B45309;
 
-  --hue-slate:  #6B7180;
-  --hue-sky:    #2E8FCC;
-  --hue-blue:   #4A63E0;
-  --hue-indigo: #6C5CE0;
-  --hue-violet: #7A50EE;
-  --hue-amber:  #C8811F;
-  --hue-orange: #D96A3E;
-  --hue-green:  #1F9E63;
-  --hue-red:    #D64562;
-  --hue-zinc:   #757C8C;
+  --hue-slate:  #8B95A6;
+  --hue-sky:    #0EA5E9;
+  --hue-blue:   #1D4ED8;
+  --hue-indigo: #4F46E5;
+  --hue-violet: #6D28D9;
+  --hue-amber:  #D97706;
+  --hue-orange: #C2410C;
+  --hue-green:  #15803D;
+  --hue-red:    #DC2626;
+  --hue-zinc:   #9AA4B2;
 
-  --shadow-sm: 0 1px 2px rgba(30,41,46,.06), 0 2px 10px rgba(30,41,46,.05);
-  --shadow-md: 0 4px 14px rgba(30,41,46,.08), 0 14px 32px rgba(30,41,46,.07);
-  --shadow-lg: 0 10px 26px rgba(30,41,46,.10), 0 26px 56px rgba(30,41,46,.09);
-  --shadow-brand: 0 8px 22px rgba(16,107,96,.30);
+  --shadow-sm: 0 1px 2px rgba(20,33,61,.04);
+  --shadow-md: 0 1px 2px rgba(20,33,61,.04), 0 8px 24px rgba(20,33,61,.05);
+  --shadow-lg: 0 24px 48px rgba(20,33,61,.12);
+  --shadow-brand: 0 8px 16px rgba(30,122,140,.28);
 
-  /* --- Typografi -----------------------------------------------------------
-     Nunito rakt igenom — rundade, vänliga bokstavsformer som matchar
-     boendeappens rubriker. Ingen separat monoteckensnitt; sifferjustering
-     hanteras med tabular-nums.                                            */
-  --font-display: "Nunito", ui-sans-serif, system-ui, sans-serif;
-  --font-body:    "Nunito", ui-sans-serif, system-ui, sans-serif;
-  --font-mono:    "Nunito", ui-sans-serif, system-ui, sans-serif;
+  /* --- Typografi ---------------------------------------------------------- */
+  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Work Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    "Manrope", ui-sans-serif, system-ui, sans-serif;
 
   --text-xs:   0.75rem;
   --text-sm:   0.8125rem;
-  --text-base: 0.9375rem;
-  --text-lg:   1.0625rem;
-  --text-xl:   1.375rem;
-  --text-2xl:  1.875rem;
-  --text-3xl:  2.5rem;
+  --text-base: 0.875rem;
+  --text-lg:   1rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
 
-  --leading-tight: 1.15;
-  --leading-body:  1.55;
+  --leading-tight: 1.2;
+  --leading-body:  1.5;
   --tracking-tight: -0.01em;
-  --tracking-label: 0.06em;
+  --tracking-label: 0.05em;
 
-  /* --- Rundning — generösare rakt igenom, i stil med boendeappens stora
-     mjuka kort och pillerformade knappar --------------------------------- */
-  --r-sm:   10px;
+  /* --- Rundning (se skalan ovan) ------------------------------------------ */
+  --r-xs:   9px;
+  --r-sm:   11px;
   --r-md:   16px;
-  --r-lg:   22px;
-  --r-xl:   30px;
+  --r-lg:   16px;
+  --r-xl:   20px;
   --r-pill: 999px;
 
   /* --- Rytm -------------------------------------------------------------- */
@@ -107,56 +108,55 @@
   --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
 
   --ease: cubic-bezier(.22,.61,.36,1);
-  --dur:  180ms;
+  --dur:  160ms;
 }
 
 /* --- Mörkt läge ----------------------------------------------------------
-   Samma familj, spegelvänd: varm kolmörk botten (inte kallblå) med samma
-   tealaccent ljusare för kontrast. Toggla med data-theme="dark" på <html>
-   (satt av ThemeProvider, sparat i localStorage).                         */
+   Samma familj: djup navy botten (från textfärgen #14213D) och samma teal
+   ljusare för kontrast. Toggla med data-theme="dark" på <html>.          */
 :root[data-theme="dark"] {
-  --canvas:       radial-gradient(120% 90% at 100% 0%, #223330 0%, #182320 50%, #101815 100%);
-  --canvas-glow:  radial-gradient(46% 38% at 82% 6%, rgba(72,162,148,.22), transparent 70%);
-  --surface:      #1B2420;
-  --surface-sunk: #141C19;
-  --surface-alt:  #212C27;
+  --canvas:       #0E1626;
+  --canvas-glow:  none;
+  --surface:      #162033;
+  --surface-sunk: #1B263B;
+  --surface-alt:  #1F2B42;
 
-  --ink:            #F2EEE2;
-  --ink-muted:      #A9A798;
-  --ink-faint:      #78776A;
-  --ink-on-canvas:  #F2EEE2;
+  --ink:            #EEF2F7;
+  --ink-muted:      #A3AEC0;
+  --ink-faint:      #6F7B90;
+  --ink-on-canvas:  #EEF2F7;
 
-  --overlay-soft:   rgba(255,255,255,.06);
+  --overlay-soft:   rgba(255,255,255,.05);
   --overlay-hover:  rgba(255,255,255,.05);
-  --overlay-solid:  rgba(255,255,255,.09);
-  --scrim:          rgba(6,8,7,.6);
+  --overlay-solid:  #1B263B;
+  --scrim:          rgba(4,8,16,.6);
 
   --border:        rgba(255,255,255,.08);
-  --border-strong: rgba(255,255,255,.16);
+  --border-strong: rgba(255,255,255,.15);
 
-  --warn-soft: rgba(200,150,40,.14);
-  --warn-ink:  #E5B15C;
+  --warn-soft: rgba(217,119,6,.16);
+  --warn-ink:  #F5B04C;
 
   --brand:        var(--teal-400);
   --brand-hover:  var(--teal-300);
-  --brand-soft:   rgba(72,162,148,.20);
-  --brand-on:     #0A231F;
-  --shadow-brand: 0 8px 22px rgba(72,162,148,.34);
+  --brand-soft:   rgba(63,175,160,.18);
+  --brand-on:     #06221F;
+  --shadow-brand: 0 8px 18px rgba(63,175,160,.25);
 
-  --hue-slate:  #8890A0;
+  --hue-slate:  #8E9AAE;
   --hue-sky:    #4FB3E8;
-  --hue-blue:   #6C8CFF;
-  --hue-indigo: #8C7CF7;
+  --hue-blue:   #6C9CFF;
+  --hue-indigo: #8C86F7;
   --hue-violet: #A98AFF;
-  --hue-amber:  #E5A83E;
+  --hue-amber:  #F0A93E;
   --hue-orange: #F0895A;
   --hue-green:  #3FC386;
-  --hue-red:    #F16C82;
-  --hue-zinc:   #9098A8;
+  --hue-red:    #F26D6D;
+  --hue-zinc:   #8590A2;
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.30), 0 2px 8px rgba(0,0,0,.22);
-  --shadow-md: 0 4px 14px rgba(0,0,0,.35), 0 14px 34px rgba(0,0,0,.30);
-  --shadow-lg: 0 10px 28px rgba(0,0,0,.42), 0 28px 60px rgba(0,0,0,.38);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+  --shadow-md: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  --shadow-lg: 0 24px 48px rgba(0,0,0,.45);
 }
 
 * { box-sizing: border-box; }
@@ -189,7 +189,6 @@ body {
   line-height: var(--leading-body);
   color: var(--ink);
   background: var(--canvas);
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   transition: background var(--dur) var(--ease);
 }
@@ -199,6 +198,7 @@ h1, h2, h3, h4 {
   line-height: var(--leading-tight);
   letter-spacing: var(--tracking-tight);
   font-weight: 800;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -213,8 +213,10 @@ h1, h2, h3, h4 {
 .tnum { font-variant-numeric: tabular-nums; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
+:where(input[type="checkbox"], input[type="radio"], input[type="range"]) { accent-color: var(--brand); }
+
 :where(a, button, input, select, textarea):focus-visible {
-  outline: 2px solid var(--teal-400);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
