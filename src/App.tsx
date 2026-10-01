@@ -10,6 +10,7 @@ import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { DashboardPage } from "@/components/DashboardPage";
 import { AiPanel } from "@/components/AiAssistant";
+import { FeedbackButton } from "@/components/FeedbackButton";
 import { ObjectListPage } from "@/components/ObjectListPage";
 import { RecordDrawer } from "@/components/RecordDrawer";
 import { D2DSellerApp } from "@/components/D2DSellerApp";
@@ -192,6 +193,24 @@ export default function App() {
     : view?.kind === "m365" ? "Kopplingen till e-postlådan och e-postsignatur"
     : tenantName;
 
+  // Feedbackknappen: menyns moduler, och den man står i (förval).
+  const fbModules = Array.from(new Set([
+    "Översikt", "Mina uppgifter",
+    ...objects.filter((o) => o.key !== "case").map((o) => o.labelPlural),
+    "Door2Door", ...(canCases ? ["Ärenden", "Microsoft 365"] : []),
+    "Import", "Inställningar", "AI-assistent", "Annat",
+  ]));
+  const fbCurrent =
+    view?.kind === "list" ? (listDef?.labelPlural ?? "Annat")
+    : view?.kind === "dashboard" ? "Översikt"
+    : view?.kind === "tasks" ? "Mina uppgifter"
+    : view?.kind === "import" ? "Import"
+    : view?.kind === "d2dbuilder" ? "Door2Door"
+    : view?.kind === "nummerbyten" ? (objectDefFor("nummerbyte")?.labelPlural ?? "Annat")
+    : view?.kind === "cases" || view?.kind === "case" ? "Ärenden"
+    : view?.kind === "m365" ? "Microsoft 365"
+    : "Annat";
+
   // Vad användaren tittar på — skickas med till AI-assistenten.
   const aiContext = openRecordId
     ? `en post (recordId ${openRecordId}) — hämta den med get_record om frågan gäller "den här posten"`
@@ -367,6 +386,8 @@ export default function App() {
           />
         )}
       </div>
+
+      <FeedbackButton modules={fbModules} currentModule={fbCurrent} />
 
       <AiPanel
         open={aiOpen}
