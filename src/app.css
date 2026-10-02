@@ -4720,3 +4720,19 @@ kbd {
 /* Leverans: saknas i projektplanen */
 .projektplan-varning { margin-bottom: var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--hue-amber) 40%, transparent); background: var(--warn-soft); color: var(--warn-ink); font-size: var(--text-sm); }
+
+/* Import: automatisk import av projektplanen */
+.imp__auto { margin-bottom: var(--sp-4); }
+.imp__autohuvud { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
+.imp__autohuvud h2 { margin: 0 0 var(--sp-1); }
+.imp__autorad { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); margin-top: var(--sp-3); font-size: var(--text-sm); color: var(--ink-muted); }
+.imp__autorad b { color: var(--ink); font-weight: 600; }
+.imp__autologg { margin-top: var(--sp-3); font-size: var(--text-sm); }
+.imp__autologg summary { cursor: pointer; color: var(--ink-muted); }
+.imp__autologg ul { margin: var(--sp-2) 0 0; padding-left: var(--sp-5); color: var(--ink-muted); }
+.imp__autologg--fel { color: var(--hue-red); }
+.imp__autologg--ok { color: var(--ink); }
+@media (max-width: 640px) {
+  .imp__autohuvud .btn { width: 100%; }
+  .imp__autorad { flex-direction: column; }
+}
