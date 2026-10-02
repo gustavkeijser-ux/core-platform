@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase, DataError } from "@/lib/data";
 import { lasXlsx, bladnamn, tillObjekt } from "@/lib/xlsx";
 
@@ -20,6 +20,78 @@ type UtanKund = {
 };
 
 const BLAD = "Projektplan";
+
+type AutoKorning = {
+  tid: string; kalla: "auto" | "manuell"; status: "ok" | "oforandrad" | "fel";
+  fil_andrad: string | null; rader: number | null; resultat: Partial<Resultat> | null; fel: string | null;
+};
+type AutoStatus = { senaste: AutoKorning[]; senastOk: AutoKorning | null; schema: string | null };
+
+const tidStr = (s: string | null) => s ? new Date(s).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" }) : "–";
+
+/** Automatisk import varje timme från Projektplan CE.xlsx på SharePoint. */
+function AutoImport() {
+  const [st, setSt] = useState<AutoStatus | null>(null);
+  const [kor, setKor] = useState(false);
+  const [svar, setSvar] = useState<string | null>(null);
+  const ladda = useCallback(async () => {
+    const { data } = await supabase.rpc("projektplan_import_status", { p_antal: 8 });
+    if (data) setSt(data as AutoStatus);
+  }, []);
+  useEffect(() => { void ladda(); }, [ladda]);
+
+  async function hamtaNu() {
+    setKor(true); setSvar(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("projektplan-import", { body: { tvinga: true } });
+      const d = (data ?? {}) as { status?: string; fel?: string; rader?: number; nya?: number; uppdaterade?: number };
+      if (error && !d.status) throw error;
+      setSvar(d.status === "ok" ? `Klart: ${d.rader} rader, ${d.nya ?? 0} nya, ${d.uppdaterade ?? 0} uppdaterade.`
+        : d.fel ?? "Importen misslyckades.");
+    } catch (e) {
+      setSvar(e instanceof Error ? e.message : "Importen misslyckades.");
+    } finally { setKor(false); void ladda(); }
+  }
+
+  const sist = st?.senaste[0];
+  const ok = st?.senastOk;
+  return (
+    <div className="card imp__auto">
+      <div className="imp__autohuvud">
+        <div>
+          <h2>Automatisk import</h2>
+          <p className="imp__not">
+            <code>Projektplan CE.xlsx</code> på SharePoint läses in varje timme (20 över). Har filen inte ändrats händer ingenting.
+          </p>
+        </div>
+        <button className="btn btn--brand btn--sm" onClick={() => void hamtaNu()} disabled={kor}>
+          {kor ? "Hämtar…" : "Hämta nu"}
+        </button>
+      </div>
+      {sist?.status === "fel" && <div className="formfield__error">Senaste körningen misslyckades: {sist.fel}</div>}
+      {svar && <p className="imp__not">{svar}</p>}
+      <div className="imp__autorad">
+        <span>Senast inläst: <b>{ok ? tidStr(ok.tid) : "aldrig"}</b>{ok?.rader ? ` · ${ok.rader} rader` : ""}</span>
+        <span>Filen ändrad: <b>{tidStr(ok?.fil_andrad ?? null)}</b></span>
+        <span>Senaste kontroll: <b>{tidStr(sist?.tid ?? null)}</b></span>
+      </div>
+      {st && st.senaste.length > 0 && (
+        <details className="imp__autologg">
+          <summary>Senaste körningarna</summary>
+          <ul>
+            {st.senaste.map((k, i) => (
+              <li key={i} className={`imp__autologg--${k.status}`}>
+                {tidStr(k.tid)} · {k.kalla === "auto" ? "automatiskt" : "manuellt"} ·{" "}
+                {k.status === "ok" ? `${k.rader} rader, ${k.resultat?.nya ?? 0} nya, ${k.resultat?.uppdaterade ?? 0} uppdaterade`
+                  : k.status === "oforandrad" ? "filen oförändrad" : `fel: ${k.fel}`}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
 
 export function ImportPage() {
   const [fil, setFil] = useState<File | null>(null);
@@ -124,8 +196,10 @@ export function ImportPage() {
 
   return (
     <div className="page imp">
+      <AutoImport />
+
       <div className="card imp__intro">
-        <h2>Importera projektplan</h2>
+        <h2>Importera fil manuellt</h2>
         <p>
           Ladda upp <code>Projektplan_ConnectEstate.xlsx</code> så läses bladet
           <strong> {BLAD}</strong> in. Leveranser matchas på fastighetsbeteckning och ort —
