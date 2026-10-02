@@ -3115,6 +3115,9 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   max-width: 1100px;
   margin: 0 auto;
 }
+/* Projektet visar leveranslistan med många kolumner — använd hela bredden. */
+.d2dpb--bred { max-width: none; }
+@media (max-width: 720px) { .d2dpb--bred { padding: var(--sp-4); } }
 
 .d2dpb-list__header {
   display: flex;
