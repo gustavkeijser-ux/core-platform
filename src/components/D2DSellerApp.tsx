@@ -12,6 +12,7 @@ import { FieldConfigPanel } from "./FieldConfigPanel";
 import { MobilNummerPanel } from "./MobilNummer";
 import { AvtalsSammanfattning } from "./D2DAvtal";
 import { ScriveSignering } from "./D2DScrive";
+import { BindningPanel, EjMerPanel } from "./D2DBindning";
 import { UTAN_NETFLIX_FALT } from "@/lib/d2dPris";
 import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
@@ -788,6 +789,7 @@ function LagenhetForm({
     && f.key !== "ej_intresserad_bindningstid"
     && !f.options.sold_panel
     && f.key !== "salt_svar"
+    && !f.options.d2d_eget_ui // bindningstid och "varför inte mer" har egna paneler
     && f.key !== UTAN_NETFLIX_FALT // eget val under Sport i "Vad såldes?"
     // Mobilnummer/portering har egen panel under Mobil i "Vad såldes?".
     && !["mobil_nummerval", "mobil_startdatum", "mobil_nummer", "mobil_nummerbyte_id"].includes(f.key)
@@ -937,20 +939,8 @@ function LagenhetForm({
               </button>
             ))}
           </div>
-          {data.ej_intresserad_anledning === "bindningstid" && (
-            <div className="d2d-reason-panel__date">
-              <label htmlFor="ej-intresserad-bindningstid" className="label">
-                Bindningstid löper ut
-              </label>
-              <input
-                id="ej-intresserad-bindningstid"
-                className="input"
-                type="text"
-                placeholder="ÅÅÅÅ-MM-DD, ÅÅÅÅ-MM eller ÅÅÅÅ"
-                value={String(data.ej_intresserad_bindningstid ?? "")}
-                onChange={(e) => set("ej_intresserad_bindningstid")(e.target.value)}
-              />
-            </div>
+          {data.ej_intresserad_anledning === "bindningstid" && !data.bunden_till && (
+            <span className="d2d-sold-panel__hint">Fyll i när bindningen löper ut under Bindningstid nedan.</span>
           )}
         </div>
       )}
@@ -1015,9 +1005,18 @@ function LagenhetForm({
               </>)}
             </div>
           ))}
+          {answer(soldFields.find((sf) => sf.key === "salt_bredband") ?? soldFields[0]) !== false
+            && !soldFields.some((sf) => sf.key !== "salt_bredband" && answer(sf) === true) && (
+            <EjMerPanel fields={objectDef?.fields ?? []} data={data} set={set} />
+          )}
           <AvtalsSammanfattning data={data} soldFields={soldFields} isAdmin={isAdmin} />
           <ScriveSignering lagenhetId={record.id} data={data} sparaForst={flush} />
         </div>
+      )}
+
+      {/* Bindningstid hos nuvarande operatör — på alla besök där någon öppnade. */}
+      {!!status && ["sald", "aterkoppling", "inte_intresserad", "ovrigt"].includes(status) && (
+        <BindningPanel fields={objectDef?.fields ?? []} data={data} set={set} />
       )}
 
       {/* Formulärfält */}
