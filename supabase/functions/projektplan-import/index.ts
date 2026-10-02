@@ -159,8 +159,11 @@ Deno.serve(async (req) => {
   } catch (e) {
     let fel = (e as Error).message ?? String(e);
     if (e instanceof GraphError && e.status === 403) {
-      fel = "Microsoft 365-appen saknar behörighet att läsa SharePoint. Ge appen Sites.Read.All (Application) " +
-        "med administratörsgodkännande i Entra ID. (" + fel + ")";
+      // App-ID (klient-ID) är inte hemligt och hjälper admin hitta rätt appregistrering i Entra.
+      const appId = Deno.env.get("MICROSOFT_CLIENT_ID") ?? "?";
+      const tenantId = Deno.env.get("MICROSOFT_TENANT_ID") ?? "?";
+      fel = `Microsoft 365-appen (app-ID ${appId}, tenant ${tenantId}) saknar behörighet att läsa SharePoint. ` +
+        "Ge appen Sites.Read.All (Application) med administratörsgodkännande i Entra ID. (" + fel + ")";
     } else if (e instanceof GraphError && e.status === 404) {
       fel = `Hittar inte filen ${FIL} på ${HOST}${SITE}. (` + fel + ")";
     }
