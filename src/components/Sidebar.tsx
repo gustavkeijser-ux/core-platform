@@ -72,7 +72,7 @@ const MENU_GROUPS: MenuGroup[] = [
         <circle cx="12" cy="13" r="1.5" />
       </svg>
     ),
-    keys: ["onboarding", "delivery", "appleverans"],
+    keys: ["onboarding", "delivery", "flit_sdu", "appleverans"],
   },
   {
     id: "d2d",
@@ -153,6 +153,13 @@ const ICONS: Record<string, JSX.Element> = {
       <path d="M10 6h3l2 3v4h-5" />
       <circle cx="4" cy="13" r="1.5" />
       <circle cx="12" cy="13" r="1.5" />
+    </svg>
+  ),
+  flit_sdu: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 13c3 0 3-10 6-10s3 10 6 10" />
+      <circle cx="2" cy="13" r="1" />
+      <circle cx="14" cy="13" r="1" />
     </svg>
   ),
   task: (
