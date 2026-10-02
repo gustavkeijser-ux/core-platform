@@ -83,7 +83,7 @@ const MENU_GROUPS: MenuGroup[] = [
         <path d="M6.5 14V10h3v4" />
       </svg>
     ),
-    keys: ["d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte"],
+    keys: ["__d2dutfall__", "d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte"],
   },
 ];
 
@@ -361,6 +361,15 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                       >
                         D2D-vy
                       </button>
+                      {isAdmin && (
+                        <button
+                          className="sidebar__item sidebar__item--child"
+                          aria-current={activeKey === "__d2dutfall__"}
+                          onClick={() => selectAndClose("__d2dutfall__")}
+                        >
+                          Utfall
+                        </button>
+                      )}
                     </>
                   )}
 
