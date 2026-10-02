@@ -24,6 +24,8 @@ import { CaseView } from "@/components/CaseView";
 import { M365StatusPage } from "@/components/M365StatusPage";
 import { type CaseFilter, getCaseSummary } from "@/lib/cases";
 import { ImportPage } from "@/components/ImportPage";
+import { FmoPage } from "@/components/FmoPage";
+import { arFmo } from "@/lib/fmo";
 import { UserSettings } from "@/components/UserSettings";
 import { useRoute, readRoute, navigate, goBack } from "@/lib/route";
 import { loadAllUsers, useUserName } from "@/lib/users";
@@ -39,7 +41,8 @@ type View =
   | { kind: "cases"; filter: CaseFilter }
   | { kind: "case"; id: string }
   | { kind: "m365" }
-  | { kind: "feedback" };
+  | { kind: "feedback" }
+  | { kind: "fmo" };
 
 /** URL → vy. Okänt/tomt → översikten. */
 function viewFromSegs(segs: string[]): View {
@@ -53,6 +56,7 @@ function viewFromSegs(segs: string[]): View {
     case "arende": if (segs[1]) return { kind: "case", id: segs[1] }; break;
     case "m365": return { kind: "m365" };
     case "feedback": return { kind: "feedback" };
+    case "fmo": return { kind: "fmo" };
     case "list": if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
   }
   return { kind: "dashboard" };
@@ -73,6 +77,8 @@ export default function App() {
   const [branding, setBranding] = useState<TenantBranding | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSeller, setIsSeller] = useState(false);
+  // Rollen "FMO (Telia)": egen inloggning som bara ser FMO-checken.
+  const [isFmo, setIsFmo] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [metaError, setMetaError] = useState<string | null>(null);
   // Var man är i appen ligger i URL:en (#/…) så att man stannar kvar på
@@ -107,8 +113,9 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
     loadAllUsers(); // användarnamn i cachen direkt, så användarfält visar namn
-    getMetadata()
-      .then((res) => {
+    Promise.all([getMetadata(), arFmo()])
+      .then(([res, fmo]) => {
+        setIsFmo(fmo);
         setObjects(res.objects);
         setBranding(res.tenant ?? null);
         setIsAdmin(!!res.isAdmin);
@@ -181,11 +188,15 @@ export default function App() {
   if (!objects) {
     return <div className="loading-shell">Laddar objekt…</div>;
   }
-  if (objects.length === 0) {
-    return <div className="loading-shell">Inga objekttyper är konfigurerade för din tenant ännu.</div>;
-  }
   if (mustChangePassword) {
     return <ForcedPasswordChangePage onDone={() => setMustChangePassword(false)} />;
+  }
+  // Telia (FMO) ser bara sin lista: exportera, svara, importera.
+  if (isFmo && !isAdmin) {
+    return <FmoPage fristaende />;
+  }
+  if (objects.length === 0) {
+    return <div className="loading-shell">Inga objekttyper är konfigurerade för din tenant ännu.</div>;
   }
 
   // D2D-läge: helt separat vy. Rena dörrsäljare (ingen admin-roll) får
@@ -212,6 +223,7 @@ export default function App() {
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
     : view?.kind === "m365" ? "Kopplingen till e-postlådan och e-postsignatur"
     : view?.kind === "feedback" ? "Fel, idéer och önskemål från användarna"
+    : view?.kind === "fmo" ? "Fastigheter som skickats på FMO-check"
     : tenantName;
 
   // Feedbackknappen: menyns moduler, och den man står i (förval).
@@ -278,6 +290,7 @@ export default function App() {
           : view?.kind === "case" ? "__cases__"
           : view?.kind === "m365" ? "__m365__"
           : view?.kind === "feedback" ? "__feedback__"
+          : view?.kind === "fmo" ? "__fmo__"
           : null
         }
         onSelect={(key) =>
@@ -292,6 +305,7 @@ export default function App() {
             : key === "__cases_unassigned__" ? { kind: "cases", filter: "unassigned" }
             : key === "__m365__" ? { kind: "m365" }
             : key === "__feedback__" ? { kind: "feedback" }
+            : key === "__fmo__" ? { kind: "fmo" }
             : { kind: "list", objectType: key }
           )
         }
@@ -324,6 +338,7 @@ export default function App() {
                 : view?.kind === "case" ? "Ärende"
                 : view?.kind === "m365" ? "Microsoft 365"
                 : view?.kind === "feedback" ? "Feedback"
+                : view?.kind === "fmo" ? "FMO-check"
                 : ""}
             </h1>
             <div className="topbar__sub">{subtitle}</div>
@@ -379,6 +394,7 @@ export default function App() {
         {view?.kind === "m365" && isAdmin && <M365StatusPage />}
 
         {view?.kind === "feedback" && <FeedbackPage isAdmin={isAdmin} />}
+        {view?.kind === "fmo" && <FmoPage />}
 
         {view?.kind === "list" && view.objectType === "d2d_lagenhet" && objectDefFor(view.objectType) && (
           <D2DLagenheterPage
@@ -408,6 +424,7 @@ export default function App() {
         {openRecordId && (
           <RecordDrawer
             key={openRecordId}
+            isAdmin={isAdmin}
             variant="page"
             objectDef={objects[0]}
             recordId={openRecordId}
