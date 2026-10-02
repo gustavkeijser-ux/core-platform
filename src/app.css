@@ -3272,6 +3272,11 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   font-size: var(--text-sm);
   color: var(--ink-muted);
   margin-bottom: var(--sp-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
 }
 
 .d2dpb-addr__table-wrap {
