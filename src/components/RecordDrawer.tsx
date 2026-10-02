@@ -13,6 +13,7 @@ import { ChecklistTab } from "./ChecklistTab";
 import { TaskTab } from "./TaskTab";
 import { LyftAffarTab } from "./LyftAffarTab";
 import { DealFollowUp } from "./DealFollowUp";
+import { FmoTab } from "./FmoTab";
 
 /** Fält som styrs via egen UI på affärskortet, inte via det generiska formuläret. */
 const DEAL_CUSTOM_FIELDS = new Set([
@@ -48,6 +49,8 @@ type Props = {
   variant?: "drawer" | "page";
   /** Brödsmulans första led → objektets lista. */
   onOpenList?: (objectKey: string) => void;
+  /** Administratörer kan svara på FMO-check direkt i affären. */
+  isAdmin?: boolean;
 };
 
 const SVG_PROPS = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -143,7 +146,7 @@ function buildTabs(objectDef: ObjectDef): TabDef[] {
   // Lyft affär hör bara till affärskortet — egen flik, ingen relationstyp.
   if (objectDef.key === "deal") {
     const idx = tabs.findIndex((t) => t.key === "checklista");
-    tabs.splice(idx >= 0 ? idx + 1 : 1, 0, { key: "lyft_affar_flik", label: "Lyft affär" });
+    tabs.splice(idx >= 0 ? idx + 1 : 1, 0, { key: "lyft_affar_flik", label: "Lyft affär" }, { key: "fmo_flik", label: "FMO-check" });
   }
 
   const seen = new Set<string>();
@@ -320,7 +323,7 @@ function RelationTab({
 
 // ── Huvud-komponent ──────────────────────────────────────────────────────────
 
-export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, recordId, objectDefFor, onClose, onSaved, onNavigate, onMetadataChanged, variant = "drawer", onOpenList }: Props) {
+export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, recordId, objectDefFor, onClose, onSaved, onNavigate, onMetadataChanged, variant = "drawer", onOpenList, isAdmin }: Props) {
   const isPage = variant === "page";
   const isCreate = !recordProp && !recordId;
 
@@ -511,21 +514,16 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
     }
   }
 
-  async function markeraFMO() {
+  /** Efter FMO-åtgärder: läs om posten (status kan ha ändrats) och kopplingarna. */
+  async function reloadAfterFmo() {
     if (!record) return;
-    setAffarsstatusSaving(true);
     try {
-      // Skickar ingen datapatch (bara ny status), så det finns inget att
-      // merga in i `data` — och därmed inget att av misstag skriva över.
-      const row = await updateRecord(record.id, {}, "invantar_fmo");
-      setLoadedRecord(row);
-      setStatus(row.status);
-      onSaved(row);
-    } catch {
-      /* tyst */
-    } finally {
-      setAffarsstatusSaving(false);
-    }
+      const res = await getRecord(record.id);
+      setRelated(res.related);
+      setLoadedRecord(res.record);
+      setStatus(res.record.status);
+      onSaved(res.record);
+    } catch { /* tyst */ }
   }
 
   // ── Flikinnehåll
@@ -534,6 +532,15 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
     if (activeTab === "oversikt" || isCreate) {
       return (
         <div className="drawer__main">
+          {/* Leverans skapad från affär men saknas i projektplanen > 15 dagar */}
+          {resolvedDef.key === "delivery" && record?.data?.projektplan_varning === true && (
+            <div className="projektplan-varning" role="alert">
+              <strong>Saknas i projektplanen.</strong> Fastigheten skapades från en såld affär
+              {typeof record.data.fran_affar_datum === "string" ? ` ${record.data.fran_affar_datum}` : ""} för mer än 15 dagar sedan
+              men finns inte med i projektplanen ännu.
+            </div>
+          )}
+
           {/* Affärskort: logga aktivitet + nästa steg, alltid överst */}
           {isDeal && !isCreate && record && (
             <DealFollowUp
@@ -591,11 +598,10 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
                 ))}
                 <button
                   className="btn btn--ghost btn--sm"
-                  disabled={affarsstatusSaving}
-                  onClick={markeraFMO}
-                  title='Sätter Status till "Inväntar svar från FMO"'
+                  onClick={() => setActiveTab("fmo_flik")}
+                  title="Välj vilka fastigheter som ska skickas på FMO-check"
                 >
-                  FMO
+                  FMO-check
                 </button>
               </div>
               {!data.signeringssteg ? (
@@ -740,6 +746,11 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
           onRelationsChanged={reloadRelations}
         />
       );
+    }
+
+    // FMO-check
+    if (activeTab === "fmo_flik" && record && isDeal) {
+      return <FmoTab deal={record} related={related} kanSvara={!!isAdmin} onChanged={reloadAfterFmo} />;
     }
 
     // Att göra
