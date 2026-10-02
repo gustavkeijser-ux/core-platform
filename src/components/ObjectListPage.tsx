@@ -33,6 +33,17 @@ type Props = {
   banner?: ReactNode;
   /** Anropas när data i listan ändrats (live eller efter tilldelning). */
   onDataChanged?: () => void;
+  /** Bara dessa fält som kolumner, i den här ordningen (ingen titel/status-kolumn). */
+  fastaKolumner?: string[];
+  /** Väljarläge: bocka i poster (t.ex. leveranser som ska ingå i ett D2D-projekt).
+   *  Raden växlar valet i stället för att öppna posten. */
+  picker?: {
+    valda: Set<string>;
+    onVal: (rader: RecordRow[], valj: boolean) => void | Promise<void>;
+    /** Text medan valet sparas, t.ex. "Lägger till 3 av 10…". */
+    arbetar?: string | null;
+    etikett?: string;
+  };
 };
 
 type SavedListState = {
@@ -100,12 +111,13 @@ function columnLayout(def: ObjectDef, columns: FieldDef[]): Cell[] {
   return out;
 }
 
-export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, reloadKey, baseFilters, stateKeySuffix, countsOverride, banner, onDataChanged }: Props) {
+export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, reloadKey, baseFilters, stateKeySuffix, countsOverride, banner, onDataChanged, fastaKolumner, picker }: Props) {
   // Listans läge (sida, sök, filter, sortering, vy) sparas per objekttyp så
   // man kommer tillbaka till exakt samma läge efter menybyte/omladdning.
   const stateKey = `list:${objectDef.key}${stateKeySuffix ?? ""}`;
   const [saved] = useState(() => loadListState<SavedListState>(stateKey));
-  const [mode, setMode] = useState<"list" | "kanban">(saved.mode ?? "list");
+  const [modeState, setMode] = useState<"list" | "kanban">(saved.mode ?? "list");
+  const mode = picker ? "list" : modeState;
   const [showColumns, setShowColumns] = useState(false);
   const [items, setItems] = useState<RecordRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -143,8 +155,17 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   }, [objectDef.key, liveCount, reloadKey]);
 
   const allFilters = useMemo(() => [...(baseFilters ?? []), ...filters], [baseFilters, filters]);
-  const columns = useMemo(() => pickColumns(objectDef), [objectDef]);
-  const layout = useMemo(() => columnLayout(objectDef, columns), [objectDef, columns]);
+  const fastaKey = fastaKolumner?.join(",") ?? "";
+  const columns = useMemo(() => fastaKolumner
+    ? fastaKolumner.map((k) => objectDef.fields.find((f) => f.key === k)).filter((f): f is FieldDef => !!f)
+    : pickColumns(objectDef),
+    /* eslint-disable-next-line */
+    [objectDef, fastaKey]);
+  const layout = useMemo<Cell[]>(() => fastaKolumner
+    ? columns.map((field) => ({ kind: "field" as const, field }))
+    : columnLayout(objectDef, columns),
+    /* eslint-disable-next-line */
+    [objectDef, columns, fastaKey]);
   const hasStatuses = objectDef.statuses.length > 0;
 
   // ── Ägarfält + uppföljningsdatum (styrs av fältoptioner, t.ex. Affärer:
@@ -188,7 +209,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
 
   // ── Markera + tilldela (bara för den som får ta bort/ändra allt — i
   // praktiken chef/admin; servern kontrollerar ändå behörigheten).
-  const canAssign = !!ownerField && objectDef.can.delete;
+  const canAssign = !picker && !!ownerField && objectDef.can.delete;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -419,7 +440,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   return (
     <div className="page">
       {banner}
-      <TopbarActions>
+      {!picker && <TopbarActions>
         <SearchField
           value={search}
           placeholder={`Sök ${plural}…`}
@@ -431,7 +452,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
             <span className="btn__label">Ny {objectDef.labelSingular.toLowerCase()}</span>
           </button>
         )}
-      </TopbarActions>
+      </TopbarActions>}
 
       <div className="list-head">
         {hasStatuses
@@ -444,13 +465,13 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
               Live
             </span>
           )}
-          {hasStatuses && (
+          {hasStatuses && !picker && (
             <div className="view-toggle">
               <button className="view-toggle__btn" aria-current={mode === "list"} onClick={() => setMode("list")}>Lista</button>
               <button className="view-toggle__btn" aria-current={mode === "kanban"} onClick={() => setMode("kanban")}>Kanban</button>
             </div>
           )}
-          {mode === "list" && (
+          {mode === "list" && !fastaKolumner && (
             <button className="btn btn--ghost btn--sm" onClick={() => setShowColumns(true)} title="Välj kolumner">
               Kolumner
             </button>
@@ -469,6 +490,13 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       </div>
 
       <div className="list-toolbar">
+        {picker && (
+          <SearchField
+            value={search}
+            placeholder={`Sök ${plural}…`}
+            onChange={(v) => { setSearch(v); setActiveViewId(""); }}
+          />
+        )}
         {quickFilters.map((q) => (
           <button key={q.key} type="button" className="chip" aria-pressed={quickActive(q)} onClick={() => toggleQuick(q)}>
             {q.label}
@@ -549,6 +577,42 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         </div>
       )}
 
+      {picker && (() => {
+        const valdaHar = items.filter((r) => picker.valda.has(r.id)).length;
+        return (
+          <div className="bulk-bar card picker-bar">
+            <span className="bulk-bar__count">
+              <strong>{picker.valda.size}</strong> {picker.etikett ?? "valda"}
+              {picker.arbetar && <span className="picker-bar__arbetar"> · {picker.arbetar}</span>}
+            </span>
+            {valdaHar < items.length && (
+              <button className="btn btn--brand btn--sm" disabled={!!picker.arbetar}
+                onClick={() => void picker.onVal(items.filter((r) => !picker.valda.has(r.id)), true)}>
+                Välj alla på sidan ({items.length - valdaHar})
+              </button>
+            )}
+            {filtered && total > items.length && (
+              <button className="btn btn--ghost btn--sm" disabled={!!picker.arbetar}
+                onClick={async () => {
+                  const alla = await collectMatching();
+                  const nya = alla.filter((r) => !picker.valda.has(r.id));
+                  if (nya.length === 0) return;
+                  if (!confirm(`Lägga till ${nya.length} ${plural} som matchar filtren?`)) return;
+                  await picker.onVal(nya, true);
+                }}>
+                Välj alla {total} träffar
+              </button>
+            )}
+            {valdaHar > 0 && (
+              <button className="btn btn--ghost btn--sm" disabled={!!picker.arbetar}
+                onClick={() => void picker.onVal(items.filter((r) => picker.valda.has(r.id)), false)}>
+                Avmarkera sidan ({valdaHar})
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
       {showSave && (
         <div className="card save-view-row">
           <input className="input" placeholder="Namn på vyn" value={saveName} onChange={(e) => setSaveName(e.target.value)} />
@@ -585,7 +649,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
           ) : (
             <EmptyState title={`Inga ${plural} än`}
               text={`Lägg till den första för att komma igång.`}
-              action={objectDef.can.create ? <button className="btn btn--brand btn--sm" onClick={() => setShowCreate(true)}><PlusIcon /> Ny {objectDef.labelSingular.toLowerCase()}</button> : undefined} />
+              action={objectDef.can.create && !picker ? <button className="btn btn--brand btn--sm" onClick={() => setShowCreate(true)}><PlusIcon /> Ny {objectDef.labelSingular.toLowerCase()}</button> : undefined} />
           ))}
           {items.length > 0 && (
             <div className={`rtable-scroll${loading ? " is-loading" : ""}`}>
@@ -597,6 +661,15 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
                       <input type="checkbox" aria-label="Markera alla på sidan" checked={pageAllSelected} onChange={togglePage} />
                     </th>
                   )}
+                  {picker && (() => {
+                    const alla = items.length > 0 && items.every((r) => picker.valda.has(r.id));
+                    return (
+                      <th className="rtable__select">
+                        <input type="checkbox" aria-label="Välj alla på sidan" checked={alla} disabled={!!picker.arbetar}
+                          onChange={() => void picker.onVal(alla ? items : items.filter((r) => !picker.valda.has(r.id)), !alla)} />
+                      </th>
+                    );
+                  })()}
                   {layout.map((cell) => {
                     if (cell.kind === "title") return (
                       <th key="__title">
@@ -648,10 +721,24 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
                 {items.map((r) => (
                   <tr
                     key={r.id}
-                    className={`rtable__row${isOverdue(r) ? " rtable__row--overdue" : ""}${selected.has(r.id) || allMatching ? " rtable__row--selected" : ""}`}
+                    className={`rtable__row${isOverdue(r) ? " rtable__row--overdue" : ""}${selected.has(r.id) || allMatching || picker?.valda.has(r.id) ? " rtable__row--selected" : ""}`}
                     {...returnRow(r.id)}
-                    onClick={() => openRow(r.id)}
+                    onClick={() => {
+                      if (picker) { if (!picker.arbetar) void picker.onVal([r], !picker.valda.has(r.id)); }
+                      else openRow(r.id);
+                    }}
                   >
+                    {picker && (
+                      <td className="rtable__select" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Välj ${r.title ?? "post"}`}
+                          checked={picker.valda.has(r.id)}
+                          disabled={!!picker.arbetar}
+                          onChange={() => void picker.onVal([r], !picker.valda.has(r.id))}
+                        />
+                      </td>
+                    )}
                     {canAssign && (
                       <td className="rtable__select" onClick={(e) => e.stopPropagation()}>
                         <input
@@ -682,7 +769,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
                       );
                     })}
                     <td className="rtable__actions">
-                      {objectDef.can.delete && (
+                      {objectDef.can.delete && !picker && (
                         <button className="btn btn--ghost btn--sm" onClick={(e) => onDelete(r.id, e)}>Ta bort</button>
                       )}
                     </td>
