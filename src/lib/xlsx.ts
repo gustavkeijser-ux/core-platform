@@ -108,15 +108,18 @@ export async function lasXlsx(fil: File, bladNamn?: string): Promise<Blad> {
   const wb = await las("xl/workbook.xml");
   const rels = await las("xl/_rels/workbook.xml.rels");
   const relMap: Record<string, string> = {};
-  for (const m of rels.matchAll(/<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g)) {
-    relMap[m[1]] = m[2];
+  // Attributens ordning varierar mellan program (Excel: Id först, andra: Target först).
+  for (const m of rels.matchAll(/<Relationship\b[^>]*>/g)) {
+    const id = (m[0].match(/\bId="([^"]+)"/) || [])[1];
+    const target = (m[0].match(/\bTarget="([^"]+)"/) || [])[1];
+    if (id && target) relMap[id] = target;
   }
   const blad: Array<{ namn: string; path: string }> = [];
-  for (const m of wb.matchAll(/<sheet[^>]*name="([^"]*)"[^>]*r:id="([^"]+)"/g)) {
-    blad.push({
-      namn: unesc(m[1]),
-      path: "xl/" + relMap[m[2]].replace(/^\/?(xl\/)?/, ""),
-    });
+  for (const m of wb.matchAll(/<sheet\b[^>]*>/g)) {
+    const namn = (m[0].match(/\bname="([^"]*)"/) || [])[1];
+    const rid = (m[0].match(/\br:id="([^"]+)"/) || [])[1];
+    if (namn == null || !rid || !relMap[rid]) continue;
+    blad.push({ namn: unesc(namn), path: "xl/" + relMap[rid].replace(/^\/?(xl\/)?/, "") });
   }
   if (blad.length === 0) throw new Error("Hittade inga blad i filen.");
 
@@ -132,13 +135,17 @@ export async function lasXlsx(fil: File, bladNamn?: string): Promise<Blad> {
   // Celler
   const xml = await las(valt.path);
   const rader: string[][] = [];
-  for (const rm of xml.matchAll(/<row[^>]*r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
+  // Tomma celler/rader kan vara självstängande (<c r="B2" s="3"/>) — de får
+  // inte svälja nästa cells värde.
+  for (const rm of xml.matchAll(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+    const radNr = (rm[1].match(/\br="(\d+)"/) || [])[1];
+    if (!radNr || !rm[2]) continue;
     const rad: string[] = [];
-    for (const cm of rm[2].matchAll(/<c([^>]*)>([\s\S]*?)<\/c>/g)) {
-      const attr = cm[1], kropp = cm[2];
-      const ref = (attr.match(/r="([A-Z]+\d+)"/) || [])[1];
+    for (const cm of rm[2].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      const attr = cm[1], kropp = cm[2] ?? "";
+      const ref = (attr.match(/\br="([A-Z]+\d+)"/) || [])[1];
       if (!ref) continue;
-      const t = (attr.match(/t="([^"]+)"/) || [])[1] || "n";
+      const t = (attr.match(/\bt="([^"]+)"/) || [])[1] || "n";
       const s = (attr.match(/ s="(\d+)"/) || [])[1];
       const v = (kropp.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
 
@@ -158,7 +165,7 @@ export async function lasXlsx(fil: File, bladNamn?: string): Promise<Blad> {
       }
       if (värde !== null && värde !== "") rad[kolumnIndex(ref)] = värde;
     }
-    rader[+rm[1] - 1] = rad;
+    rader[+radNr - 1] = rad;
   }
 
   return { namn: valt.namn, rader };
