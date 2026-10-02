@@ -4639,3 +4639,84 @@ kbd {
 .d2d-scrive__info { margin: 0; font-size: var(--text-xs); color: var(--hue-green); }
 .d2d-scrive__fel { margin: 0; font-size: var(--text-xs); color: var(--hue-red); overflow-wrap: anywhere; }
 @media (max-width: 640px) { .d2d-scrive__knappar > .btn:not(.btn--sm) { flex: 1 1 100%; } }
+
+/* ── FMO-check (lista för Telia/admin + flik på affären) ─────────────── */
+.fmo__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.fmo__verktyg { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.fmo__hjalp { margin: 0 0 var(--sp-4); color: var(--ink-muted); font-size: var(--text-sm); max-width: 70ch; }
+.fmo__info { margin-bottom: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius: 8px; font-size: var(--text-sm);
+  background: color-mix(in srgb, var(--hue-green) 12%, var(--surface)); color: var(--hue-green); }
+.fmo__sub { color: var(--ink-muted); font-size: var(--text-xs); }
+.fmo__adress { min-width: 120px; }
+.fmo__kommentar { min-width: 120px; width: 100%; }
+.fmo__status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; }
+.fmo__status--godkand { background: color-mix(in srgb, var(--hue-green) 14%, transparent); color: var(--hue-green); }
+.fmo__status--ej_godkand { background: color-mix(in srgb, var(--hue-red) 14%, transparent); color: var(--hue-red); }
+.fmo__knappar { display: flex; flex-direction: column; gap: var(--sp-1); align-items: stretch; }
+.fmo__tabell .fmo__sub { display: block; }
+.fmo__tabell td { white-space: nowrap; }
+.fmo__tabell td.rtable__title, .fmo__tabell td[data-label="Koncernmoder"] { white-space: normal; min-width: 140px; }
+.fmo__import { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; }
+.fmo__import .field-config__body { overflow: auto; }
+.fmo__importlista { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.fmo__importrad { display: grid; grid-template-columns: 64px 1fr auto; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-sm); border-top: 1px solid var(--border); }
+.fmo__importrad:first-child { border-top: none; }
+.fmo__importrad--fel { background: var(--warn-soft); color: var(--warn-ink); }
+.fmo__importnr { color: var(--ink-muted); }
+.fmo__importnamn { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .fmo__head { align-items: stretch; }
+  .fmo__verktyg > * { flex: 1 1 auto; }
+  .fmo__importrad { grid-template-columns: 1fr; gap: 2px; }
+  .fmo__knappar { width: 100%; flex-direction: row; }
+  .fmo__knappar .btn { flex: 1; }
+  .fmo__tabell .fmo__sub { display: inline; }
+  .fmo__tabell td { white-space: normal; }
+}
+
+/* Fristående skal för användare med bara rollen FMO (Telia). */
+.fmo-app { min-height: 100vh; background: var(--canvas); color: var(--ink); }
+.fmo-app__header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5); background: var(--surface); border-bottom: 1px solid var(--border); }
+.fmo-app__brand { font-weight: 700; font-size: var(--text-lg); }
+.fmo-app__brand span { color: var(--ink-muted); font-weight: 500; }
+.fmo-app__actions { display: flex; align-items: center; gap: var(--sp-2); }
+.fmo-app__main { padding: var(--sp-5); max-width: 1400px; margin: 0 auto; }
+@media (max-width: 640px) {
+  .fmo-app__header { padding: var(--sp-3) var(--sp-4); }
+  .fmo-app__main { padding: var(--sp-4); }
+}
+
+/* Flik på affären */
+.fmo-tab__summa { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-bottom: var(--sp-4); font-size: var(--text-sm); color: var(--ink-muted); }
+.fmo-tab__summa b { color: var(--ink); }
+.fmo-tab__dot::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.fmo-tab__dot--skickad::before { background: var(--hue-amber); }
+.fmo-tab__dot--godkand::before { background: var(--hue-green); }
+.fmo-tab__dot--ej::before { background: var(--hue-red); }
+.fmo-tab__knappar { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.fmo-tab__lista { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.fmo-tab__rad { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border); }
+.fmo-tab__rad:first-child { border-top: none; }
+.fmo-tab__rad--vald { background: color-mix(in srgb, var(--brand) 7%, var(--surface)); }
+.fmo-tab__val { display: flex; align-items: center; gap: var(--sp-3); flex: 1 1 220px; min-width: 0; cursor: pointer; }
+.fmo-tab__val input { width: 18px; height: 18px; flex: none; }
+.fmo-tab__namn { font-weight: 600; overflow-wrap: anywhere; }
+.fmo-tab__status { font-size: var(--text-sm); padding: 2px 10px; border-radius: 999px; background: var(--surface-alt); color: var(--ink-muted); }
+.fmo-tab__status--skickad { background: var(--warn-soft); color: var(--warn-ink); }
+.fmo-tab__status--godkand { background: color-mix(in srgb, var(--hue-green) 14%, transparent); color: var(--hue-green); }
+.fmo-tab__svar { display: flex; gap: var(--sp-2); }
+.fmo-tab__historik { margin-top: var(--sp-5); }
+.fmo-tab__historik h3 { font-size: var(--text-base); margin: 0 0 var(--sp-2); }
+.fmo-tab__historik ul { margin: 0; padding-left: var(--sp-5); font-size: var(--text-sm); color: var(--ink-muted); }
+.fmo-tab__historik b { color: var(--ink); }
+@media (max-width: 640px) {
+  .fmo-tab__knappar .btn { flex: 1 1 auto; }
+  .fmo-tab__svar { width: 100%; }
+  .fmo-tab__svar .btn { flex: 1; }
+}
+
+/* Leverans: saknas i projektplanen */
+.projektplan-varning { margin-bottom: var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--hue-amber) 40%, transparent); background: var(--warn-soft); color: var(--warn-ink); font-size: var(--text-sm); }
