@@ -5,6 +5,7 @@
 //   • "Avslutade"   → Leveranser med status 99. Avslutad (rader som också
 //                     finns i Projektplan hoppas över, där gäller Projektplan)
 //   • "FLIT-SDU"    → FLIT-SDU under Leveransprocess
+//   • "Adresser"    → telia_adresser (Telias lägenhetslista, underlag för D2D)
 //
 //  Körs:
 //   1. Av pg_cron varje timme (header x-cron-token, token i Vault).
@@ -30,6 +31,8 @@ const FIL = Deno.env.get("PROJEKTPLAN_FIL") ?? "CRM-Import/Projektplan/Projektpl
 const BLAD = "Projektplan";
 const BLAD_AVSLUTADE = ["Avslutade", "Avslutade projekt"];
 const BLAD_FLIT = ["FLIT-SDU"];
+const BLAD_ADRESSER = ["Adresser", "Utdrag app Leveransvolymer"];
+const OMGANG_ADRESSER = 1000;
 const OMGANG = 80;
 
 const CORS = {
@@ -77,13 +80,25 @@ async function lasValfrittBlad(buf: ArrayBuffer, namn: string[]) {
   return null;
 }
 
+/** Adressbladet: i Telias original ligger en rubrikrad ovanför kolumnrubrikerna. */
+async function lasAdresser(buf: ArrayBuffer) {
+  for (const n of BLAD_ADRESSER) {
+    try {
+      const b = await lasXlsx(buf, n);
+      const hi = b.rader.slice(0, 10).findIndex((r) => (r ?? []).some((v) => String(v ?? "").trim() === "Objektnummer"));
+      return hi < 0 ? [] : tillObjekt(b.rader, hi);
+    } catch (e) { if (!String((e as Error).message).includes("finns inte")) throw e; }
+  }
+  return null;
+}
+
 const radNyckel = (r: Record<string, string>) =>
   `${(r["Fastighetsbeteckning"] ?? "").trim().toUpperCase()}|${(r["Ort:"] ?? "").trim().toUpperCase()}`;
 
-async function importera(fn: string, rader: Record<string, string>[], namn: string): Promise<Summa> {
+async function importera(fn: string, rader: Record<string, string>[], namn: string, omgang = OMGANG): Promise<Summa> {
   const summa = tomSumma();
-  for (let i = 0; i < rader.length; i += OMGANG) {
-    const { data, error } = await db.rpc(fn, { p_rows: rader.slice(i, i + OMGANG), p_dry_run: false });
+  for (let i = 0; i < rader.length; i += omgang) {
+    const { data, error } = await db.rpc(fn, { p_rows: rader.slice(i, i + omgang), p_dry_run: false });
     if (error) throw new Error(`Importen av ${namn} avbröts vid rad ${i + 2}: ${error.message}`);
     for (const k of Object.keys(summa) as Array<keyof Summa>) summa[k] += Number((data as any)?.[k] ?? 0);
   }
@@ -138,11 +153,19 @@ Deno.serve(async (req) => {
     const avslutadeAlla = await lasValfrittBlad(buf, BLAD_AVSLUTADE);
     const avslutade = (avslutadeAlla ?? []).filter((r) => !aktiva.has(radNyckel(r)));
     const flit = await lasValfrittBlad(buf, BLAD_FLIT);
+    const adresser = await lasAdresser(buf);
 
     // 3. Importera i omgångar
     const pp = await importera("ingest_projektplan", rader, BLAD);
     const av = avslutade.length ? await importera("ingest_projektplan_avslutade", avslutade, "Avslutade") : tomSumma();
     const fl = flit?.length ? await importera("ingest_flit_sdu", flit, "FLIT-SDU") : tomSumma();
+    const ad = adresser?.length ? await importera("ingest_telia_adresser", adresser, "Adresser", OMGANG_ADRESSER) : tomSumma();
+    // Nya adresser till D2D-fastigheter som redan hämtat lägenheter från Telia.
+    let d2d: unknown = null;
+    if (adresser?.length) {
+      const { data, error } = await db.rpc("telia_adresser_efter_import");
+      d2d = error ? { fel: error.message } : data;
+    }
 
     // Toppnivån gäller leveranser (Projektplan + Avslutade), som tidigare.
     const summa = tomSumma();
@@ -151,8 +174,9 @@ Deno.serve(async (req) => {
       projektplan: { rader: rader.length, ...pp },
       avslutade: avslutadeAlla ? { rader: avslutade.length, iProjektplan: avslutadeAlla.length - avslutade.length, ...av } : null,
       flit_sdu: flit ? { rader: flit.length, ...fl } : null,
+      adresser: adresser ? { rader: adresser.length, ...ad, d2d } : null,
     };
-    const antal = rader.length + avslutade.length + (flit?.length ?? 0);
+    const antal = rader.length + avslutade.length + (flit?.length ?? 0) + (adresser?.length ?? 0);
 
     await logga({ kalla, status: "ok", fil_andrad: item.lastModifiedDateTime ?? null, ctag, rader: antal, resultat: { ...summa, blad: perBlad } });
     return json({ status: "ok", rader: antal, filAndrad: item.lastModifiedDateTime, ...summa, blad: perBlad });
