@@ -1397,7 +1397,7 @@ export function D2DProjectBuilder({ objectDefFor, onOpenRecord }: {
       : v.kind === "karta" ? ["d2dbuilder", "karta"] : ["d2dbuilder"]);
 
   return (
-    <div className="d2dpb">
+    <div className={`d2dpb${view.kind === "project" ? " d2dpb--bred" : ""}`}>
       {view.kind !== "project" && (
         <div className="d2dpb-toplevel-tabs">
           <button
