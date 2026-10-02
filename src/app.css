@@ -4806,3 +4806,19 @@ kbd {
 .d2d-bindning__sub { font-size: var(--text-sm); color: var(--ink-muted); font-weight: 600; }
 .d2d-bindning__manad { width: auto; min-width: 170px; }
 .d2d-ejmer { border-top: 1px dashed var(--border); padding-top: var(--sp-3); }
+
+/* D2D-utfall: utfällbara skäl med kommentarer */
+.utf-skal > summary { list-style: none; cursor: pointer; border-radius: 6px; }
+.utf-skal > summary::-webkit-details-marker { display: none; }
+.utf-skal > summary:hover .utf-bar__lbl { color: var(--brand); }
+.utf-skal > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.utf-skal__pil { display: inline-block; width: 1em; color: var(--ink-muted); transition: transform .15s; }
+.utf-skal[open] .utf-skal__pil { transform: rotate(90deg); }
+.utf-bar--dim .utf-bar__fill { background: color-mix(in srgb, var(--ink-faint) 60%, var(--surface)); }
+.utf-skal__lista { list-style: none; margin: var(--sp-2) 0 var(--sp-3); padding: 0 0 0 1em; display: grid; gap: var(--sp-2); }
+.utf-skal__lista li { padding: var(--sp-2) var(--sp-3); background: var(--surface-sunk); border-radius: 8px; font-size: var(--text-sm); min-width: 0; }
+.utf-skal__adress { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; text-align: left; }
+.utf-skal__adress:hover { color: var(--brand); text-decoration: underline; }
+.utf-skal__text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.utf-skal__text--tom { color: var(--ink-muted); font-style: italic; }
+@media (prefers-reduced-motion: reduce) { .utf-skal__pil { transition: none; } }
