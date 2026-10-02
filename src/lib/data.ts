@@ -53,6 +53,8 @@ export type FieldDef = {
     /** Datumfält som markeras som försenat i listan när det passerats
      *  (och ger snabbfiltren "Försenade" och "Utan datum"). */
     _overdue?: boolean;
+    /** D2D: fältet har egen panel i säljarvyn (visas inte som vanligt formulärfält). */
+    d2d_eget_ui?: boolean;
   };
   helpText: string | null;
   sortOrder: number;
