@@ -21,10 +21,35 @@ type UtanKund = {
 
 const BLAD = "Projektplan";
 
+/** Vilket blad det är avgör hur raderna läses in. */
+type BladTyp = "projektplan" | "avslutade" | "flit";
+const bladTyp = (namn: string): BladTyp =>
+  /^avslutade/i.test(namn.trim()) ? "avslutade" : /^flit/i.test(namn.trim()) ? "flit" : "projektplan";
+const RPC: Record<BladTyp, string> = {
+  projektplan: "import_projektplan",
+  avslutade: "import_projektplan_avslutade",
+  flit: "import_flit_sdu",
+};
+const radNyckel = (r: Record<string, string>) =>
+  `${(r["Fastighetsbeteckning"] ?? "").trim().toUpperCase()}|${(r["Ort:"] ?? "").trim().toUpperCase()}`;
+
+type BladSumma = { rader: number; nya: number; uppdaterade: number } | null;
+type PerBlad = { projektplan?: BladSumma; avslutade?: BladSumma; flit_sdu?: BladSumma };
 type AutoKorning = {
   tid: string; kalla: "auto" | "manuell"; status: "ok" | "oforandrad" | "fel";
-  fil_andrad: string | null; rader: number | null; resultat: Partial<Resultat> | null; fel: string | null;
+  fil_andrad: string | null; rader: number | null; resultat: (Partial<Resultat> & { blad?: PerBlad }) | null; fel: string | null;
 };
+
+/** "Projektplan 351 · Avslutade 170 · FLIT-SDU 8" */
+function bladText(b?: PerBlad): string {
+  if (!b) return "";
+  const delar = [
+    b.projektplan && `Projektplan ${b.projektplan.rader}`,
+    b.avslutade && `Avslutade ${b.avslutade.rader}`,
+    b.flit_sdu && `FLIT-SDU ${b.flit_sdu.rader}`,
+  ].filter(Boolean);
+  return delar.length ? ` (${delar.join(" · ")})` : "";
+}
 type AutoStatus = { senaste: AutoKorning[]; senastOk: AutoKorning | null; schema: string | null };
 
 const tidStr = (s: string | null) => s ? new Date(s).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" }) : "–";
@@ -44,9 +69,9 @@ function AutoImport() {
     setKor(true); setSvar(null);
     try {
       const { data, error } = await supabase.functions.invoke("projektplan-import", { body: { tvinga: true } });
-      const d = (data ?? {}) as { status?: string; fel?: string; rader?: number; nya?: number; uppdaterade?: number };
+      const d = (data ?? {}) as { status?: string; fel?: string; rader?: number; nya?: number; uppdaterade?: number; blad?: PerBlad };
       if (error && !d.status) throw error;
-      setSvar(d.status === "ok" ? `Klart: ${d.rader} rader, ${d.nya ?? 0} nya, ${d.uppdaterade ?? 0} uppdaterade.`
+      setSvar(d.status === "ok" ? `Klart: ${d.rader} rader${bladText(d.blad)}, ${d.nya ?? 0} nya leveranser, ${d.uppdaterade ?? 0} uppdaterade.`
         : d.fel ?? "Importen misslyckades.");
     } catch (e) {
       setSvar(e instanceof Error ? e.message : "Importen misslyckades.");
@@ -61,7 +86,7 @@ function AutoImport() {
         <div>
           <h2>Automatisk import</h2>
           <p className="imp__not">
-            <code>Projektplan CE.xlsx</code> på SharePoint läses in varje timme (20 över). Har filen inte ändrats händer ingenting.
+            <code>Projektplan CE.xlsx</code> på SharePoint läses in varje timme (20 över): bladen Projektplan, Avslutade och FLIT-SDU. Har filen inte ändrats händer ingenting.
           </p>
         </div>
         <button className="btn btn--brand btn--sm" onClick={() => void hamtaNu()} disabled={kor}>
@@ -82,7 +107,7 @@ function AutoImport() {
             {st.senaste.map((k, i) => (
               <li key={i} className={`imp__autologg--${k.status}`}>
                 {tidStr(k.tid)} · {k.kalla === "auto" ? "automatiskt" : "manuellt"} ·{" "}
-                {k.status === "ok" ? `${k.rader} rader, ${k.resultat?.nya ?? 0} nya, ${k.resultat?.uppdaterade ?? 0} uppdaterade`
+                {k.status === "ok" ? `${k.rader} rader${bladText(k.resultat?.blad)}, ${k.resultat?.nya ?? 0} nya, ${k.resultat?.uppdaterade ?? 0} uppdaterade`
                   : k.status === "oforandrad" ? "filen oförändrad" : `fel: ${k.fel}`}
               </li>
             ))}
@@ -97,6 +122,8 @@ export function ImportPage() {
   const [fil, setFil] = useState<File | null>(null);
   const [blad, setBlad] = useState<string[]>([]);
   const [valtBlad, setValtBlad] = useState(BLAD);
+  const [iProjektplan, setIProjektplan] = useState(0);
+  const typ = bladTyp(valtBlad);
   const [rader, setRader] = useState<Record<string, string>[] | null>(null);
   const [rubriker, setRubriker] = useState<string[]>([]);
   const [kanda, setKanda] = useState<Set<string>>(new Set());
@@ -109,7 +136,7 @@ export function ImportPage() {
 
   function nollstall() {
     setRader(null); setRubriker([]); setForhands(null); setResultat(null);
-    setUtanKund(null); setFel(null);
+    setUtanKund(null); setFel(null); setIProjektplan(0);
   }
 
   async function valjFil(e: React.ChangeEvent<HTMLInputElement>) {
@@ -135,17 +162,30 @@ export function ImportPage() {
     setArbetar("Läser bladet…");
     setFel(null);
     try {
+      const t = bladTyp(bladet);
       const b = await lasXlsx(f, bladet);
-      const objekt = tillObjekt(b.rader);
+      let objekt = tillObjekt(b.rader);
+      setIProjektplan(0);
+      // Står fastigheten kvar i Projektplan gäller den, inte Avslutade.
+      if (t === "avslutade") {
+        const alla = await bladnamn(f);
+        const pp = alla.find((n) => n.toLowerCase() === BLAD.toLowerCase());
+        if (pp) {
+          const aktiva = new Set(tillObjekt((await lasXlsx(f, pp)).rader).map(radNyckel));
+          const kvar = objekt.filter((r) => !aktiva.has(radNyckel(r)));
+          setIProjektplan(objekt.length - kvar.length);
+          objekt = kvar;
+        }
+      }
       setRader(objekt);
       setRubriker((b.rader[0] || []).map((h) => String(h ?? "").trim()).filter(Boolean));
 
       const { data } = await supabase.rpc("projektplan_kanda_rubriker");
-      const k = new Set<string>((data?.falt ?? []) as string[]);
-      k.add("Fastighetsbeteckning"); k.add("Ort:");
+      const k = new Set<string>(((t === "flit" ? data?.flit : data?.falt) ?? []) as string[]);
+      if (t !== "flit") { k.add("Fastighetsbeteckning"); k.add("Ort:"); }
       setKanda(k);
 
-      await kor(objekt, true);
+      await kor(objekt, true, t);
     } catch (err) {
       setFel(err instanceof Error ? err.message : "Kunde inte läsa bladet.");
       setRader(null);
@@ -155,7 +195,7 @@ export function ImportPage() {
   }
 
   /** Kör i omgångar så att en stor fil inte blir ett enda långt anrop. */
-  async function kor(objekt: Record<string, string>[], torrt: boolean) {
+  async function kor(objekt: Record<string, string>[], torrt: boolean, t: BladTyp = typ) {
     setArbetar(torrt ? "Räknar ut vad som skulle hända…" : "Läser in…");
     setFel(null);
     const summa: Resultat = {
@@ -164,7 +204,7 @@ export function ImportPage() {
     };
     try {
       for (let i = 0; i < objekt.length; i += 60) {
-        const { data, error } = await supabase.rpc("import_projektplan", {
+        const { data, error } = await supabase.rpc(RPC[t], {
           p_rows: objekt.slice(i, i + 60),
           p_dry_run: torrt,
         });
@@ -180,6 +220,7 @@ export function ImportPage() {
       if (torrt) setForhands(summa);
       else {
         setResultat(summa); setForhands(null);
+        if (t === "flit") return;
         // Vilka leveranser fick ingen kund? Det är den lista någon behöver gå igenom.
         const { data } = await supabase.rpc("leveranser_utan_kund");
         setUtanKund((data ?? []) as UtanKund[]);
@@ -201,10 +242,11 @@ export function ImportPage() {
       <div className="card imp__intro">
         <h2>Importera fil manuellt</h2>
         <p>
-          Ladda upp <code>Projektplan_ConnectEstate.xlsx</code> så läses bladet
-          <strong> {BLAD}</strong> in. Leveranser matchas på fastighetsbeteckning och ort —
-          befintliga uppdateras, nya skapas. Att köra om samma fil ändrar ingenting,
-          så du kan importera så ofta du vill.
+          Ladda upp <code>Projektplan CE.xlsx</code> och välj blad. <strong>{BLAD}</strong> och
+          <strong> Avslutade</strong> blir leveranser (Avslutade får status 99. Avslutad) och matchas
+          på fastighetsbeteckning och ort. <strong>FLIT-SDU</strong> läses in under Leveransprocess →
+          FLIT-SDU och matchas på GA1-nr. Befintliga uppdateras, nya skapas. Att köra om samma
+          fil ändrar ingenting, så du kan importera så ofta du vill.
         </p>
 
         <div className="imp__valj">
@@ -241,7 +283,7 @@ export function ImportPage() {
             </div>
             <div className="imp__ruta imp__ruta--ny">
               <span className="imp__n">{forhands?.nya ?? "–"}</span>
-              <span className="imp__l">Nya leveranser</span>
+              <span className="imp__l">{typ === "flit" ? "Nya FLIT-SDU" : "Nya leveranser"}</span>
             </div>
             <div className="imp__ruta">
               <span className="imp__n">{forhands?.uppdaterade ?? "–"}</span>
@@ -253,10 +295,19 @@ export function ImportPage() {
             </div>
           </div>
 
+          {typ === "avslutade" && (
+            <p className="imp__not">
+              Alla rader i bladet får status <strong>99. Avslutad</strong>
+              {iProjektplan > 0 && <> — {iProjektplan} fastigheter finns också i bladet {BLAD} och
+              hoppas över, där gäller Projektplan</>}.
+            </p>
+          )}
+
           {forhands && forhands.hoppade > 0 && (
             <p className="imp__not">
-              {forhands.hoppade} rader saknar fastighetsbeteckning och hoppas över —
-              utan den går de inte att matcha.
+              {typ === "flit"
+                ? `${forhands.hoppade} rader saknar både GA1-nr, CS-nr, A-/KO-nr och fastighetsbeteckning och hoppas över.`
+                : `${forhands.hoppade} rader saknar fastighetsbeteckning och hoppas över — utan den går de inte att matcha.`}
             </p>
           )}
 
@@ -295,7 +346,7 @@ export function ImportPage() {
         <div className="card imp__klart">
           <h3>Klart</h3>
           <p>
-            {resultat.nya} nya leveranser, {resultat.uppdaterade} uppdaterade
+            {resultat.nya} {typ === "flit" ? "nya FLIT-SDU" : "nya leveranser"}, {resultat.uppdaterade} uppdaterade
             {resultat.statusbyten ? `, varav ${resultat.statusbyten} bytte status` : ""}.
             {resultat.hoppade > 0 && ` ${resultat.hoppade} rader hoppades över.`}
             {resultat.kopplade_kunder
@@ -303,7 +354,7 @@ export function ImportPage() {
               : ""}
           </p>
           <p className="imp__not">
-            Öppna Leveranser för att se dem. Listan uppdaterar sig själv, så har du
+            Öppna {typ === "flit" ? "FLIT-SDU" : "Leveranser"} för att se dem. Listan uppdaterar sig själv, så har du
             den öppen i en annan flik har den redan hunnit ikapp.
           </p>
         </div>
