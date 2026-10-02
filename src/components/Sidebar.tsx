@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { ObjectDef, TenantBranding } from "@/lib/data";
 import { useUserName } from "@/lib/users";
 import { AiMascot } from "./AiAssistant";
@@ -56,7 +56,7 @@ const MENU_GROUPS: MenuGroup[] = [
       </svg>
     ),
     keys: [
-      "forvaltningsbolag", "koncernmoder", "direktagt_bolag", "property", "deal", "uppstartsmote",
+      "forvaltningsbolag", "koncernmoder", "direktagt_bolag", "property", "deal", "__fmo__", "uppstartsmote", "hyresforhandling",
       // Ej i huvudflödet men nåbara här:
       "customer", "contact", "agreement",
     ],
@@ -365,14 +365,25 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                   )}
 
                   {groupObjects.map((o) => (
-                    <button
-                      key={o.key}
-                      className="sidebar__item sidebar__item--child"
-                      aria-current={o.key === activeKey}
-                      onClick={() => selectAndClose(o.key)}
-                    >
-                      {o.labelPlural}
-                    </button>
+                    <Fragment key={o.key}>
+                      <button
+                        className="sidebar__item sidebar__item--child"
+                        aria-current={o.key === activeKey}
+                        onClick={() => selectAndClose(o.key)}
+                      >
+                        {o.labelPlural}
+                      </button>
+                      {/* FMO-check direkt under Affärer (administratörer) */}
+                      {o.key === "deal" && isAdmin && (
+                        <button
+                          className="sidebar__item sidebar__item--child"
+                          aria-current={activeKey === "__fmo__"}
+                          onClick={() => selectAndClose("__fmo__")}
+                        >
+                          FMO-check
+                        </button>
+                      )}
+                    </Fragment>
                   ))}
                 </div>
               )}
