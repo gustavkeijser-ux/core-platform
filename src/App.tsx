@@ -375,7 +375,7 @@ export default function App() {
 
         {view?.kind === "import" && <ImportPage />}
 
-        {view?.kind === "d2dbuilder" && <D2DProjectBuilder />}
+        {view?.kind === "d2dbuilder" && <D2DProjectBuilder objectDefFor={objectDefFor} onOpenRecord={openRecord} />}
         {view?.kind === "d2dutfall" && <D2DUtfallPage onOpenRecord={openRecord} />}
 
         {view?.kind === "nummerbyten" && <NummerbytenPage />}
