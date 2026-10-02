@@ -150,6 +150,8 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   // ── Ägarfält + uppföljningsdatum (styrs av fältoptioner, t.ex. Affärer:
   // Säljare = owner_field, Nästa steg datum = _overdue).
   const ownerField = objectDef.fields.find((f) => f.fieldType === "user" && f.options.owner_field);
+  // Koncernmoder: ledningen delar ut till säljare → affär skapas automatiskt.
+  const isKm = objectDef.key === "koncernmoder";
   const dueField = objectDef.fields.find((f) => (f.fieldType === "date" || f.fieldType === "datetime") && f.options._overdue);
   const terminalStatuses = useMemo(
     () => new Set(objectDef.statuses.filter((s) => s.isTerminal).map((s) => s.key)),
@@ -250,7 +252,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       setAssignOpen(false); setAssignUsers([]); setSelected(new Set()); setAllMatching(false);
       await load();
       onDataChanged?.();
-      alert(`${n} ${n === 1 ? objectDef.labelSingular.toLowerCase() : objectDef.labelPlural.toLowerCase()} ${assignUsers.length > 1 ? "fördelade" : "tilldelade"}.`);
+      alert(`${n} ${n === 1 ? objectDef.labelSingular.toLowerCase() : objectDef.labelPlural.toLowerCase()} ${assignUsers.length > 1 ? "fördelade" : "tilldelade"}.${isKm ? " Affärer med fastigheterna är skapade hos säljarna." : ""}`);
     } catch (e) {
       alert(e instanceof DataError ? e.message : "Kunde inte tilldela.");
     } finally {
@@ -499,7 +501,8 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       {canAssign && selectedCount === 0 && mode === "list" && items.length > 0 && (
         <label className="bulk-hint">
           <input type="checkbox" checked={false} onChange={togglePage} />
-          Markera {plural} för att byta {ownerField!.label.toLowerCase()} på flera samtidigt
+          {isKm ? `Markera ${plural} för att dela ut dem till säljare`
+            : `Markera ${plural} för att byta ${ownerField!.label.toLowerCase()} på flera samtidigt`}
         </label>
       )}
 
@@ -514,7 +517,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
             )}
           </span>
           <button className="btn btn--brand btn--sm" onClick={() => setAssignOpen((o) => !o)}>
-            Byt {ownerField!.label.toLowerCase()}
+            {isKm ? "Dela ut till säljare" : `Byt ${ownerField!.label.toLowerCase()}`}
           </button>
           <button className="btn btn--ghost btn--sm" onClick={() => { setSelected(new Set()); setAllMatching(false); }}>
             Avmarkera
@@ -523,6 +526,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
             <div className="bulk-bar__assign">
               <p className="formfield__help" style={{ margin: 0 }}>
                 Välj en {ownerField!.label.toLowerCase()} för att ge hen alla, eller flera för att fördela jämnt.
+                {isKm && " Varje koncernmoder hamnar i Affärer hos säljaren, tillsammans med sina fastigheter."}
               </p>
               <div className="chips">
                 {users.map((u) => (
