@@ -25,8 +25,8 @@ const STATUS: Record<string, string> = {
   sald: "Såld", aterkoppling: "Återkoppling", inte_intresserad: "Inte intresserad", ovrigt: "Övrigt", inte_hemma: "Inte hemma",
 };
 const KATEGORI: Array<[string, string]> = [
-  ["tv", "TV"], ["mobil", "Mobil"], ["streaming_film", "Streaming film och serier"], ["streaming_sport", "Sportpaket"],
-  ["tvbox", "TV-box"], ["router", "Extra router"], ["trygghet", "Trygghetspaket"],
+  ["bredband", "Bredband"], ["tv", "TV"], ["mobil_huvud", "Mobil – huvudabonnemang"], ["mobil_extra", "Mobil – extra användare"],
+  ["streaming_film", "Streaming film och serier"], ["streaming_sport", "Sportpaket"], ["trygghet", "Trygghetspaket"],
 ];
 const EJ_MER: Record<string, string> = {
   tittar_lite: "Tittar lite på TV/streaming", mobil_bunden: "Mobilen är bunden", har_telia: "Har redan Telia",
@@ -188,8 +188,11 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
           <h2>Sålda kunder</h2>
           <div className="utf__two">
             <div>
-              <h3>Sålt utöver bredband</h3>
-              <Staplar rader={KATEGORI.map(([k, l]) => [l, u.sald.kategorier[k] ?? 0])} tom="Inget sålt utöver bredband." />
+              <h3>Sålda tjänster</h3>
+              <Staplar rader={KATEGORI.map(([k, l]) => [l, u.sald.kategorier[k] ?? 0])} tom="Inga tjänster ifyllda." />
+              {(u.sald.kategorier.bredbandUtanUppgift ?? 0) > 0 && (
+                <p className="formfield__help">{u.sald.kategorier.bredbandUtanUppgift} äldre affärer saknar ifyllda tjänster och räknas som bredband.</p>
+              )}
             </div>
             <div>
               <h3>Varför {baraBredband} bara tog bredband</h3>
