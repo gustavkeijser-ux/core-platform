@@ -1,7 +1,10 @@
 // =====================================================================
 //  PROJEKTPLAN-IMPORT — läser Projektplan CE.xlsx från SharePoint och
-//  importerar bladet "Projektplan" till Leveranser (samma tolkning som
-//  manuell import under Import).
+//  importerar (samma tolkning som manuell import under Import):
+//   • "Projektplan" → Leveranser
+//   • "Avslutade"   → Leveranser med status 99. Avslutad (rader som också
+//                     finns i Projektplan hoppas över, där gäller Projektplan)
+//   • "FLIT-SDU"    → FLIT-SDU under Leveransprocess
 //
 //  Körs:
 //   1. Av pg_cron varje timme (header x-cron-token, token i Vault).
@@ -25,6 +28,8 @@ const HOST = Deno.env.get("PROJEKTPLAN_HOST") ?? "connectestate24.sharepoint.com
 const SITE = Deno.env.get("PROJEKTPLAN_SITE") ?? "/sites/ConnectEstateTelia";
 const FIL = Deno.env.get("PROJEKTPLAN_FIL") ?? "CRM-Import/Projektplan/Projektplan CE.xlsx";
 const BLAD = "Projektplan";
+const BLAD_AVSLUTADE = ["Avslutade", "Avslutade projekt"];
+const BLAD_FLIT = ["FLIT-SDU"];
 const OMGANG = 80;
 
 const CORS = {
@@ -58,6 +63,31 @@ async function logga(l: Logg) {
   await db.from("projektplan_import").insert(l);
   // Behåll en månads historik.
   await db.from("projektplan_import").delete().lt("tid", new Date(Date.now() - 31 * 86400_000).toISOString());
+}
+
+type Summa = { nya: number; uppdaterade: number; hoppade: number; slangda_varden: number; statusbyten: number; kopplade_kunder: number };
+const tomSumma = (): Summa => ({ nya: 0, uppdaterade: 0, hoppade: 0, slangda_varden: 0, statusbyten: 0, kopplade_kunder: 0 });
+
+/** Läser första bladet som finns av de angivna namnen, annars null. */
+async function lasValfrittBlad(buf: ArrayBuffer, namn: string[]) {
+  for (const n of namn) {
+    try { return tillObjekt((await lasXlsx(buf, n)).rader); }
+    catch (e) { if (!String((e as Error).message).includes("finns inte")) throw e; }
+  }
+  return null;
+}
+
+const radNyckel = (r: Record<string, string>) =>
+  `${(r["Fastighetsbeteckning"] ?? "").trim().toUpperCase()}|${(r["Ort:"] ?? "").trim().toUpperCase()}`;
+
+async function importera(fn: string, rader: Record<string, string>[], namn: string): Promise<Summa> {
+  const summa = tomSumma();
+  for (let i = 0; i < rader.length; i += OMGANG) {
+    const { data, error } = await db.rpc(fn, { p_rows: rader.slice(i, i + OMGANG), p_dry_run: false });
+    if (error) throw new Error(`Importen av ${namn} avbröts vid rad ${i + 2}: ${error.message}`);
+    for (const k of Object.keys(summa) as Array<keyof Summa>) summa[k] += Number((data as any)?.[k] ?? 0);
+  }
+  return summa;
 }
 
 Deno.serve(async (req) => {
@@ -103,16 +133,29 @@ Deno.serve(async (req) => {
       throw new Error(`Bladet ${BLAD} ser fel ut: ${rader.length} rader, ${medBet} med fastighetsbeteckning. Ingen import gjord.`);
     }
 
-    // 3. Importera i omgångar
-    const summa = { nya: 0, uppdaterade: 0, hoppade: 0, slangda_varden: 0, statusbyten: 0, kopplade_kunder: 0 };
-    for (let i = 0; i < rader.length; i += OMGANG) {
-      const { data, error } = await db.rpc("ingest_projektplan", { p_rows: rader.slice(i, i + OMGANG), p_dry_run: false });
-      if (error) throw new Error(`Importen avbröts vid rad ${i + 2}: ${error.message}`);
-      for (const k of Object.keys(summa) as Array<keyof typeof summa>) summa[k] += Number((data as any)?.[k] ?? 0);
-    }
+    // Avslutade och FLIT-SDU är valfria blad — saknas de läses bara Projektplan.
+    const aktiva = new Set(rader.map(radNyckel));
+    const avslutadeAlla = await lasValfrittBlad(buf, BLAD_AVSLUTADE);
+    const avslutade = (avslutadeAlla ?? []).filter((r) => !aktiva.has(radNyckel(r)));
+    const flit = await lasValfrittBlad(buf, BLAD_FLIT);
 
-    await logga({ kalla, status: "ok", fil_andrad: item.lastModifiedDateTime ?? null, ctag, rader: rader.length, resultat: summa });
-    return json({ status: "ok", rader: rader.length, filAndrad: item.lastModifiedDateTime, ...summa });
+    // 3. Importera i omgångar
+    const pp = await importera("ingest_projektplan", rader, BLAD);
+    const av = avslutade.length ? await importera("ingest_projektplan_avslutade", avslutade, "Avslutade") : tomSumma();
+    const fl = flit?.length ? await importera("ingest_flit_sdu", flit, "FLIT-SDU") : tomSumma();
+
+    // Toppnivån gäller leveranser (Projektplan + Avslutade), som tidigare.
+    const summa = tomSumma();
+    for (const k of Object.keys(summa) as Array<keyof Summa>) summa[k] = pp[k] + av[k];
+    const perBlad = {
+      projektplan: { rader: rader.length, ...pp },
+      avslutade: avslutadeAlla ? { rader: avslutade.length, iProjektplan: avslutadeAlla.length - avslutade.length, ...av } : null,
+      flit_sdu: flit ? { rader: flit.length, ...fl } : null,
+    };
+    const antal = rader.length + avslutade.length + (flit?.length ?? 0);
+
+    await logga({ kalla, status: "ok", fil_andrad: item.lastModifiedDateTime ?? null, ctag, rader: antal, resultat: { ...summa, blad: perBlad } });
+    return json({ status: "ok", rader: antal, filAndrad: item.lastModifiedDateTime, ...summa, blad: perBlad });
   } catch (e) {
     let fel = (e as Error).message ?? String(e);
     if (e instanceof GraphError && e.status === 403) {
