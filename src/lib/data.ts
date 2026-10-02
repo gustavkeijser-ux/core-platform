@@ -824,6 +824,18 @@ export async function d2dImportAddresses(
   return data as { imported: number };
 }
 
+/**
+ * Skapar D2D-lägenheter från Telias adresslista (bladet Adresser i
+ * Projektplan CE.xlsx). Lägenheter som redan finns dubbleras inte.
+ */
+export async function d2dHamtaTeliaLagenheter(
+  fastighetId: string
+): Promise<{ skapade: number; i_telias_lista: number }> {
+  const { data, error } = await supabase.rpc("d2d_hamta_telia_lagenheter", { p_fastighet_id: fastighetId });
+  if (error) asError(error);
+  return data as { skapade: number; i_telias_lista: number };
+}
+
 /** Sätter procentuell säljartilldelning för en fastighet (måste summera till 100). */
 export async function d2dSetAssignment(
   fastighetId: string, assignments: Array<{ user_id: string; procent: number }>
@@ -1032,5 +1044,8 @@ export async function d2dSkapaFastighetFranLeverans(
   if (propertyRel) {
     await addRelation(row.id, "d2d_fast_property", propertyRel.record.id);
   }
+  // Lägenheterna hämtas direkt från Telias adresslista. Misslyckas det
+  // (t.ex. fastigheten saknas i listan) går det att göra senare med knappen.
+  try { await d2dHamtaTeliaLagenheter(row.id); } catch { /* knappen finns kvar */ }
   return row;
 }
