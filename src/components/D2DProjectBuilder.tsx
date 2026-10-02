@@ -8,8 +8,9 @@ import {
   d2dDeleteProjekt,
   d2dGetKartaData, d2dGeokodaNu, type KartaPunkt,
   d2dGetLeveransKartaData, d2dSkapaFastighetFranLeverans, type LeveransPunkt,
-  type RecordRow, type SellerOption, DataError,
+  type RecordRow, type SellerOption, type ObjectDef, DataError,
 } from "@/lib/data";
+import { ObjectListPage } from "./ObjectListPage";
 import { lasXlsx, tillObjekt } from "@/lib/xlsx";
 import { StatusPill } from "./StatusPill";
 
@@ -44,7 +45,7 @@ function loadLeaflet(): Promise<void> {
   return leafletLoading;
 }
 
-function KartaSection({ projektId, totalFastigheter }: { projektId: string; totalFastigheter: number }) {
+function KartaSection({ projektId, totalFastigheter, reloadKey = 0 }: { projektId: string; totalFastigheter: number; reloadKey?: number }) {
   const mapElRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<unknown>(null);
   const [punkter, setPunkter] = useState<KartaPunkt[] | null>(null);
@@ -61,7 +62,7 @@ function KartaSection({ projektId, totalFastigheter }: { projektId: string; tota
     }
   }, [projektId]);
 
-  useEffect(() => { ladda(); }, [ladda]);
+  useEffect(() => { ladda(); }, [ladda, reloadKey, totalFastigheter]);
 
   useEffect(() => {
     if (!punkter || punkter.length === 0) return;
@@ -1028,7 +1029,15 @@ function AddFastighetPicker({ projektId, turordningStart, onAdded }: {
 // Projektdetalj
 // =============================================================================
 
-function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () => void }) {
+/** Kolumnerna i leveranslistan när man väljer fastigheter till ett projekt. */
+const PROJEKT_KOLUMNER = [
+  "bolagsnamn", "fastighetsagare", "fastighetsbeteckning", "adress", "postnummer", "ort", "lagenheter",
+  "befintlig_fiberleverantor", "avtalstid_ko", "kanalpaket_projektplan", "migrering", "projektplan_status", "kundklar",
+];
+
+function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
+  projektId: string; onBack: () => void; deliveryDef?: ObjectDef; onOpenRecord?: (id: string) => void;
+}) {
   const [project, setProject] = useState<RecordRow | null>(null);
   const [fastigheter, setFastigheter] = useState<FastRow[]>([]);
   const [sellers, setSellers] = useState<SellerOption[]>([]);
@@ -1038,6 +1047,11 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
   const [approveErr, setApproveErr] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  // Leverans → projektets d2d_fastighet (valet i leveranslistan).
+  const [levTillFast, setLevTillFast] = useState<Map<string, string>>(new Map());
+  const [valArbetar, setValArbetar] = useState<string | null>(null);
+  const [valFel, setValFel] = useState<string | null>(null);
+  const [kartaKey, setKartaKey] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1050,7 +1064,15 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
         .filter((r) => r.record.objectType === "d2d_fastighet")
         .map((r) => r.record.id);
 
-      if (fastIds.length === 0) { setFastigheter([]); return; }
+      if (fastIds.length === 0) { setFastigheter([]); setLevTillFast(new Map()); return; }
+
+      const { data: levRels } = await supabase
+        .from("relationships")
+        .select("from_record_id,to_record_id")
+        .eq("rel_type", "d2d_fast_delivery")
+        .in("from_record_id", fastIds);
+      setLevTillFast(new Map(((levRels ?? []) as Array<{ from_record_id: string; to_record_id: string }>)
+        .map((r) => [r.to_record_id, r.from_record_id])));
 
       const { data: fastData } = await supabase
         .from("records")
@@ -1091,6 +1113,62 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
     load();
   }
 
+  /** Bocka i/ur leveranser i projektet. */
+  async function valjLeveranser(rader: RecordRow[], valj: boolean) {
+    setValFel(null);
+    if (valj) {
+      const nya = rader.filter((r) => !levTillFast.has(r.id));
+      if (nya.length === 0) return;
+      try {
+        // Fastighetsposter som tidigare plockats ur ett projekt återanvänds,
+        // så lägenheter och tilldelning följer med om man ångrar sig.
+        const { data: gamla } = await supabase.from("relationships").select("from_record_id,to_record_id")
+          .eq("rel_type", "d2d_fast_delivery").in("to_record_id", nya.map((r) => r.id));
+        const kand = ((gamla ?? []) as Array<{ from_record_id: string; to_record_id: string }>);
+        const { data: iProjekt } = kand.length
+          ? await supabase.from("relationships").select("from_record_id")
+            .eq("rel_type", "d2d_fast_projekt").in("from_record_id", kand.map((k) => k.from_record_id))
+          : { data: [] };
+        const upptagna = new Set(((iProjekt ?? []) as Array<{ from_record_id: string }>).map((x) => x.from_record_id));
+        const ledig = new Map<string, string>();
+        for (const k of kand) if (!upptagna.has(k.from_record_id) && !ledig.has(k.to_record_id)) ledig.set(k.to_record_id, k.from_record_id);
+
+        let tur = fastigheter.length + 1;
+        for (let i = 0; i < nya.length; i++) {
+          setValArbetar(`Lägger till ${i + 1} av ${nya.length}…`);
+          const fastId = ledig.get(nya[i].id);
+          if (fastId) await addRelation(fastId, "d2d_fast_projekt", projektId);
+          else await d2dSkapaFastighetFranLeverans(nya[i].id, projektId, tur++);
+        }
+        setValArbetar("Geokodar…");
+        await d2dGeokodaNu().catch(() => null);
+      } catch (e) {
+        setValFel(e instanceof DataError ? e.message : "Kunde inte lägga till alla fastigheter.");
+      } finally {
+        setValArbetar(null);
+        await load();
+        setKartaKey((k) => k + 1);
+      }
+    } else {
+      const bort = rader.map((r) => levTillFast.get(r.id)).filter((x): x is string => !!x);
+      if (bort.length === 0) return;
+      const medAdresser = fastigheter.filter((f) => bort.includes(f.id) && f._addrCount > 0).length;
+      if (medAdresser > 0 && !confirm(`${medAdresser} av fastigheterna har redan adresser. Ta ändå bort ${bort.length === 1 ? "den" : "dem"} ur projektet? Adresserna ligger kvar.`)) return;
+      try {
+        for (let i = 0; i < bort.length; i++) {
+          setValArbetar(`Tar bort ${i + 1} av ${bort.length}…`);
+          await removeRelation(bort[i], "d2d_fast_projekt", projektId);
+        }
+      } catch (e) {
+        setValFel(e instanceof DataError ? e.message : "Kunde inte ta bort alla fastigheter.");
+      } finally {
+        setValArbetar(null);
+        await load();
+        setKartaKey((k) => k + 1);
+      }
+    }
+  }
+
   async function approve() {
     setApproving(true); setApproveMsg(null); setApproveErr(null);
     try {
@@ -1126,7 +1204,9 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
     }
   }
 
-  if (loading) return <div className="d2d-loading">Laddar projekt…</div>;
+  const valda = new Set(levTillFast.keys());
+
+  if (loading && !project) return <div className="d2d-loading">Laddar projekt…</div>;
   if (!project) return <div className="d2d-empty">Projektet hittades inte.</div>;
 
   const data = project.data as Record<string, unknown>;
@@ -1153,7 +1233,7 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
           <h3>Fastigheter ({fastigheter.length})</h3>
         </div>
         {fastigheter.length === 0 && (
-          <div className="d2d-empty">Inga fastigheter tillagda ännu. Sök upp en leverans nedan för att lägga till en.</div>
+          <div className="d2d-empty">Inga fastigheter tillagda ännu. Bocka i leveranser i listan nedan.</div>
         )}
         {fastigheter.map((f) => (
           <FastighetRow
@@ -1164,11 +1244,13 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
             onRemove={() => removeFastighet(f.id)}
           />
         ))}
-        <AddFastighetPicker
-          projektId={projektId}
-          turordningStart={fastigheter.length + 1}
-          onAdded={load}
-        />
+        {!deliveryDef && (
+          <AddFastighetPicker
+            projektId={projektId}
+            turordningStart={fastigheter.length + 1}
+            onAdded={load}
+          />
+        )}
         <ExcelImportPanel
           projektId={projektId}
           fastigheter={fastigheter}
@@ -1176,7 +1258,27 @@ function ProjectDetail({ projektId, onBack }: { projektId: string; onBack: () =>
         />
       </div>
 
-      <KartaSection projektId={projektId} totalFastigheter={fastigheter.length} />
+      {deliveryDef && (
+        <div className="d2dpb-detail__section d2dpb-leveranser">
+          <div className="d2dpb-detail__section-header">
+            <h3>Välj fastigheter från leveranslistan</h3>
+          </div>
+          <p className="ink-faint">
+            Filtrera som i Leveranser och bocka i de fastigheter som ska ingå i projektet. De läggs till direkt och
+            geokodas, så de syns på kartan nedan.
+          </p>
+          {valFel && <div className="d2d-error">{valFel}</div>}
+          <ObjectListPage
+            objectDef={deliveryDef}
+            onOpenRecord={onOpenRecord ?? (() => {})}
+            stateKeySuffix=":d2dprojekt"
+            fastaKolumner={PROJEKT_KOLUMNER}
+            picker={{ valda, onVal: valjLeveranser, arbetar: valArbetar, etikett: "i projektet" }}
+          />
+        </div>
+      )}
+
+      <KartaSection projektId={projektId} totalFastigheter={fastigheter.length} reloadKey={kartaKey} />
 
       <div className="d2dpb-detail__approve">
         <button className="btn btn--brand" onClick={approve} disabled={approving || fastigheter.length === 0}>
@@ -1279,7 +1381,9 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
 // Huvudkomponent
 // =============================================================================
 
-export function D2DProjectBuilder() {
+export function D2DProjectBuilder({ objectDefFor, onOpenRecord }: {
+  objectDefFor?: (key: string) => ObjectDef | undefined; onOpenRecord?: (id: string) => void;
+} = {}) {
   // Vyn ligger i URL:en (#/d2dbuilder, …/karta, …/projekt/<id>) så en
   // omladdning stannar kvar i samma projekt.
   const route = useRoute();
@@ -1313,7 +1417,8 @@ export function D2DProjectBuilder() {
       {view.kind === "list" && <ProjectList onOpen={(id) => setView({ kind: "project", id })} />}
       {view.kind === "karta" && <LeveransKarta />}
       {view.kind === "project" && (
-        <ProjectDetail projektId={view.id} onBack={() => goBack(() => setView({ kind: "list" }))} />
+        <ProjectDetail projektId={view.id} onBack={() => goBack(() => setView({ kind: "list" }))}
+          deliveryDef={objectDefFor?.("delivery")} onOpenRecord={onOpenRecord} />
       )}
     </div>
   );
