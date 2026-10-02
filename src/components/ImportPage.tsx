@@ -22,19 +22,29 @@ type UtanKund = {
 const BLAD = "Projektplan";
 
 /** Vilket blad det är avgör hur raderna läses in. */
-type BladTyp = "projektplan" | "avslutade" | "flit";
+type BladTyp = "projektplan" | "avslutade" | "flit" | "adresser";
 const bladTyp = (namn: string): BladTyp =>
-  /^avslutade/i.test(namn.trim()) ? "avslutade" : /^flit/i.test(namn.trim()) ? "flit" : "projektplan";
+  /^avslutade/i.test(namn.trim()) ? "avslutade" : /^flit/i.test(namn.trim()) ? "flit"
+    : /^adresser|leveransvolym/i.test(namn.trim()) ? "adresser" : "projektplan";
 const RPC: Record<BladTyp, string> = {
   projektplan: "import_projektplan",
   avslutade: "import_projektplan_avslutade",
   flit: "import_flit_sdu",
+  adresser: "import_telia_adresser",
 };
+const NYA: Record<BladTyp, string> = {
+  projektplan: "nya leveranser", avslutade: "nya leveranser", flit: "nya FLIT-SDU", adresser: "nya adresser",
+};
+/** Kolumner som adressimporten använder (Telias lägenhetslista). */
+const ADRESS_KOLUMNER = ["Objektnummer", "Punkt ID", "Status", "Gata", "Gatunummer", "Lägenhetsnummer", "Ingång",
+  "Postnummer", "Stad", "Kommun", "Fastighetsbeteckning", "Fastighetsbeteckning enhetlig", "Byggnadskategori",
+  "Kommunikationsoperatör", "Nätägare", "Avtalsnummer", "CPE-modell", "CPE-status", "Har Telia Bredband",
+  "Är flyttad till Avslutade projekt"];
 const radNyckel = (r: Record<string, string>) =>
   `${(r["Fastighetsbeteckning"] ?? "").trim().toUpperCase()}|${(r["Ort:"] ?? "").trim().toUpperCase()}`;
 
 type BladSumma = { rader: number; nya: number; uppdaterade: number } | null;
-type PerBlad = { projektplan?: BladSumma; avslutade?: BladSumma; flit_sdu?: BladSumma };
+type PerBlad = { projektplan?: BladSumma; avslutade?: BladSumma; flit_sdu?: BladSumma; adresser?: BladSumma };
 type AutoKorning = {
   tid: string; kalla: "auto" | "manuell"; status: "ok" | "oforandrad" | "fel";
   fil_andrad: string | null; rader: number | null; resultat: (Partial<Resultat> & { blad?: PerBlad }) | null; fel: string | null;
@@ -47,6 +57,7 @@ function bladText(b?: PerBlad): string {
     b.projektplan && `Projektplan ${b.projektplan.rader}`,
     b.avslutade && `Avslutade ${b.avslutade.rader}`,
     b.flit_sdu && `FLIT-SDU ${b.flit_sdu.rader}`,
+    b.adresser && `Adresser ${b.adresser.rader}`,
   ].filter(Boolean);
   return delar.length ? ` (${delar.join(" · ")})` : "";
 }
@@ -86,7 +97,7 @@ function AutoImport() {
         <div>
           <h2>Automatisk import</h2>
           <p className="imp__not">
-            <code>Projektplan CE.xlsx</code> på SharePoint läses in varje timme (20 över): bladen Projektplan, Avslutade och FLIT-SDU. Har filen inte ändrats händer ingenting.
+            <code>Projektplan CE.xlsx</code> på SharePoint läses in varje timme (20 över): bladen Projektplan, Avslutade, FLIT-SDU och Adresser. Har filen inte ändrats händer ingenting.
           </p>
         </div>
         <button className="btn btn--brand btn--sm" onClick={() => void hamtaNu()} disabled={kor}>
@@ -164,7 +175,11 @@ export function ImportPage() {
     try {
       const t = bladTyp(bladet);
       const b = await lasXlsx(f, bladet);
-      let objekt = tillObjekt(b.rader);
+      // I Telias original ligger en rubrikrad ovanför adressbladets kolumnrubriker.
+      const hi = t === "adresser"
+        ? Math.max(0, b.rader.slice(0, 10).findIndex((r) => (r ?? []).some((v) => String(v ?? "").trim() === "Objektnummer")))
+        : 0;
+      let objekt = tillObjekt(b.rader, hi);
       setIProjektplan(0);
       // Står fastigheten kvar i Projektplan gäller den, inte Avslutade.
       if (t === "avslutade") {
@@ -178,11 +193,12 @@ export function ImportPage() {
         }
       }
       setRader(objekt);
-      setRubriker((b.rader[0] || []).map((h) => String(h ?? "").trim()).filter(Boolean));
+      setRubriker((b.rader[hi] || []).map((h) => String(h ?? "").trim()).filter(Boolean));
 
       const { data } = await supabase.rpc("projektplan_kanda_rubriker");
-      const k = new Set<string>(((t === "flit" ? data?.flit : data?.falt) ?? []) as string[]);
-      if (t !== "flit") { k.add("Fastighetsbeteckning"); k.add("Ort:"); }
+      const k = new Set<string>(t === "adresser" ? ADRESS_KOLUMNER
+        : ((t === "flit" ? data?.flit : data?.falt) ?? []) as string[]);
+      if (t === "projektplan" || t === "avslutade") { k.add("Fastighetsbeteckning"); k.add("Ort:"); }
       setKanda(k);
 
       await kor(objekt, true, t);
@@ -203,9 +219,10 @@ export function ImportPage() {
       statusbyten: 0, kopplade_kunder: 0, torrkorning: torrt,
     };
     try {
-      for (let i = 0; i < objekt.length; i += 60) {
+      const omgang = t === "adresser" ? 1000 : 60;
+      for (let i = 0; i < objekt.length; i += omgang) {
         const { data, error } = await supabase.rpc(RPC[t], {
-          p_rows: objekt.slice(i, i + 60),
+          p_rows: objekt.slice(i, i + omgang),
           p_dry_run: torrt,
         });
         if (error) throw new DataError(error.code === "42501" ? "forbidden" : "unknown", error.message);
@@ -220,7 +237,7 @@ export function ImportPage() {
       if (torrt) setForhands(summa);
       else {
         setResultat(summa); setForhands(null);
-        if (t === "flit") return;
+        if (t === "flit" || t === "adresser") return;
         // Vilka leveranser fick ingen kund? Det är den lista någon behöver gå igenom.
         const { data } = await supabase.rpc("leveranser_utan_kund");
         setUtanKund((data ?? []) as UtanKund[]);
@@ -245,7 +262,8 @@ export function ImportPage() {
           Ladda upp <code>Projektplan CE.xlsx</code> och välj blad. <strong>{BLAD}</strong> och
           <strong> Avslutade</strong> blir leveranser (Avslutade får status 99. Avslutad) och matchas
           på fastighetsbeteckning och ort. <strong>FLIT-SDU</strong> läses in under Leveransprocess →
-          FLIT-SDU och matchas på GA1-nr. Befintliga uppdateras, nya skapas. Att köra om samma
+          FLIT-SDU och matchas på GA1-nr. <strong>Adresser</strong> (eller Telias <em>Utdrag app
+          Leveransvolymer</em>) blir Telias lägenhetslista, som D2D hämtar lägenheter ur. Befintliga uppdateras, nya skapas. Att köra om samma
           fil ändrar ingenting, så du kan importera så ofta du vill.
         </p>
 
@@ -283,7 +301,7 @@ export function ImportPage() {
             </div>
             <div className="imp__ruta imp__ruta--ny">
               <span className="imp__n">{forhands?.nya ?? "–"}</span>
-              <span className="imp__l">{typ === "flit" ? "Nya FLIT-SDU" : "Nya leveranser"}</span>
+              <span className="imp__l">{NYA[typ].replace(/^n/, "N")}</span>
             </div>
             <div className="imp__ruta">
               <span className="imp__n">{forhands?.uppdaterade ?? "–"}</span>
@@ -305,7 +323,9 @@ export function ImportPage() {
 
           {forhands && forhands.hoppade > 0 && (
             <p className="imp__not">
-              {typ === "flit"
+              {typ === "adresser"
+                ? `${forhands.hoppade} rader saknar objektnummer eller är dubbletter och hoppas över.`
+                : typ === "flit"
                 ? `${forhands.hoppade} rader saknar både GA1-nr, CS-nr, A-/KO-nr och fastighetsbeteckning och hoppas över.`
                 : `${forhands.hoppade} rader saknar fastighetsbeteckning och hoppas över — utan den går de inte att matcha.`}
             </p>
@@ -346,7 +366,7 @@ export function ImportPage() {
         <div className="card imp__klart">
           <h3>Klart</h3>
           <p>
-            {resultat.nya} {typ === "flit" ? "nya FLIT-SDU" : "nya leveranser"}, {resultat.uppdaterade} uppdaterade
+            {resultat.nya} {NYA[typ]}, {resultat.uppdaterade} uppdaterade
             {resultat.statusbyten ? `, varav ${resultat.statusbyten} bytte status` : ""}.
             {resultat.hoppade > 0 && ` ${resultat.hoppade} rader hoppades över.`}
             {resultat.kopplade_kunder
@@ -354,8 +374,9 @@ export function ImportPage() {
               : ""}
           </p>
           <p className="imp__not">
-            Öppna {typ === "flit" ? "FLIT-SDU" : "Leveranser"} för att se dem. Listan uppdaterar sig själv, så har du
-            den öppen i en annan flik har den redan hunnit ikapp.
+            {typ === "adresser" ? "Lägenheterna hämtas in när en fastighet läggs till i ett D2D-projekt, eller med knappen Hämta lägenheter från Telia på fastigheten."
+              : <>Öppna {typ === "flit" ? "FLIT-SDU" : "Leveranser"} för att se dem. Listan uppdaterar sig själv, så har du
+            den öppen i en annan flik har den redan hunnit ikapp.</>}
           </p>
         </div>
       )}
