@@ -8,11 +8,13 @@ import { FilterPills, SkeletonRows } from "./PageChrome";
    (med återringningslista). Allt räknas i databasen (d2d_utfall).
    ========================================================================== */
 
+type Kommentar = { id: string; adress: string; ort: string | null; kommentar: string | null; saljare: string | null };
 type Rad = { id: string; adress: string; ort: string | null; status: string; bunden: string; tjanst: string[]; operator: string | null; saljare: string | null; kommentar: string | null };
 type Utfall = {
   besok: number;
   statusar: Record<string, number>;
   sald: { antal: number; merAnBredband: number; kategorier: Record<string, number>; ejMer: Record<string, number>; ejMerUtanSkal: number };
+  ejMerKommentarer?: Record<string, Kommentar[]>;
   ejIntresserad: Record<string, number>;
   bindningar: { hushall: number; ejSalda: number; svaradeEjSalda: number; perManad: Record<string, number>; tjanst: Record<string, number>; operator: Record<string, number> };
   perSaljare: Array<{ id: string; namn: string | null; besok: number; oppnade: number; salda: number; mer: number }>;
@@ -70,6 +72,39 @@ function Staplar({ rader, ton = "accent", tom = "Inget att visa ännu." }: {
           <span className="utf-bar__track"><span className="utf-bar__fill" style={{ width: `${(n / max) * 100}%` }} /></span>
           <span className="utf-bar__n">{n}</span>
         </div>
+      ))}
+    </div>
+  );
+}
+
+/** Staplar som går att fälla ut och visar kommentarerna bakom varje skäl. */
+function SkalLista({ rader, onOpen }: {
+  rader: Array<{ key: string; lbl: string; n: number; poster: Kommentar[] }>;
+  onOpen: (id: string) => void;
+}) {
+  const max = Math.max(1, ...rader.map((r) => r.n));
+  if (!rader.some((r) => r.n > 0)) return <p className="formfield__help">Inga skäl ifyllda ännu.</p>;
+  return (
+    <div className="utf-bars">
+      {rader.map((r) => (
+        <details key={r.key} className="utf-skal">
+          <summary className={`utf-bar utf-bar--${r.key === "saknas" ? "dim" : "warn"}`}>
+            <span className="utf-bar__lbl"><span className="utf-skal__pil" aria-hidden>›</span>{r.lbl}</span>
+            <span className="utf-bar__track"><span className="utf-bar__fill" style={{ width: `${(r.n / max) * 100}%` }} /></span>
+            <span className="utf-bar__n">{r.n}</span>
+          </summary>
+          <ul className="utf-skal__lista">
+            {r.poster.map((k) => (
+              <li key={k.id}>
+                <button type="button" className="utf-skal__adress" onClick={() => onOpen(k.id)}>
+                  {k.adress}{k.ort ? `, ${k.ort}` : ""}
+                </button>
+                {k.saljare && <span className="utf__sub"> · {k.saljare}</span>}
+                <p className={k.kommentar ? "utf-skal__text" : "utf-skal__text utf-skal__text--tom"}>{k.kommentar ?? "Ingen kommentar."}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
       ))}
     </div>
   );
@@ -196,8 +231,17 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
             </div>
             <div>
               <h3>Varför {baraBredband} bara tog bredband</h3>
-              <Staplar ton="warn" rader={sortera(u.sald.ejMer, EJ_MER)} tom="Inga skäl ifyllda ännu." />
-              {u.sald.ejMerUtanSkal > 0 && <p className="formfield__help">{u.sald.ejMerUtanSkal} saknar skäl.</p>}
+              <SkalLista
+                onOpen={onOpenRecord}
+                rader={[
+                  ...Object.entries(u.sald.ejMer).sort((a, b) => (a[0] === "annat" ? 1 : 0) - (b[0] === "annat" ? 1 : 0) || b[1] - a[1])
+                    .map(([k, n]) => ({ key: k, lbl: EJ_MER[k] ?? k, n, poster: u.ejMerKommentarer?.[k] ?? [] })),
+                  ...(u.sald.ejMerUtanSkal > 0
+                    ? [{ key: "saknas", lbl: "Inget skäl valt", n: u.sald.ejMerUtanSkal, poster: u.ejMerKommentarer?.saknas ?? [] }]
+                    : []),
+                ]}
+              />
+              <p className="formfield__help">Klicka på ett skäl för att se säljarnas kommentarer.</p>
             </div>
           </div>
         </section>
