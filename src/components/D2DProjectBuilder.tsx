@@ -4,7 +4,7 @@ import { rememberRow, useReturnToRow } from "@/lib/returnRow";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listRecords, getRecord, createRecord, updateRecord, removeRelation, addRelation,
-  listSellers, d2dImportAddresses, d2dSetAssignment, d2dSetManualAssignment, d2dApproveProject,
+  listSellers, d2dImportAddresses, d2dHamtaTeliaLagenheter, d2dSetAssignment, d2dSetManualAssignment, d2dApproveProject,
   d2dDeleteProjekt,
   d2dGetKartaData, d2dGeokodaNu, type KartaPunkt,
   d2dGetLeveransKartaData, d2dSkapaFastighetFranLeverans, type LeveransPunkt,
@@ -462,6 +462,24 @@ function AddressEditor({
 
   useEffect(() => { loadAdresser(); }, [loadAdresser]);
 
+  const [hamtar, setHamtar] = useState(false);
+  async function hamtaFranTelia() {
+    setHamtar(true); setError(null); setOk(null);
+    try {
+      const r = await d2dHamtaTeliaLagenheter(fastighetId);
+      setOk(r.i_telias_lista === 0
+        ? "Fastigheten finns inte i Telias adresslista."
+        : r.skapade === 0
+          ? `Alla ${r.i_telias_lista} lägenheter i Telias lista finns redan.`
+          : `${r.skapade} lägenheter hämtade från Telia (${r.i_telias_lista} i Telias lista).`);
+      if (r.skapade > 0) { onImported(); loadAdresser(); }
+    } catch (e) {
+      setError(e instanceof DataError ? e.message : "Kunde inte hämta lägenheter från Telia.");
+    } finally {
+      setHamtar(false);
+    }
+  }
+
   function setCell(i: number, key: keyof AddrRow, value: string) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
   }
@@ -489,6 +507,10 @@ function AddressEditor({
     <div className="d2dpb-addr">
       <div className="d2dpb-addr__header">
         <span>{existingCount} adress(er) redan inlagda</span>
+        <button className="btn btn--ghost btn--sm" onClick={hamtaFranTelia} disabled={hamtar}
+          title="Skapar lägenheterna från Telias adresslista i projektplanen. Befintliga dubbleras inte.">
+          {hamtar ? "Hämtar…" : "Hämta lägenheter från Telia"}
+        </button>
       </div>
 
       {adresser.length > 0 && (
@@ -1137,8 +1159,10 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
         for (let i = 0; i < nya.length; i++) {
           setValArbetar(`Lägger till ${i + 1} av ${nya.length}…`);
           const fastId = ledig.get(nya[i].id);
-          if (fastId) await addRelation(fastId, "d2d_fast_projekt", projektId);
-          else await d2dSkapaFastighetFranLeverans(nya[i].id, projektId, tur++);
+          if (fastId) {
+            await addRelation(fastId, "d2d_fast_projekt", projektId);
+            await d2dHamtaTeliaLagenheter(fastId).catch(() => null);
+          } else await d2dSkapaFastighetFranLeverans(nya[i].id, projektId, tur++);
         }
         setValArbetar("Geokodar…");
         await d2dGeokodaNu().catch(() => null);
