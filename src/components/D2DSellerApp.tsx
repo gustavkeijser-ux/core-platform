@@ -1006,7 +1006,7 @@ function LagenhetForm({
             </div>
           ))}
           {answer(soldFields.find((sf) => sf.key === "salt_bredband") ?? soldFields[0]) !== false
-            && !soldFields.some((sf) => sf.key !== "salt_bredband" && answer(sf) === true) && (
+            && !soldFields.some((sf) => !["salt_bredband", "salt_router", "salt_tvbox"].includes(sf.key) && answer(sf) === true) && (
             <EjMerPanel fields={objectDef?.fields ?? []} data={data} set={set} />
           )}
           <AvtalsSammanfattning data={data} soldFields={soldFields} isAdmin={isAdmin} />
