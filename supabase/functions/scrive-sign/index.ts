@@ -10,12 +10,14 @@
 //  action "status" → hämta aktuellt läge från Scrive.
 //  action "pdf"    → tillfällig länk till det signerade avtalet.
 //  action "avbryt" → avbryt ett avtal som inte är signerat.
+//  action "utkast" → förhandsgranskning (PDF med ifyllda fält, märkt UTKAST).
 //
 //  Behörighet: användarens JWT. d2d_avtal_for() släpper bara igenom den som
 //  får se lägenheten. Priserna räknas här på servern, aldrig i klienten.
 // =====================================================================
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { scriveJson, scriveMissing, syncAvtal, SCRIVE_URL, ScriveError } from "../_shared/scrive.ts";
+import { scrive, scriveJson, scriveMissing, syncAvtal, SCRIVE_URL, ScriveError } from "../_shared/scrive.ts";
+import { skapaUtkast } from "../_shared/utkast.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -181,6 +183,17 @@ const mobilnr = (s: string) => {
   return d ? "+46" + d : "";
 };
 
+/** Utkast (förhandsgranskning) av ett Scrive-dokument → tillfällig länk till PDF:en. */
+async function utkastLank(doc: any, tenantId: string, lagenhetId: string): Promise<string | null> {
+  const res = await scrive(`/documents/${encodeURIComponent(doc.id)}/files/main/avtal.pdf`);
+  if (!res.ok) return null;
+  const pdf = await skapaUtkast(new Uint8Array(await res.arrayBuffer()));
+  const path = `${tenantId}/${lagenhetId}/${doc.id}-utkast.pdf`;
+  const { error } = await db.storage.from("d2d-avtal").upload(path, pdf, { contentType: "application/pdf", upsert: true });
+  if (error) return null;
+  return (await db.storage.from("d2d-avtal").createSignedUrl(path, 1800)).data?.signedUrl ?? null;
+}
+
 // ── Handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -273,6 +286,12 @@ Deno.serve(async (req: Request) => {
       if (!avtal?.scrive_document_id) return json({ error: "Avtal saknas" }, 400);
       if (avtal.status === "vantar") await scriveJson(`/documents/${encodeURIComponent(avtal.scrive_document_id)}/cancel`, {});
       return json({ ok: true, avtal: await syncAvtal(db, avtal.id) });
+    }
+
+    if (action === "utkast") {
+      if (!avtal?.scrive_document_id) return json({ error: "Avtal saknas" }, 400);
+      const doc = await scriveJson(`/documents/${encodeURIComponent(avtal.scrive_document_id)}/get`);
+      return json({ ok: true, url: await utkastLank(doc, avtal.tenant_id, avtal.lagenhet_id) });
     }
 
     if (action === "lank") {
@@ -390,7 +409,12 @@ Deno.serve(async (req: Request) => {
       const kund = (started.parties ?? []).find((p: any) => p.is_signatory && !p.is_author);
       await db.from("d2d_avtal").update({ status: "vantar", uppdaterad: new Date().toISOString() }).eq("id", row.id);
 
+      // Förhandsgranskning till säljaren (ett fel här stoppar inte utskicket).
+      let utkast: string | null = null;
+      try { utkast = await utkastLank(started, lag.tenant_id, lagenhetId); } catch (e) { console.error("utkast", String(e)); }
+
       return json({
+        utkast,
         ok: true, avtalId: row.id,
         url: leverans === "plats" && kund?.api_delivery_url ? SCRIVE_URL + kund.api_delivery_url : null,
         faltSomInteFinnsIMallen: ej,
