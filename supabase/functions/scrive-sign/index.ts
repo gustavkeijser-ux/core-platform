@@ -196,6 +196,31 @@ Deno.serve(async (req: Request) => {
 
   if (action === "check") return json({ configured: missing.length === 0, missing });
 
+  // Testa nycklarna mot Scrive (bara läsning): listar kontots mallar (id + namn).
+  // Kräver cron-token (pg_cron/Vault) — inga nyckelvärden returneras.
+  if (action === "test") {
+    const tok = req.headers.get("x-cron-token");
+    const { data: okTok } = tok ? await db.rpc("mail_check_cron_token", { p_token: tok }) : { data: false };
+    if (!okTok) return json({ error: "Ej behörig" }, 403);
+    const nycklar = missing.filter((k) => k !== "SCRIVE_TEMPLATE_ID");
+    if (nycklar.length) return json({ ok: false, missing });
+    try {
+      const filter = encodeURIComponent(JSON.stringify([{ filter_by: "is_template" }]));
+      const l = await scriveJson(`/documents/list?max=50&filter=${filter}`);
+      const mallar = (l.documents ?? []).map((d: any) => ({ id: String(d.id), titel: d.title }));
+      const mall = Deno.env.get("SCRIVE_TEMPLATE_ID");
+      return json({ ok: true, url: SCRIVE_URL, missing, mallar, valdMall: mall ? mallar.some((m: any) => m.id === mall) : null });
+    } catch (e) {
+      // Formkontroll av nycklarna — aldrig värdena, bara längd och teckentyp.
+      const form = Object.fromEntries(["SCRIVE_API_TOKEN", "SCRIVE_API_SECRET", "SCRIVE_ACCESS_TOKEN", "SCRIVE_ACCESS_SECRET"].map((k) => {
+        const v = Deno.env.get(k) ?? "";
+        return [k, { langd: v.length, baraHex: /^[0-9a-f]+$/i.test(v), understreck: v.includes("_"), stjarna: v.includes("*"),
+          mellanslag: /\s/.test(v), citattecken: /["']/.test(v) }];
+      }));
+      return json({ ok: false, fel: e instanceof Error ? e.message : String(e), url: SCRIVE_URL, form });
+    }
+  }
+
   // Avtal-id → lägenhet (och behörighetskontroll via d2d_avtal_for).
   let lagenhetId = String(b.lagenhetId ?? "");
   let avtal: Record<string, any> | null = null;
