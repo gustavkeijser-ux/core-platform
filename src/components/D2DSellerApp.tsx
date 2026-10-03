@@ -63,7 +63,7 @@ function d2dSegsFromView(v: D2DView): string[] {
   }
 }
 
-type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "intresserad" | "sald" | "ovrigt";
+type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "intresserad" | "sald" | "scrive" | "ovrigt";
 
 const STATUS_CONFIG: Record<KnockStatus, { label: string; color: string; cssClass: string }> = {
   ej_knackad:       { label: "Ej knackad",       color: "var(--hue-slate)",  cssClass: "d2d-status--slate" },
@@ -72,6 +72,9 @@ const STATUS_CONFIG: Record<KnockStatus, { label: string; color: string; cssClas
   inte_intresserad: { label: "Inte intresserad", color: "var(--hue-red)",    cssClass: "d2d-status--red" },
   intresserad:      { label: "Intresserad",      color: "var(--hue-green)",  cssClass: "d2d-status--green" },
   sald:             { label: "Såld",             color: "var(--hue-green)",  cssClass: "d2d-status--green-solid" },
+  // Som "Såld" men utan att registrera ett sälj: kunden signerar ett avtalsförslag
+  // med Scrive (inte ett bindande avtal). Räknas inte som sålt i statistiken.
+  scrive:           { label: "Signera med Scrive", color: "var(--hue-violet)", cssClass: "d2d-status--violet" },
   ovrigt:           { label: "Övrigt",           color: "var(--hue-slate)",  cssClass: "d2d-status--slate" },
 };
 
@@ -945,11 +948,11 @@ function LagenhetForm({
         </div>
       )}
 
-      {/* Vad såldes? — visas när statusen är "Såld". En rubrik per
-          kategori; ett val per kategori, utom där flera går (t.ex. Mobil). */}
-      {status === "sald" && soldFields.length > 0 && (
+      {/* Vad såldes? — visas när statusen är "Såld" eller "Signera med Scrive".
+          En rubrik per kategori; ett val per kategori, utom där flera går (t.ex. Mobil). */}
+      {(status === "sald" || status === "scrive") && soldFields.length > 0 && (
         <div className="d2d-reason-panel d2d-sold-panel">
-          <span className="label">Vad såldes?</span>
+          <span className="label">{status === "scrive" ? "Vad ska kunden signera?" : "Vad såldes?"}</span>
           {soldFields.map((f) => (
             <div key={f.key} className="d2d-sold-panel__group">
               <div className="d2d-sold-panel__head">
@@ -1005,17 +1008,17 @@ function LagenhetForm({
               </>)}
             </div>
           ))}
-          {answer(soldFields.find((sf) => sf.key === "salt_bredband") ?? soldFields[0]) !== false
+          {status === "sald" && answer(soldFields.find((sf) => sf.key === "salt_bredband") ?? soldFields[0]) !== false
             && !soldFields.some((sf) => !["salt_bredband", "salt_router", "salt_tvbox"].includes(sf.key) && answer(sf) === true) && (
             <EjMerPanel fields={objectDef?.fields ?? []} data={data} set={set} />
           )}
           <AvtalsSammanfattning data={data} soldFields={soldFields} isAdmin={isAdmin} />
-          <ScriveSignering lagenhetId={record.id} data={data} sparaForst={flush} />
+          {status === "scrive" && <ScriveSignering lagenhetId={record.id} data={data} sparaForst={flush} />}
         </div>
       )}
 
       {/* Bindningstid hos nuvarande operatör — på alla besök där någon öppnade. */}
-      {!!status && ["sald", "aterkoppling", "inte_intresserad", "ovrigt"].includes(status) && (
+      {!!status && ["sald", "scrive", "aterkoppling", "inte_intresserad", "ovrigt"].includes(status) && (
         <BindningPanel fields={objectDef?.fields ?? []} data={data} set={set} />
       )}
 
