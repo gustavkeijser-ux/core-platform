@@ -14,6 +14,7 @@ import { TaskTab } from "./TaskTab";
 import { LyftAffarTab } from "./LyftAffarTab";
 import { DealFollowUp } from "./DealFollowUp";
 import { FmoTab } from "./FmoTab";
+import { TeliaLagenheterTab } from "./TeliaLagenheterTab";
 
 /** Fält som styrs via egen UI på affärskortet, inte via det generiska formuläret. */
 const DEAL_CUSTOM_FIELDS = new Set([
@@ -147,6 +148,12 @@ function buildTabs(objectDef: ObjectDef): TabDef[] {
   if (objectDef.key === "deal") {
     const idx = tabs.findIndex((t) => t.key === "checklista");
     tabs.splice(idx >= 0 ? idx + 1 : 1, 0, { key: "lyft_affar_flik", label: "Lyft affär" }, { key: "fmo_flik", label: "FMO-check" });
+  }
+
+  // Lägenheter enligt Telias adresslista (kopplas vid import av projektplanen).
+  if (["delivery", "koncernmoder", "direktagt_bolag"].includes(objectDef.key)) {
+    const idx = tabs.findIndex((t) => t.key === "att_gora");
+    tabs.splice(idx >= 0 ? idx : tabs.length, 0, { key: "telia_lgh", label: "Lägenheter" });
   }
 
   const seen = new Set<string>();
@@ -752,6 +759,9 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
     if (activeTab === "fmo_flik" && record && isDeal) {
       return <FmoTab deal={record} related={related} kanSvara={!!isAdmin} onChanged={reloadAfterFmo} />;
     }
+
+    // Lägenheter (Telias adresslista)
+    if (activeTab === "telia_lgh" && record) return <TeliaLagenheterTab recordId={record.id} />;
 
     // Att göra
     if (activeTab === "att_gora" && record) return <TaskTab recordId={record.id} />;
