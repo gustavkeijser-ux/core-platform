@@ -4,10 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 /* =============================================================================
    "Signera med Scrive" — under avtalsförslaget i "Vad såldes?".
    Avtalet skapas från Scrive-mallen och fylls i på servern (scrive-sign) med
-   kunduppgifter, valda tjänster och priser. Kunden signerar med BankID:
-     • På plats: signeringen öppnas på säljarens telefon.
-     • Skicka: Scrive skickar länken till kunden via e-post/sms.
-   Signerat avtal sparas som PDF på lägenheten.
+   kunduppgifter, valda tjänster och priser. Scrive skickar länken till
+   kunden via e-post/sms, och ett utkast av avtalet öppnas i en ny flik så
+   att säljaren ser exakt vad kunden fått. Signerat avtal sparas som PDF.
    ========================================================================== */
 
 type AvtalStatus = "skapas" | "vantar" | "signerat" | "avvisat" | "avbrutet" | "fel";
@@ -91,24 +90,17 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
   if (pnrSiffror.length !== 10 && pnrSiffror.length !== 12) saknas.push("personnummer");
   if (!String(data.kund_epost ?? "").includes("@")) saknas.push("e-post");
 
-  async function starta(leverans: "plats" | "skickat", nytt = false) {
+  async function starta(nytt = false) {
     setFel(null); setInfo(null);
-    // Öppna fönstret direkt vid klicket (annars stoppas det av popup-skyddet på mobilen).
-    const flik = leverans === "plats" ? window.open("", "_blank") : null;
-    setBusy(leverans);
+    // Fliken för utkastet öppnas direkt vid klicket (annars stoppas den av popup-skyddet på mobilen).
+    const flik = window.open("", "_blank");
+    setBusy("skickat");
     try {
       await sparaForst();
-      const r = await anropa<{ url: string | null; faltSomInteFinnsIMallen?: string[] }>(
-        { action: "start", lagenhetId, leverans, nytt });
-      if (leverans === "plats") {
-        if (r.url && flik) flik.location.href = r.url;
-        else if (r.url) window.location.href = r.url;
-        else flik?.close();
-        setInfo("Signeringen är öppnad i en ny flik. Kunden signerar med BankID.");
-      } else {
-        flik?.close();
-        setInfo("Avtalet är skickat till kunden.");
-      }
+      const r = await anropa<{ utkast?: string | null }>({ action: "start", lagenhetId, leverans: "skickat", nytt });
+      if (r.utkast && flik) flik.location.href = r.utkast;
+      else flik?.close();
+      setInfo(r.utkast ? "Avtalet är skickat till kunden. Utkastet är öppnat i en ny flik." : "Avtalet är skickat till kunden.");
       await ladda();
     } catch (e) {
       flik?.close();
@@ -116,7 +108,7 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
       if (ex.info?.pagaende && !nytt) {
         if (confirm("Det finns redan ett avtal som väntar på signering. Vill du avbryta det och skapa ett nytt med de uppgifter som står nu?")) {
           setBusy(null);
-          return starta(leverans, true);
+          return starta(true);
         }
       } else {
         setFel(ex.message);
@@ -126,11 +118,11 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
     }
   }
 
-  async function atgard(action: "status" | "avbryt" | "lank" | "pdf") {
+  async function atgard(action: "status" | "avbryt" | "lank" | "pdf" | "utkast") {
     if (!senaste) return;
     setFel(null);
     if (action === "avbryt" && !confirm("Avbryta avtalet? Kunden kan då inte längre signera det.")) return;
-    const flik = action === "lank" || action === "pdf" ? window.open("", "_blank") : null;
+    const flik = action === "lank" || action === "pdf" || action === "utkast" ? window.open("", "_blank") : null;
     setBusy(action);
     try {
       const r = await anropa<{ url?: string | null }>({ action, avtalId: senaste.id });
@@ -172,6 +164,9 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
             {senaste.leverans === "plats" && (
               <button type="button" className="btn btn--brand btn--sm" disabled={!!busy} onClick={() => void atgard("lank")}>Öppna signeringen igen</button>
             )}
+            <button type="button" className="btn btn--ghost btn--sm" disabled={!!busy} onClick={() => void atgard("utkast")}>
+              {busy === "utkast" ? "Hämtar…" : "Visa utkast"}
+            </button>
             <button type="button" className="btn btn--ghost btn--sm" disabled={!!busy} onClick={() => void atgard("status")}>
               {busy === "status" ? "Kollar…" : "Uppdatera status"}
             </button>
@@ -185,15 +180,12 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
       {senaste?.status !== "signerat" && !pagar && (
         <>
           <div className="d2d-scrive__knappar">
-            <button type="button" className="btn btn--brand d2d-scrive__primar" disabled={!kanStarta} onClick={() => void starta("plats")}>
-              {busy === "plats" ? "Skapar avtal…" : "Signera nu med BankID"}
-            </button>
-            <button type="button" className="btn btn--ghost" disabled={!kanStarta} onClick={() => void starta("skickat")}>
-              {busy === "skickat" ? "Skickar…" : "Skicka till kunden"}
+            <button type="button" className="btn btn--brand d2d-scrive__primar" disabled={!kanStarta} onClick={() => void starta()}>
+              {busy === "skickat" ? "Skickar…" : "Skicka avtalet till kunden"}
             </button>
           </div>
           {kopplad === false && <p className="d2d-scrive__hint">Scrive är inte kopplat än. När kopplingen är klar fungerar knapparna direkt.</p>}
-          {kopplad && saknas.length > 0 && <p className="d2d-scrive__hint">Fyll i kundens {saknas.length > 1 ? `${saknas.slice(0, -1).join(", ")} och ${saknas[saknas.length - 1]}` : saknas[0]} nedan för att kunna signera.</p>}
+          {kopplad && saknas.length > 0 && <p className="d2d-scrive__hint">Fyll i kundens {saknas.length > 1 ? `${saknas.slice(0, -1).join(", ")} och ${saknas[saknas.length - 1]}` : saknas[0]} nedan för att kunna skicka avtalet.</p>}
         </>
       )}
 
