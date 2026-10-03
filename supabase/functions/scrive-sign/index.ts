@@ -273,7 +273,7 @@ Deno.serve(async (req: Request) => {
     const sold = (fdefs ?? []).filter((f: any) => f.options?.sold_panel && f.visibility !== "hidden") as Field[];
     const { data: lista } = await db.from("d2d_prislista").select("data").eq("tenant_id", lag.tenant_id).maybeSingle();
     const a = berakna(data, sold, lista?.data ?? {});
-    if (a.manad.length === 0) return json({ error: "Välj vad kunden köper under \"Vad såldes?\" först." }, 400);
+    if (a.manad.length === 0) return json({ error: "Välj vad kunden köper under \"Vad ska kunden signera?\" först." }, 400);
     const falt = avtalsfalt(data, a, lista?.data ?? {});
 
     const { data: me } = await userDb.auth.getUser();
