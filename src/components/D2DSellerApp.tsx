@@ -960,7 +960,8 @@ function LagenhetForm({
       {(status === "sald" || status === "scrive") && soldFields.length > 0 && (
         <div className="d2d-reason-panel d2d-sold-panel">
           <span className="label">{status === "scrive" ? "Vad ska kunden signera?" : "Vad såldes?"}</span>
-          {soldFields.map((f) => (
+          {/* TV-box frågas inte: den ingår alltid i TV-paketet. */}
+          {soldFields.filter((f) => f.key !== "salt_tvbox").map((f) => (
             <div key={f.key} className="d2d-sold-panel__group">
               <div className="d2d-sold-panel__head">
                 <span className="d2d-sold-panel__title">{f.label}</span>
@@ -989,6 +990,7 @@ function LagenhetForm({
               )}
               {answer(f) === true && f.fieldType !== "boolean" && (<>
               {f.fieldType === "multi_select" && <span className="d2d-sold-panel__hint">Välj en eller flera</span>}
+              {f.key === "salt_tv" && <span className="d2d-sold-panel__hint">TV-box ingår i alla TV-paket</span>}
               <div className="d2d-reason-panel__chips">
                 {f.options.choices!.map((c) => (
                   <button
