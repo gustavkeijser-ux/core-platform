@@ -192,7 +192,11 @@ Deno.serve(async (req: Request) => {
   let b: Record<string, any> = {};
   try { b = await req.json(); } catch { /* */ }
   const action = String(b.action ?? "check");
-  const missing = scriveMissing();
+  // Mall-id: från databasen (scrive_installningar), annars secret SCRIVE_TEMPLATE_ID.
+  const { data: inst } = await db.from("scrive_installningar").select("tenant_id, mall_id");
+  const mallFor = (tenantId?: string) =>
+    (inst ?? []).find((r: any) => r.tenant_id === tenantId)?.mall_id ?? Deno.env.get("SCRIVE_TEMPLATE_ID") ?? (inst ?? [])[0]?.mall_id ?? null;
+  const missing = scriveMissing().filter((k) => k !== "SCRIVE_TEMPLATE_ID" || !mallFor());
 
   if (action === "check") return json({ configured: missing.length === 0, missing });
 
@@ -208,7 +212,7 @@ Deno.serve(async (req: Request) => {
       const filter = encodeURIComponent(JSON.stringify([{ filter_by: "is_template" }]));
       const l = await scriveJson(`/documents/list?max=50&filter=${filter}`);
       const mallar = (l.documents ?? []).map((d: any) => ({ id: String(d.id), titel: d.title }));
-      const mall = Deno.env.get("SCRIVE_TEMPLATE_ID");
+      const mall = mallFor();
       // Granska en eller flera mallar: hur många av mallens fält känner vi igen?
       const granska: string[] = Array.isArray(b.granska) ? b.granska.map(String) : mall ? [mall] : [];
       const granskning = [];
@@ -325,7 +329,7 @@ Deno.serve(async (req: Request) => {
 
     try {
       // 1) Nytt dokument från mallen
-      const doc = await scriveJson(`/documents/newfromtemplate/${encodeURIComponent(Deno.env.get("SCRIVE_TEMPLATE_ID")!)}`, {});
+      const doc = await scriveJson(`/documents/newfromtemplate/${encodeURIComponent(mallFor(lag.tenant_id)!)}`, {});
       await db.from("d2d_avtal").update({ scrive_document_id: String(doc.id) }).eq("id", row.id);
 
       // 2) Fyll i: kunden (motparten) + mallens namngivna fält
