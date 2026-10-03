@@ -31,6 +31,8 @@ export type Prislista = {
 export const ROUTER_FALT = "salt_router";
 export const TVBOX_FALT = "salt_tvbox";
 export const UTAN_NETFLIX_FALT = "salt_sport_utan_netflix";
+/** TV-paket där TV-boxen ingår utan kostnad (TV Start, TV Bas). */
+export const TV_GRATIS_BOX = new Set(["tv_start", "tv_basic"]);
 /** Kategorier som är engångskostnader (inte per månad). */
 export const ENGANG_FALT = new Set([ROUTER_FALT, TVBOX_FALT]);
 
@@ -107,7 +109,9 @@ function valda(f: FieldDef, v: unknown): string[] {
  *  - Trygghetspaket 99 kr med bredband, annars 129 kr.
  *  - Sportpaket kan väljas utan Netflix (lägre pris).
  *  - Router: 0 kr för 1 st med BB + TV + tillval (premium/mobil/trygghet)
- *    eller BB + mobil; annars enligt prislistan. TV-box: engångspris.
+ *    eller BB + mobil; annars enligt prislistan.
+ *  - TV-box ingår alltid i alla TV-paket: 0 kr för TV Start/TV Bas,
+ *    annars engångspriset i prislistan.
  */
 export function beraknaAvtal(data: Record<string, unknown>, soldFields: FieldDef[], lista: Prislista): Avtal {
   const priser = lista.priser ?? {};
@@ -132,6 +136,7 @@ export function beraknaAvtal(data: Record<string, unknown>, soldFields: FieldDef
   let antalMobil = 0;
 
   for (const f of soldFields) {
+    if (f.key === TVBOX_FALT) continue;   // läggs till nedan, följer TV-paketet
     for (const val of aktiv(f)) {
       const nyckel = val ? `${f.key}:${val}` : f.key;
       const label = val ? (f.options.choices?.find((c) => c.key === val)?.label ?? val) : f.label;
@@ -168,6 +173,19 @@ export function beraknaAvtal(data: Record<string, unknown>, soldFields: FieldDef
       if (kampanj == null && ordinarie == null) saknas.push(label);
       manad.push({ falt: f.key, kategori: f.label, label, kampanj: kampanj ?? ordinarie, ordinarie: ordinarie ?? kampanj, not });
     }
+  }
+
+  // TV-box: ingår alltid när kunden har ett TV-paket.
+  const tvboxF = byKey.get(TVBOX_FALT);
+  if (harTv && tvboxF) {
+    const tvPaket = aktiv(byKey.get("salt_tv")!)[0] ?? "";
+    const p = engangPriser[TVBOX_FALT] ?? {};
+    const gratis = TV_GRATIS_BOX.has(tvPaket);
+    const k = gratis ? 0 : (tal(p.kampanj) ?? tal(p.ordinarie));
+    const o = gratis ? 0 : (tal(p.ordinarie) ?? k);
+    if (k == null) saknas.push(tvboxF.label);
+    engang.push({ falt: TVBOX_FALT, kategori: tvboxF.label, label: tvboxF.label, kampanj: k, ordinarie: o,
+      not: k === 0 ? "ingår" : undefined });
   }
 
   const sum = (rows: AvtalsRad[], k: "kampanj" | "ordinarie") => rows.reduce((s, r) => s + (r[k] ?? 0), 0);
