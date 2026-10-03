@@ -4630,6 +4630,10 @@ kbd {
 }
 
 /* ── D2D: Signera med Scrive ──────────────────────────────────────────── */
+.d2d-kunduppgifter {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: var(--sp-4); border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border);
+}
 .d2d-scrive {
   display: flex; flex-direction: column; gap: var(--sp-3);
   padding: var(--sp-4); border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border);
