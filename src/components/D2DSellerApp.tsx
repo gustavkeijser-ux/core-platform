@@ -840,11 +840,18 @@ function LagenhetForm({
       : data[f.key] === choice;
   // Admin väljer via "Anpassa fält" vilka av dem säljarna ser (seller_hidden).
   const fields = configurableFields.filter((f) => !f.options.seller_hidden);
+  // Signera med Scrive: kundens uppgifter ligger mellan avtalsförslaget och
+  // signeringen (och visas då inte en gång till i formuläret nedanför).
+  const KUND_FALT = ["kund_namn", "personnummer", "kund_epost", "kund_telefon"];
+  const kundFalt = status === "scrive"
+    ? KUND_FALT.map((k) => configurableFields.find((f) => f.key === k)).filter((f): f is FieldDef => !!f)
+    : [];
+  const formFalt = kundFalt.length ? fields.filter((f) => !KUND_FALT.includes(f.key)) : fields;
 
   type FieldGroup = { section: string | null; label: string | null; fields: FieldDef[] };
   const groups: FieldGroup[] = [];
   let current: FieldGroup | null = null;
-  for (const f of fields) {
+  for (const f of formFalt) {
     const sec = f.options.section ?? null;
     if (!current || current.section !== sec) {
       current = { section: sec, label: sec ? (SECTION_LABELS[sec] ?? sec) : null, fields: [] };
@@ -1013,6 +1020,14 @@ function LagenhetForm({
             <EjMerPanel fields={objectDef?.fields ?? []} data={data} set={set} />
           )}
           <AvtalsSammanfattning data={data} soldFields={soldFields} isAdmin={isAdmin} />
+          {kundFalt.length > 0 && (
+            <div className="d2d-kunduppgifter">
+              <span className="label">Kunduppgifter</span>
+              {kundFalt.map((f) => (
+                <FieldInput key={f.key} field={f} value={data[f.key]} onChange={set(f.key, TYPING_TYPES.has(f.fieldType) ? 800 : 0)} />
+              ))}
+            </div>
+          )}
           {status === "scrive" && <ScriveSignering lagenhetId={record.id} data={data} sparaForst={flush} />}
         </div>
       )}
