@@ -69,7 +69,7 @@ export const STATUS_FROM_SCRIVE: Record<string, string> = {
 /**
  * Hämtar avtalets aktuella läge från Scrive (litar aldrig på data i en
  * callback) och uppdaterar d2d_avtal. När det är signerat: spara PDF:en i
- * lagringen och fyll i avtalsnummer + såld datum på lägenheten.
+ * lagringen och notera signeringen på lägenheten.
  */
 export async function syncAvtal(db: SupabaseClient, avtalId: string): Promise<Record<string, unknown>> {
   const { data: a } = await db.from("d2d_avtal").select("*").eq("id", avtalId).maybeSingle();
@@ -91,12 +91,15 @@ export async function syncAvtal(db: SupabaseClient, avtalId: string): Promise<Re
     const signedAt = (doc.parties ?? []).map((p: any) => p.sign_time).filter(Boolean).sort().pop();
     patch.signerad = signedAt ?? new Date().toISOString();
 
-    // Lägenheten: avtalsnummer och såld datum (om det inte redan är satt).
+    // Lägenheten: när och vilket Scrive-dokument. Ett Scrive-avtal är ett
+    // avtalsförslag, inte ett sälj — såld datum och avtalsnummer rörs inte.
     const { data: lag } = await db.from("records").select("data").eq("id", a.lagenhet_id).maybeSingle();
     if (lag) {
       const d = (lag.data ?? {}) as Record<string, unknown>;
-      const add: Record<string, unknown> = { avtalsnummer: String(a.scrive_document_id) };
-      if (!d.sald_datum) add.sald_datum = String(patch.signerad).slice(0, 10);
+      const add: Record<string, unknown> = {
+        scrive_dokument: String(a.scrive_document_id),
+        scrive_signerad: String(patch.signerad).slice(0, 10),
+      };
       await db.from("records").update({ data: { ...d, ...add } }).eq("id", a.lagenhet_id);
     }
   }
