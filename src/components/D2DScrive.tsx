@@ -185,7 +185,7 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
             </button>
           </div>
           {kopplad === false && <p className="d2d-scrive__hint">Scrive är inte kopplat än. När kopplingen är klar fungerar knapparna direkt.</p>}
-          {kopplad && saknas.length > 0 && <p className="d2d-scrive__hint">Fyll i kundens {saknas.length > 1 ? `${saknas.slice(0, -1).join(", ")} och ${saknas[saknas.length - 1]}` : saknas[0]} nedan för att kunna skicka avtalet.</p>}
+          {kopplad && saknas.length > 0 && <p className="d2d-scrive__hint">Fyll i kundens {saknas.length > 1 ? `${saknas.slice(0, -1).join(", ")} och ${saknas[saknas.length - 1]}` : saknas[0]} ovan för att kunna skicka avtalet.</p>}
         </>
       )}
 
