@@ -57,6 +57,7 @@ function berakna(data: Record<string, any>, fields: Field[], lista: any) {
   const manad: Rad[] = [], engang: Rad[] = [];
 
   for (const f of fields) {
+    if (f.key === "salt_tvbox") continue;   // läggs till nedan, följer TV-paketet
     for (const val of aktiv(f)) {
       const nyckel = val ? `${f.key}:${val}` : f.key;
       const label = val ? (f.options?.choices?.find((c: any) => c.key === val)?.label ?? val) : f.label;
@@ -64,11 +65,6 @@ function berakna(data: Record<string, any>, fields: Field[], lista: any) {
         const p = engangP[nyckel] ?? {};
         const pris = bb && tv && tillval ? tal(p.bbTvTillval) : bb && tv ? tal(p.bbTv) : bb && mobil ? tal(p.bbPp) : tal(p.bbEnsam);
         engang.push({ falt: f.key, val, label, kampanj: pris, ordinarie: tal(p.bbEnsam) ?? pris });
-        continue;
-      }
-      if (f.key === "salt_tvbox") {
-        const p = engangP[nyckel] ?? {};
-        engang.push({ falt: f.key, val, label, kampanj: tal(p.kampanj) ?? tal(p.ordinarie), ordinarie: tal(p.ordinarie) ?? tal(p.kampanj) });
         continue;
       }
       const p = priser[nyckel] ?? {};
@@ -81,6 +77,15 @@ function berakna(data: Record<string, any>, fields: Field[], lista: any) {
       manad.push({ falt: f.key, val, label, kampanj: k ?? o, ordinarie: o ?? k });
     }
   }
+  // TV-box ingår alltid i alla TV-paket: 0 kr för TV Start/TV Bas, annars prislistan.
+  const boxF = by.get("salt_tvbox");
+  if (tv && boxF) {
+    const paket = aktiv(by.get("salt_tv")!)[0] ?? "";
+    const p = engangP["salt_tvbox"] ?? {};
+    const gratis = paket === "tv_start" || paket === "tv_basic";
+    const k = gratis ? 0 : (tal(p.kampanj) ?? tal(p.ordinarie));
+    engang.push({ falt: "salt_tvbox", val: "", label: boxF.label, kampanj: k, ordinarie: gratis ? 0 : (tal(p.ordinarie) ?? k) });
+  }
   const sum = (r: Rad[], x: "kampanj" | "ordinarie") => r.reduce((s, y) => s + (y[x] ?? 0), 0);
   return { manad, engang, bb, tv, totalKampanj: sum(manad, "kampanj"), totalOrdinarie: sum(manad, "ordinarie"),
     kampanjManader: lista?.kampanjManader ?? 12, bindningManader: lista?.bindningManader ?? 12 };
@@ -91,7 +96,8 @@ function berakna(data: Record<string, any>, fields: Field[], lista: any) {
 // prisfält heter <kategori>_kampanj / <kategori>_ordinarie.
 const KRYSS: Record<string, string> = {
   "salt_bredband:bb150": "bb150", "salt_bredband:bb300": "bb300", "salt_bredband:bb600": "bb600", "salt_bredband:bb1000": "bb1000",
-  "salt_tv:tv_bas": "tv_mini", "salt_tv:tv_mini": "tv_mini", "salt_tv:tv_mellan": "tv_mellan", "salt_tv:tv_mycket": "tv_mycket",
+  // tv_bas är "TV Mini" i CRM:et; nya TV Bas heter tv_basic.
+  "salt_tv:tv_start": "tv_start", "salt_tv:tv_basic": "tv_bas", "salt_tv:tv_bas": "tv_mini", "salt_tv:tv_mini": "tv_mini", "salt_tv:tv_mellan": "tv_mellan", "salt_tv:tv_mycket": "tv_mycket",
   "salt_streaming_film:streaming_mer": "film_mer", "salt_streaming_film:streaming_maxad": "film_maxad", "salt_streaming_film:streaming_mest": "film_mest",
   "salt_streaming_sport:lilla_sportpaketet": "sport_lilla", "salt_streaming_sport:stora_sportpaketet": "sport_stora",
   "salt_streaming_sport:storsta_sportpaketet": "sport_storsta",
@@ -118,7 +124,7 @@ const ALIAS: Record<string, string> = {
   tjansteleverantor: "leverantor",
   // Kryssrutorna i mallen heter "checkbox 1" … "checkbox 24" (i den ordning de lades ut).
   checkbox_1: "bb150", checkbox_2: "bb300", checkbox_3: "bb600", checkbox_4: "bb1000",
-  checkbox_5: "tv_mini", checkbox_6: "tv_mellan", checkbox_7: "tv_mycket",
+  checkbox_5: "tv_bas", checkbox_6: "tv_mellan", checkbox_7: "tv_mycket",
   checkbox_8: "router_ja", checkbox_9: "router_nej", checkbox_10: "tvbox_ja", checkbox_11: "tvbox_nej",
   checkbox_12: "film_mer", checkbox_14: "film_maxad", checkbox_13: "film_mest",
   checkbox_15: "sport_lilla", checkbox_17: "sport_stora", checkbox_16: "sport_storsta",
@@ -149,7 +155,7 @@ function avtalsfalt(data: Record<string, any>, a: ReturnType<typeof berakna>, li
   const router = a.engang.find((r) => r.falt === "salt_router");
   const tvbox = a.engang.find((r) => r.falt === "salt_tvbox");
   if (a.bb) { v[router ? "router_ja" : "router_nej"] = "X"; if (router) v.router_kostnad = kr(router.kampanj); }
-  if (a.tv) { v[tvbox ? "tvbox_ja" : "tvbox_nej"] = "X"; if (tvbox) v.tvbox_kostnad = kr(tvbox.kampanj); }
+  if (a.tv) { v[tvbox ? "tvbox_ja" : "tvbox_nej"] = "X"; if (tvbox) v.tvbox_kostnad = tvbox.kampanj === 0 ? "Ingår" : kr(tvbox.kampanj); }
   if (data.salt_sport_utan_netflix === true && a.manad.some((r) => r.falt === "salt_streaming_sport")) v.sport_utan_netflix = "X";
   v.total_kampanj = kr(a.totalKampanj);
   v.total_ordinarie = kr(a.totalOrdinarie);
