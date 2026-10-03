@@ -2734,6 +2734,7 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 .d2d-status--red    .d2d-lag-card__badge { background: rgba(241,108,130,.15); color: var(--hue-red); }
 .d2d-status--green  .d2d-lag-card__badge { background: rgba(63,195,134,.15);  color: var(--hue-green); }
 .d2d-status--green-solid .d2d-lag-card__badge { background: var(--hue-green); color: #fff; }
+.d2d-status--violet .d2d-lag-card__badge { background: color-mix(in srgb, var(--hue-violet) 15%, transparent); color: var(--hue-violet); }
 
 /* ── Status picker (lägenhet-formulär) ────────────────────────────────── */
 
@@ -2772,6 +2773,7 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 .d2d-status--red.d2d-status-btn--active    { border-color: var(--hue-red);    color: var(--hue-red);   background: rgba(241,108,130,.12); }
 .d2d-status--green.d2d-status-btn--active  { border-color: var(--hue-green);  color: var(--hue-green); background: rgba(63,195,134,.12); }
 .d2d-status--green-solid.d2d-status-btn--active { border-color: var(--hue-green); color: #fff; background: var(--hue-green); }
+.d2d-status--violet.d2d-status-btn--active { border-color: var(--hue-violet); color: var(--hue-violet); background: color-mix(in srgb, var(--hue-violet) 12%, transparent); }
 
 /* ── Anledning vid "Inte intresserad" ─────────────────────────────────── */
 
@@ -4768,6 +4770,7 @@ kbd {
 .utf__legend span { display: inline-flex; align-items: center; gap: 6px; }
 .utf__legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .utf__seg--sald { background: var(--brand); color: #fff; }
+.utf__seg--scrive { background: color-mix(in srgb, var(--hue-violet) 30%, var(--surface)); color: var(--ink); }
 .utf__seg--aterkoppling { background: color-mix(in srgb, var(--brand) 40%, var(--surface)); color: var(--ink); }
 .utf__seg--inte_intresserad { background: var(--warn-soft); color: var(--warn-ink); }
 .utf__seg--ovrigt { background: var(--surface-alt); color: var(--ink); }
