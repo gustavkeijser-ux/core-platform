@@ -209,7 +209,22 @@ Deno.serve(async (req: Request) => {
       const l = await scriveJson(`/documents/list?max=50&filter=${filter}`);
       const mallar = (l.documents ?? []).map((d: any) => ({ id: String(d.id), titel: d.title }));
       const mall = Deno.env.get("SCRIVE_TEMPLATE_ID");
-      return json({ ok: true, url: SCRIVE_URL, missing, mallar, valdMall: mall ? mallar.some((m: any) => m.id === mall) : null });
+      // Granska en eller flera mallar: hur många av mallens fält känner vi igen?
+      const granska: string[] = Array.isArray(b.granska) ? b.granska.map(String) : mall ? [mall] : [];
+      const granskning = [];
+      for (const id of granska.slice(0, 6)) {
+        try {
+          const d = await scriveJson(`/documents/${encodeURIComponent(id)}/get`);
+          const falt = (d.parties ?? []).flatMap((p: any) => (p.fields ?? []).filter((f: any) => f.type === "text" || f.type === "checkbox"));
+          const namn = falt.map((f: any) => String(f.name ?? ""));
+          const kanda = new Set([...Object.values(ALIAS), ...Object.values(KRYSS), "bindningstid", "kampanjperiod", "startdatum",
+            "gatuadress", "lagenhetsnummer", "telefon", "epost", "namn", "personnummer", "ort", "datum", "sport_utan_netflix"]);
+          granskning.push({ id, titel: d.title, andrad: d.mtime, antalFalt: namn.length,
+            kanda: namn.filter((n: string) => kanda.has(faltnyckel(n))).length,
+            okanda: namn.filter((n: string) => !kanda.has(faltnyckel(n))).slice(0, 30) });
+        } catch (e) { granskning.push({ id, fel: String(e) }); }
+      }
+      return json({ ok: true, url: SCRIVE_URL, missing, mallar, valdMall: mall ? mallar.some((m: any) => m.id === mall) : null, granskning });
     } catch (e) {
       // Formkontroll av nycklarna — aldrig värdena, bara längd och teckentyp.
       const form = Object.fromEntries(["SCRIVE_API_TOKEN", "SCRIVE_API_SECRET", "SCRIVE_ACCESS_TOKEN", "SCRIVE_ACCESS_SECRET"].map((k) => {
