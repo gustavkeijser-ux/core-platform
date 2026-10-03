@@ -19,6 +19,7 @@ import { D2DSellerApp } from "@/components/D2DSellerApp";
 import { D2DProjectBuilder } from "@/components/D2DProjectBuilder";
 import { D2DUtfallPage } from "@/components/D2DUtfallPage";
 import { D2DAvtalPage } from "@/components/D2DAvtalPage";
+import { D2DPrislistaPage } from "@/components/D2DAvtal";
 import { MyTasksPage } from "@/components/MyTasksPage";
 import { NummerbytenPage } from "@/components/NummerbytenPage";
 import { CasesPage } from "@/components/CasesPage";
@@ -41,6 +42,7 @@ type View =
   | { kind: "d2dbuilder" }
   | { kind: "d2dutfall" }
   | { kind: "d2davtal" }
+  | { kind: "d2dpriser" }
   | { kind: "nummerbyten" }
   | { kind: "cases"; filter: CaseFilter }
   | { kind: "case"; id: string }
@@ -57,6 +59,7 @@ function viewFromSegs(segs: string[]): View {
     case "d2dbuilder": return { kind: "d2dbuilder" };
     case "d2dutfall": return { kind: "d2dutfall" };
     case "d2davtal": return { kind: "d2davtal" };
+    case "d2dpriser": return { kind: "d2dpriser" };
     case "nummerbyten": return { kind: "nummerbyten" };
     case "arenden": return { kind: "cases", filter: (CASE_FILTERS.includes(segs[1] as CaseFilter) ? segs[1] : "open") as CaseFilter };
     case "arende": if (segs[1]) return { kind: "case", id: segs[1] }; break;
@@ -228,6 +231,7 @@ export default function App() {
     : view?.kind === "d2dbuilder" ? "Projekt, adresser och tilldelning"
     : view?.kind === "d2dutfall" ? "Utfall, merförsäljning och bindningstider"
     : view?.kind === "d2davtal" ? "Avtal signerade med Scrive i D2D-vyn"
+    : view?.kind === "d2dpriser" ? "Priser och villkor för alla avtalsförslag i D2D"
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
     : view?.kind === "m365" ? "Kopplingen till e-postlådan och e-postsignatur"
     : view?.kind === "feedback" ? "Fel, idéer och önskemål från användarna"
@@ -246,7 +250,7 @@ export default function App() {
     : view?.kind === "dashboard" ? "Översikt"
     : view?.kind === "tasks" ? "Mina uppgifter"
     : view?.kind === "import" ? "Import"
-    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" ? "Door2Door"
+    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" || view?.kind === "d2dpriser" ? "Door2Door"
     : view?.kind === "nummerbyten" ? (objectDefFor("nummerbyte")?.labelPlural ?? "Annat")
     : view?.kind === "cases" || view?.kind === "case" ? "Ärenden"
     : view?.kind === "m365" ? "Microsoft 365"
@@ -295,6 +299,7 @@ export default function App() {
           : view?.kind === "d2dbuilder" ? "__d2dbuilder__"
           : view?.kind === "d2dutfall" ? "__d2dutfall__"
           : view?.kind === "d2davtal" ? "__d2davtal__"
+          : view?.kind === "d2dpriser" ? "__d2dpriser__"
           : view?.kind === "nummerbyten" ? "nummerbyte"
           : view?.kind === "cases" ? (view.filter === "unassigned" ? "__cases_unassigned__" : "__cases__")
           : view?.kind === "case" ? "__cases__"
@@ -312,6 +317,7 @@ export default function App() {
             : key === "__d2dbuilder__" ? { kind: "d2dbuilder" }
             : key === "__d2dutfall__" ? { kind: "d2dutfall" }
             : key === "__d2davtal__" ? { kind: "d2davtal" }
+            : key === "__d2dpriser__" ? { kind: "d2dpriser" }
             : key === "nummerbyte" ? { kind: "nummerbyten" }
             : key === "__cases__" ? { kind: "cases", filter: "open" }
             : key === "__cases_unassigned__" ? { kind: "cases", filter: "unassigned" }
@@ -347,6 +353,7 @@ export default function App() {
                 : view?.kind === "d2dbuilder" ? "D2D – Projekt"
                 : view?.kind === "d2dutfall" ? "D2D – Utfall"
                 : view?.kind === "d2davtal" ? "D2D – Avtal"
+                : view?.kind === "d2dpriser" ? "D2D – Priser"
                 : view?.kind === "nummerbyten" ? "Nummerbyten"
                 : view?.kind === "cases" ? "Ärenden"
                 : view?.kind === "case" ? "Ärende"
@@ -385,6 +392,9 @@ export default function App() {
         {view?.kind === "d2dbuilder" && <D2DProjectBuilder objectDefFor={objectDefFor} onOpenRecord={openRecord} />}
         {view?.kind === "d2dutfall" && <D2DUtfallPage onOpenRecord={openRecord} />}
         {view?.kind === "d2davtal" && <D2DAvtalPage onOpenRecord={openRecord} />}
+        {view?.kind === "d2dpriser" && (isAdmin
+          ? <D2DPrislistaPage fields={objectDefFor("d2d_lagenhet")?.fields ?? []} />
+          : <div className="page"><p className="formfield__help">Bara administratörer kan ändra priserna.</p></div>)}
 
         {view?.kind === "nummerbyten" && <NummerbytenPage />}
 
