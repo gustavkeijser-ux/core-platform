@@ -24,7 +24,7 @@ type Utfall = {
 };
 
 const STATUS: Record<string, string> = {
-  sald: "Såld", aterkoppling: "Återkoppling", inte_intresserad: "Inte intresserad", ovrigt: "Övrigt", inte_hemma: "Inte hemma",
+  sald: "Såld", scrive: "Signera med Scrive", aterkoppling: "Återkoppling", inte_intresserad: "Inte intresserad", ovrigt: "Övrigt", inte_hemma: "Inte hemma",
 };
 const KATEGORI: Array<[string, string]> = [
   ["bredband", "Bredband"], ["tv", "TV"], ["mobil_huvud", "Mobil – huvudabonnemang"], ["mobil_extra", "Mobil – extra användare"],
@@ -208,12 +208,12 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         <section className="card utf__sek">
           <h2>Utfall av besöken</h2>
           <div className="utf__stack" role="img" aria-label="Fördelning av utfall">
-            {["sald", "aterkoppling", "inte_intresserad", "ovrigt", "inte_hemma"].filter((k) => (s[k] ?? 0) > 0).map((k) => (
+            {["sald", "scrive", "aterkoppling", "inte_intresserad", "ovrigt", "inte_hemma"].filter((k) => (s[k] ?? 0) > 0).map((k) => (
               <div key={k} className={`utf__seg utf__seg--${k}`} style={{ flex: s[k] }} title={`${STATUS[k]}: ${s[k]}`}>{s[k]}</div>
             ))}
           </div>
           <div className="utf__legend">
-            {["sald", "aterkoppling", "inte_intresserad", "ovrigt", "inte_hemma"].map((k) => (
+            {["sald", "scrive", "aterkoppling", "inte_intresserad", "ovrigt", "inte_hemma"].filter((k) => k !== "scrive" || (s[k] ?? 0) > 0).map((k) => (
               <span key={k}><i className={`utf__seg--${k}`} />{STATUS[k]} {s[k] ?? 0}</span>
             ))}
           </div>
