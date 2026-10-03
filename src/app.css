@@ -4607,6 +4607,10 @@ kbd {
 .d2d-sold-chip--toggle { align-self: flex-start; }
 
 .d2d-prislista { width: min(760px, calc(100vw - 24px)); }
+.d2dpris__kort { max-width: 860px; padding: 0; }
+.d2dpris__kort .field-config__body { padding: var(--sp-4) var(--sp-5); }
+.d2dpris__kort .d2d-prislista__fot { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--border); }
+.d2d-prislista__sparat { margin-right: auto; align-self: center; font-size: var(--text-sm); font-weight: 600; color: var(--hue-green); }
 .d2d-prislista__villkor { display: flex; flex-wrap: wrap; gap: var(--sp-4); margin-bottom: var(--sp-4); }
 .d2d-prislista__villkor label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-xs); color: var(--ink-muted); font-weight: 600; }
 .d2d-prislista__villkor .input { width: 7rem; }
