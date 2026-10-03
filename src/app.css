@@ -4830,3 +4830,20 @@ kbd {
 .utf-skal__text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
 .utf-skal__text--tom { color: var(--ink-muted); font-style: italic; }
 @media (prefers-reduced-motion: reduce) { .utf-skal__pil { transition: none; } }
+
+/* ── Lägenheter enligt Telias adresslista (flik på leverans/kund/bolag) ── */
+.tlgh { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.tlgh__tal { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: var(--sp-2); }
+.tlgh__tal > div { background: var(--surface-sunk); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-3); display: flex; flex-direction: column; }
+.tlgh__tal b { font-size: 1.25rem; }
+.tlgh__tal span { font-size: var(--text-sm); color: var(--ink-muted); }
+.tlgh__sok { max-width: 360px; }
+.tlgh__grupp { border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); }
+.tlgh__grupp > summary { cursor: pointer; padding: var(--sp-2) var(--sp-3); display: flex; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
+.tlgh__fastighet { font-weight: 600; }
+.tlgh__antal { color: var(--ink-muted); font-size: var(--text-sm); }
+.tlgh__tabellwrap { overflow-x: auto; border-top: 1px solid var(--border); }
+.tlgh__tabell { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.tlgh__tabell th, .tlgh__tabell td { text-align: left; padding: 6px var(--sp-3); white-space: nowrap; border-bottom: 1px solid var(--border); }
+.tlgh__tabell th { color: var(--ink-muted); font-weight: 500; }
+.tlgh__tom, .tlgh__kalla { color: var(--ink-muted); font-size: var(--text-sm); }
