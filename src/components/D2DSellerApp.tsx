@@ -842,7 +842,7 @@ function LagenhetForm({
   const fields = configurableFields.filter((f) => !f.options.seller_hidden);
   // Signera med Scrive: kundens uppgifter ligger mellan avtalsförslaget och
   // signeringen (och visas då inte en gång till i formuläret nedanför).
-  const KUND_FALT = ["kund_namn", "personnummer", "kund_epost", "kund_telefon"];
+  const KUND_FALT = ["kund_namn", "personnummer", "kund_epost", "kund_telefon", "startdatum_tjanst"];
   const kundFalt = status === "scrive"
     ? KUND_FALT.map((k) => configurableFields.find((f) => f.key === k)).filter((f): f is FieldDef => !!f)
     : [];
@@ -1028,6 +1028,9 @@ function LagenhetForm({
               {kundFalt.map((f) => (
                 <FieldInput key={f.key} field={f} value={data[f.key]} onChange={set(f.key, TYPING_TYPES.has(f.fieldType) ? 800 : 0)} />
               ))}
+              {kundFalt.some((f) => f.key === "startdatum_tjanst") && !data.startdatum_tjanst && (
+                <span className="d2d-sold-panel__hint">Utan startdatum står det "Enligt orderbekräftelse" i avtalet.</span>
+              )}
             </div>
           )}
           {status === "scrive" && <ScriveSignering lagenhetId={record.id} data={data} sparaForst={flush} />}
