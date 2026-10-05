@@ -391,7 +391,7 @@ export default function App() {
 
         {view?.kind === "d2dbuilder" && <D2DProjectBuilder objectDefFor={objectDefFor} onOpenRecord={openRecord} />}
         {view?.kind === "d2dutfall" && <D2DUtfallPage onOpenRecord={openRecord} />}
-        {view?.kind === "d2davtal" && <D2DAvtalPage onOpenRecord={openRecord} />}
+        {view?.kind === "d2davtal" && <D2DAvtalPage onOpenRecord={openRecord} lagFields={objectDefFor("d2d_lagenhet")?.fields ?? []} />}
         {view?.kind === "d2dpriser" && (isAdmin
           ? <D2DPrislistaPage fields={objectDefFor("d2d_lagenhet")?.fields ?? []} />
           : <div className="page"><p className="formfield__help">Bara administratörer kan ändra priserna.</p></div>)}
