@@ -5259,3 +5259,21 @@ select.input {
 .case--conv .case__facts { display: none; }
 .case--conv .steg { padding: 12px 14px 8px; }
 .case--conv .steg__fakta { margin-top: 10px; padding-top: 8px; }
+
+/* Lång text i listor (t.ex. D2D-kommentarer): tre rader syns, resten vid hovring. */
+.rtable td:has(> .rtable__lang) { white-space: normal; min-width: 260px; max-width: 380px; }
+.rtable__lang {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  white-space: pre-line; line-height: 1.4; font-size: 12.5px; color: var(--ink-soft); outline: none;
+}
+.rtable__pop {
+  position: fixed; z-index: 200; max-width: 380px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: var(--r-box);
+  box-shadow: var(--shadow-lg); padding: 10px 12px; font-size: 13px; line-height: 1.5; white-space: pre-line;
+  pointer-events: none;
+}
+.rtable__pop--upp { transform: translateY(-100%); }
+@media (max-width: 640px) {
+  .rtable td:has(> .rtable__lang) { min-width: 0; max-width: none; }
+  .rtable__lang { -webkit-line-clamp: 5; }
+}
