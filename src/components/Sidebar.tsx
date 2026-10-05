@@ -340,21 +340,50 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         {item("__dashboard__", "Översikt", ICONS.__dashboard__)}
         {item("__tasks__", "Mina uppgifter", ICONS.__tasks__)}
 
-        {/* ÄRENDEN — allt som är arbete, överst under Översikt (Förslag B, punkt 6). */}
-        {canCases && (
-          <>
-            <div className="sidebar__section-label">Ärenden</div>
-            {CASE_VIEWS.map((v) => item(`__cases_${v.key}__`, v.label, undefined,
-              v.count ? { n: caseCounts?.[v.count], alert: v.alert } : undefined))}
-            <button className="sidebar__item sidebar__item--create" aria-current={activeKey === "__newcase__"}
-              onClick={() => selectAndClose("__newcase__")}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-              <span className="sidebar__label">Skapa ärende</span>
-            </button>
-          </>
-        )}
+        <div className="sidebar__section-label">Moduler</div>
 
-        <div className="sidebar__section-label">Försäljning och leverans</div>
+        {/* ÄRENDEN — allt som är arbete, överst under Översikt (Förslag B, punkt 6).
+         *  Fälls ut/ihop som övriga moduler. */}
+        {canCases && (() => {
+          const caseActive = (activeKey ?? "").startsWith("__cases_") || activeKey === "__newcase__";
+          const isOpen = !!expanded.arenden || caseActive;
+          const forsenade = caseCounts?.overdue ?? 0;
+          return (
+            <div className="sidebar__group">
+              <button
+                className="sidebar__item sidebar__item--group"
+                aria-expanded={isOpen}
+                onClick={() => toggle("arenden")}
+              >
+                {ICONS.support_case}
+                <span className="sidebar__label">Ärenden</span>
+                {!isOpen && forsenade > 0 && <span className="sidebar__badge sidebar__badge--alert" title="Försenade">{forsenade}</span>}
+                <Chevron open={isOpen} />
+              </button>
+              {isOpen && (
+                <div className="sidebar__children">
+                  {CASE_VIEWS.map((v) => {
+                    const n = v.count ? caseCounts?.[v.count] : undefined;
+                    return (
+                      <button key={v.key} className="sidebar__item sidebar__item--child"
+                        aria-current={activeKey === `__cases_${v.key}__`}
+                        onClick={() => selectAndClose(`__cases_${v.key}__`)}>
+                        <span className="sidebar__label">{v.label}</span>
+                        {!!n && <span className={`sidebar__badge${v.alert ? " sidebar__badge--alert" : ""}`}>{n}</span>}
+                      </button>
+                    );
+                  })}
+                  <button className="sidebar__item sidebar__item--child sidebar__item--create" aria-current={activeKey === "__newcase__"}
+                    onClick={() => selectAndClose("__newcase__")}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                    <span className="sidebar__label">Skapa ärende</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
 
         {/* Grupperade sektioner */}
         {MENU_GROUPS.map((group) => {
