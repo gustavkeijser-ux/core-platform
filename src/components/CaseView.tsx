@@ -5,12 +5,12 @@ import { DataError } from "@/lib/data";
 import {
   type CaseAttachment, type CaseCategory, type CaseDetail, type CaseMessage,
   PRIORITIES, SLA_META, SOURCE_LABEL,
-  assignableUsers, attachmentUrl, caseAddNote, caseCategories, caseLink, caseReply, caseSet,
+  assignableUsers, attachmentUrl, caseAddNote, caseCategories, caseLink, caseReply, caseSet, caseSetDeadline,
   caseSetCustomerEmail, fmtDateTime, formatBytes, getCase, getMessageHtml, relTime, searchLinkTargets, sendQueued,
 } from "@/lib/cases";
 import { StatusPill } from "./StatusPill";
-import { PriorityTag } from "./CasesPage";
-import { UserBadge, useUserName } from "@/lib/users";
+import { KanalIkon, PriorityTag, deadlineText } from "./CasesPage";
+import { useUserName } from "@/lib/users";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -194,30 +194,31 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
           )}
         </div>
         <h2 className="case__title">{data.name || "(Inget ämne)"}</h2>
+        <div className="case__sub">
+          <KanalIkon kanal={data.channel as string} /> {d.categoryLabel ?? "Ingen kategori"} · anmält {fmtDateTime(c.created_at)}
+        </div>
+
+        <StatusSteg status={c.status} deadline={resDue} ansvarig={c.owner_user_id} atgard={data.planerad_atgard as string | undefined} />
 
         {/* De sju frågorna, på en rad */}
         <div className="case__facts">
           <Fact label="Kund">
             {data.kund_epost ? <a href={`mailto:${data.kund_epost}`}>{data.kund_epost}</a> : <span className="ink-faint">Okänd</span>}
           </Fact>
-          <Fact label="Gäller">
-            {d.categoryLabel ? <>{d.categoryLabel}{d.subcategoryLabel ? ` · ${d.subcategoryLabel}` : ""}</> : <span className="ink-faint">Ingen kategori</span>}
-          </Fact>
           <Fact label="Fastighet / lägenhet">
             {fastighet || lagenhet
               ? <>{fastighet?.title ?? ""}{fastighet && lagenhet ? " · " : ""}{lagenhet ? data.lagenhet_namn ?? lagenhet.title : ""}</>
               : <span className="ink-faint">Ej kopplad</span>}
           </Fact>
-          <Fact label="Ansvarig">
-            {c.owner_user_id ? <UserBadge id={c.owner_user_id} /> : <span className="case__unassigned">Ej tilldelad</span>}
-          </Fact>
           <Fact label="Status">
             <StatusPill status={c.status} def={statusDef.get(c.status)} /> <PriorityTag p={data.priority ?? "normal"} />
           </Fact>
-          <Fact label="Deadline">
-            <SlaLine label="Svar" state={d.sla.firstResponse} due={firstDue} doneAt={data.first_response_at} />
-            <SlaLine label="Lösning" state={d.sla.resolution} due={resDue} doneAt={data.resolved_at} />
-          </Fact>
+          {(firstDue || resDue) && (
+            <Fact label="Svarstider">
+              <SlaLine label="Svar" state={d.sla.firstResponse} due={firstDue} doneAt={data.first_response_at} />
+              <SlaLine label="Lösning" state={d.sla.resolution} due={resDue} doneAt={data.resolved_at} />
+            </Fact>
+          )}
         </div>
 
         <div className={`case__next case__next--${next.tone}`}>
@@ -283,6 +284,9 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
                 <button className="btn btn--ghost btn--sm" onClick={() => void act(() => caseSet(c.id, { ansvarig: me }))}>Mig</button>
               )}
             </div>
+
+            <label className="label" htmlFor="cs-dl">Deadline</label>
+            <DeadlineEditor value={resDue ?? null} disabled={!d.canUpdate} onSave={(v) => act(() => caseSetDeadline(c.id, v))} />
 
             <label className="label" htmlFor="cs-cat">Kategori</label>
             <select id="cs-cat" className="input" value={data.category ?? ""} disabled={!d.canUpdate}
@@ -443,35 +447,36 @@ function MessageItem({ m, onRetry, latest = false }: { m: CaseMessage; onRetry: 
 
   const who = isNote ? `Intern kommentar · ${author}` : inbound ? `Hyresgäst · ${m.from ?? ""}` : `ConnectEstate · ${m.authorUserId ? author : (m.from ?? "")}`;
 
+  const vem = isNote ? `Intern kommentar · ${author}` : inbound ? (m.from ?? "Kunden") : `${m.authorUserId ? author : (m.from ?? "ConnectEstate")}, ConnectEstate`;
+
   return (
-    <li className={`tl__msg tl__msg--${isNote ? "note" : inbound ? "in" : "out"}`}>
-      <div className="tl__head">
-        <span className="tl__who">{who}</span>
-        <span className="tl__when">{fmtDateTime(m.occurredAt)}</span>
+    <li className={`tl__msg tl__msg--${isNote ? "note" : inbound ? "in" : "out"}`} title={who}>
+      <div className="tl__bubbla">
+        {isNote && <div className="tl__note-flag">Syns bara internt — skickas aldrig till kunden</div>}
+        {!isNote && m.subject && <div className="tl__subject">{m.subject}</div>}
+        {!isNote && !inbound && m.to?.length > 0 && <div className="tl__to">Till: {m.to.join(", ")}</div>}
+        <MessageBody text={m.bodyText} defaultOpen={latest} />
+
+        {m.attachments.length > 0 && (
+          <ul className="tl__atts">
+            {m.attachments.map((a) => <AttachmentChip key={a.id} a={a} />)}
+          </ul>
+        )}
+
+        {m.hasHtml && (
+          <div className="tl__html">
+            <button className="linklike" onClick={() => void toggleHtml()}>{showHtml ? "Dölj originalmejlet" : "Visa hela originalmejlet"}</button>
+            {showHtml && html != null && (
+              <>
+                {!images && <button className="linklike tl__img-btn" onClick={() => setImages(true)}>Visa bilder</button>}
+                <SafeHtml html={html} allowImages={images} />
+              </>
+            )}
+            {err && <div className="formfield__error">{err}</div>}
+          </div>
+        )}
       </div>
-      {isNote && <div className="tl__note-flag">Syns bara internt — skickas aldrig till kunden</div>}
-      {!isNote && m.subject && <div className="tl__subject">{m.subject}</div>}
-      {!isNote && !inbound && m.to?.length > 0 && <div className="tl__to ink-faint">Till: {m.to.join(", ")}</div>}
-      <MessageBody text={m.bodyText} defaultOpen={latest} />
-
-      {m.attachments.length > 0 && (
-        <ul className="tl__atts">
-          {m.attachments.map((a) => <AttachmentChip key={a.id} a={a} />)}
-        </ul>
-      )}
-
-      {m.hasHtml && (
-        <div className="tl__html">
-          <button className="linklike" onClick={() => void toggleHtml()}>{showHtml ? "Dölj originalmejlet" : "Visa hela originalmejlet"}</button>
-          {showHtml && html != null && (
-            <>
-              {!images && <button className="linklike tl__img-btn" onClick={() => setImages(true)}>Visa bilder</button>}
-              <SafeHtml html={html} allowImages={images} />
-            </>
-          )}
-          {err && <div className="formfield__error">{err}</div>}
-        </div>
-      )}
+      <div className="tl__meta">{vem} · {fmtDateTime(m.occurredAt)}</div>
 
       {!inbound && !isNote && m.sendStatus && m.sendStatus !== "sent" && (
         <div className={`tl__send tl__send--${m.sendStatus}`}>
@@ -654,5 +659,59 @@ function LinkPicker({ label, type, current, disabled, onPick }: {
         </div>
       )}
     </div>
+  );
+}
+
+/** Statussteg som i boendeappen: Mottagen → Pågående → Väntar på svar → Avslutad,
+ *  med förväntad åtgärd och ansvarig under. */
+const STEG: Array<{ label: string; keys: string[] }> = [
+  { label: "Mottagen", keys: ["new"] },
+  { label: "Pågående", keys: ["assigned", "in_progress"] },
+  { label: "Väntar på svar", keys: ["waiting_customer", "waiting_internal", "waiting_contractor"] },
+  { label: "Avslutad", keys: ["resolved", "closed"] },
+];
+
+function StatusSteg({ status, deadline, ansvarig, atgard }: { status: string; deadline?: string; ansvarig: string | null; atgard?: string }) {
+  const idx = Math.max(0, STEG.findIndex((s) => s.keys.includes(status)));
+  const avslutad = idx === 3;
+  const dl = deadlineText(deadline, avslutad);
+  const namn = useUserName(ansvarig);
+  return (
+    <div className="steg">
+      <ol className="steg__rad" aria-label="Status">
+        {STEG.map((s, i) => (
+          <li key={s.label} className={`steg__punkt${i < idx || (avslutad && i === idx) ? " steg__punkt--klar" : ""}${i === idx && !avslutad ? " steg__punkt--nu" : ""}`}
+            aria-current={i === idx ? "step" : undefined}>
+            <span className="steg__prick">
+              {(i < idx || (avslutad && i === idx)) && (
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6L9 17l-5-5" /></svg>
+              )}
+            </span>
+            <span className="steg__text">{s.label}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="steg__fakta">
+        <div><span>Förväntad åtgärd</span><strong className={`arl__dl--${dl.ton}`}>{dl.text}</strong></div>
+        <div><span>Ansvarig</span><strong>{ansvarig ? namn : "Ej tilldelad"}</strong></div>
+        {atgard && <div><span>Planerad åtgärd</span><strong>{atgard}</strong></div>}
+      </div>
+    </div>
+  );
+}
+
+function DeadlineEditor({ value, disabled, onSave }: { value: string | null; disabled: boolean; onSave: (v: string | null) => Promise<void> }) {
+  const lokal = (iso: string | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const [v, setV] = useState(lokal(value));
+  useEffect(() => setV(lokal(value)), [value]);
+  return (
+    <input id="cs-dl" className="input" type="datetime-local" value={v} disabled={disabled}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => { if (v !== lokal(value)) void onSave(v ? new Date(v).toISOString() : null); }} />
   );
 }
