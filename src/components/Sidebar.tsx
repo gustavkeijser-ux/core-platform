@@ -17,8 +17,8 @@ type Props = {
   /** Kundservice: visas när användaren får läsa ärenden. */
   canCases?: boolean;
   isAdmin?: boolean;
-  /** Antal otilldelade öppna ärenden (badge i menyn). */
-  unassignedCases?: number;
+  /** Antal per färdig ärendevy (märken i menyn), räknat inom användarens behörighet. */
+  caseCounts?: Partial<Record<string, number>>;
   /** Inloggad användare (kortet längst ner i menyn). */
   user?: { id: string; email: string; role: string };
   onOpenSettings?: () => void;
@@ -57,8 +57,6 @@ const MENU_GROUPS: MenuGroup[] = [
     ),
     keys: [
       "forvaltningsbolag", "koncernmoder", "direktagt_bolag", "property", "deal", "__fmo__", "uppstartsmote", "hyresforhandling",
-      // Ej i huvudflödet men nåbara här:
-      "customer", "contact", "agreement",
     ],
   },
   {
@@ -87,9 +85,22 @@ const MENU_GROUPS: MenuGroup[] = [
   },
 ];
 
+/** Register (Förslag B punkt 6): kunder, kontakter, avtal och partners —
+ *  det man slår upp, skilt från det man arbetar med. */
+const REGISTER_KEYS = ["customer", "contact", "agreement", "partner"];
+
 /** Nycklar som inte grupperas utan visas fristående */
-const GROUPED_KEYS = new Set(MENU_GROUPS.flatMap((g) => g.keys));
-const HIDDEN_SPECIAL = new Set(["partner"]); // visas separat längst ner
+const GROUPED_KEYS = new Set([...MENU_GROUPS.flatMap((g) => g.keys), ...REGISTER_KEYS]);
+
+/** Färdiga ärendevyer överst i menyn (ÄRENDEN). Märket visar antal. */
+const CASE_VIEWS: Array<{ key: string; label: string; count?: string; alert?: boolean }> = [
+  { key: "mine", label: "Mina ärenden", count: "mine" },
+  { key: "open", label: "Alla ärenden" },
+  { key: "new", label: "Nya", count: "new" },
+  { key: "overdue", label: "Försenade", count: "overdue", alert: true },
+  { key: "waiting", label: "Väntar på svar", count: "waiting" },
+  { key: "unassigned", label: "Ej tilldelade", count: "unassigned" },
+];
 /** Ärenden har egen inkorg under Kundservice (inte den generiska listan). */
 const OWN_VIEW = new Set(["case"]);
 
@@ -183,6 +194,26 @@ const ICONS: Record<string, JSX.Element> = {
       <rect x="1.5" y="1.5" width="13" height="13" rx="2" />
     </svg>
   ),
+  mail: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
+      <path d="M2 4l6 5 6-5" />
+    </svg>
+  ),
+  partner: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5.5" cy="5.5" r="2" />
+      <circle cx="11" cy="6.5" r="1.7" />
+      <path d="M1.5 13c0-2.2 1.8-4 4-4s4 1.8 4 4" />
+      <path d="M10 9.2c2 0 4.5 1 4.5 3.8" />
+    </svg>
+  ),
+  settings: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+    </svg>
+  ),
   support_case: (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 3h12a1 1 0 011 1v6a1 1 0 01-1 1H5l-3 3V4a1 1 0 011-1z" />
@@ -225,7 +256,7 @@ function Chevron({ open }: { open: boolean }) {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, unassignedCases, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -248,13 +279,9 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
   // Objektmap för snabb lookup
   const objMap = new Map(objects.map((o) => [o.key, o]));
 
-  // Fristående objekt (inte i någon grupp, inte dolda)
-  const standalone = objects.filter(
-    (o) => !GROUPED_KEYS.has(o.key) && !HIDDEN_SPECIAL.has(o.key) && !OWN_VIEW.has(o.key)
-  );
-
-  // Ärenden + Partners (visas sist, fristående)
-  const bottomItems = objects.filter((o) => HIDDEN_SPECIAL.has(o.key));
+  // Fristående objekt (inte i någon grupp eller i Register)
+  const standalone = objects.filter((o) => !GROUPED_KEYS.has(o.key) && !OWN_VIEW.has(o.key));
+  const registerItems = REGISTER_KEYS.map((k) => objMap.get(k)).filter(Boolean) as ObjectDef[];
 
   // Om activeKey finns i en grupp, se till att den gruppen är expanderad
   // (vid mount och vid navigation)
@@ -263,6 +290,14 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
     // Vi sätter direkt utan setState för att undvika loop
     expanded[activeGroup.id] = true;
   }
+
+  const item = (key: string, label: string, icon?: JSX.Element, badge?: { n?: number; alert?: boolean }) => (
+    <button key={key} className="sidebar__item" aria-current={activeKey === key} onClick={() => selectAndClose(key)}>
+      {icon}
+      <span className="sidebar__label">{label}</span>
+      {!!badge?.n && <span className={`sidebar__badge${badge.alert ? " sidebar__badge--alert" : ""}`}>{badge.n}</span>}
+    </button>
+  );
 
   return (
     <>
@@ -279,12 +314,12 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           ) : (
             <>
               <span className="sidebar__mark">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 11l9-8 9 8" />
-                  <path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10" />
+                  <path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10" />
                 </svg>
               </span>
-              {branding?.name || "ConnectEstate"}
+              ConnectEstate
             </>
           )}
           <button
@@ -299,31 +334,27 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         </div>
         {/* Organisationen man arbetar i — som i förvaltarpanelen. */}
         <div className="sidebar__org">
-          <span className="sidebar__org-label">Organisation</span>
           <span className="sidebar__org-name">{branding?.name || "ConnectEstate"}</span>
         </div>
         <nav className="sidebar__nav">
-        {/* Översikt */}
-        <button
-          className="sidebar__item"
-          aria-current={activeKey === "__dashboard__"}
-          onClick={() => selectAndClose("__dashboard__")}
-        >
-          {ICONS.__dashboard__}
-          Översikt
-        </button>
+        {item("__dashboard__", "Översikt", ICONS.__dashboard__)}
+        {item("__tasks__", "Mina uppgifter", ICONS.__tasks__)}
 
-        {/* Mina uppgifter */}
-        <button
-          className="sidebar__item"
-          aria-current={activeKey === "__tasks__"}
-          onClick={() => selectAndClose("__tasks__")}
-        >
-          {ICONS.__tasks__}
-          Mina uppgifter
-        </button>
+        {/* ÄRENDEN — allt som är arbete, överst under Översikt (Förslag B, punkt 6). */}
+        {canCases && (
+          <>
+            <div className="sidebar__section-label">Ärenden</div>
+            {CASE_VIEWS.map((v) => item(`__cases_${v.key}__`, v.label, undefined,
+              v.count ? { n: caseCounts?.[v.count], alert: v.alert } : undefined))}
+            <button className="sidebar__item sidebar__item--create" aria-current={activeKey === "__newcase__"}
+              onClick={() => selectAndClose("__newcase__")}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+              <span className="sidebar__label">Skapa ärende</span>
+            </button>
+          </>
+        )}
 
-        <div className="sidebar__section-label">Moduler</div>
+        <div className="sidebar__section-label">Försäljning och leverans</div>
 
         {/* Grupperade sektioner */}
         {MENU_GROUPS.map((group) => {
@@ -331,7 +362,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           const groupObjects = group.keys
             .map((k) => objMap.get(k))
             .filter(Boolean) as ObjectDef[];
-          const hasActive = group.keys.includes(activeKey ?? "");
+          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__"].includes(activeKey ?? ""));
 
           // Hoppa över om inga objekt i gruppen finns
           if (groupObjects.length === 0) return null;
@@ -345,7 +376,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                 onClick={() => toggle(group.id)}
               >
                 {group.icon}
-                {group.label}
+                <span className="sidebar__label">{group.label}</span>
                 <Chevron open={isOpen} />
               </button>
 
@@ -423,94 +454,22 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           );
         })}
 
-        {/* Kundservice: fälls ut/ihop som övriga moduler */}
-        {canCases && (() => {
-          const caseKeys = ["__cases__", "__cases_unassigned__", "__m365__"];
-          const hasActive = caseKeys.includes(activeKey ?? "");
-          const isOpen = !!expanded.kundservice || hasActive;
-          return (
-            <div className="sidebar__group">
-              <button
-                className="sidebar__item sidebar__item--group"
-                aria-expanded={isOpen}
-                onClick={() => toggle("kundservice")}
-              >
-                {ICONS.support_case}
-                Kundservice
-                {!isOpen && !!unassignedCases && <span className="sidebar__badge">{unassignedCases}</span>}
-                <Chevron open={isOpen} />
-              </button>
-              {isOpen && (
-                <div className="sidebar__children">
-                  <button
-                    className="sidebar__item sidebar__item--child"
-                    aria-current={activeKey === "__cases__"}
-                    onClick={() => selectAndClose("__cases__")}
-                  >
-                    Ärenden
-                  </button>
-                  <button
-                    className="sidebar__item sidebar__item--child"
-                    aria-current={activeKey === "__cases_unassigned__"}
-                    onClick={() => selectAndClose("__cases_unassigned__")}
-                  >
-                    Otilldelade
-                    {!!unassignedCases && <span className="sidebar__badge">{unassignedCases}</span>}
-                  </button>
-                  {isAdmin && (
-                    <button
-                      className="sidebar__item sidebar__item--child"
-                      aria-current={activeKey === "__m365__"}
-                      onClick={() => selectAndClose("__m365__")}
-                    >
-                      Microsoft 365
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {/* REGISTER — kunder, kontakter, avtal och partners. */}
+        {(registerItems.length > 0 || standalone.length > 0) && <div className="sidebar__section-label">Register</div>}
+        {registerItems.map((o) => item(o.key, o.labelPlural, ICONS[o.key] ?? ICONS.contact))}
+        {standalone.map((o) => item(o.key, o.labelPlural, ICONS[o.key] ?? fallbackIcon()))}
 
-        {(bottomItems.length > 0 || standalone.length > 0 || isAdmin) && <div className="sidebar__section-label">Övrigt</div>}
-        {/* Fristående objekt (om några hamnar utanför grupperna) */}
-        {standalone.map((o) => (
-          <button
-            key={o.key}
-            className="sidebar__item"
-            aria-current={o.key === activeKey}
-            onClick={() => selectAndClose(o.key)}
-          >
-            {ICONS[o.key] ?? fallbackIcon()}
-            {o.labelPlural}
-          </button>
-        ))}
-
-        {/* Feedback från knappen längst ned till höger (administratörer) */}
-        {isAdmin && (
-          <button
-            className="sidebar__item"
-            aria-current={activeKey === "__feedback__"}
-            onClick={() => selectAndClose("__feedback__")}
-          >
-            {ICONS.__feedback__}
-            Feedback
-            {!!newFeedback && <span className="sidebar__badge">{newFeedback}</span>}
+        {/* ADMINISTRATION */}
+        <div className="sidebar__section-label">Administration</div>
+        {canCases && isAdmin && item("__m365__", "Microsoft 365", ICONS.mail)}
+        {isAdmin && item("__feedback__", "Feedback", ICONS.__feedback__, { n: newFeedback })}
+        {item("__import__", "Import", ICONS.__import__)}
+        {onOpenSettings && (
+          <button className="sidebar__item" onClick={() => { onOpenSettings(); onCloseMobile?.(); }}>
+            {ICONS.settings}
+            <span className="sidebar__label">Inställningar</span>
           </button>
         )}
-
-        {/* Ärenden & Partners */}
-        {bottomItems.map((o) => (
-          <button
-            key={o.key}
-            className="sidebar__item"
-            aria-current={o.key === activeKey}
-            onClick={() => selectAndClose(o.key)}
-          >
-            {ICONS[o.key] ?? fallbackIcon()}
-            {o.labelPlural}
-          </button>
-        ))}
       </nav>
       <div className="sidebar__bottom">
         {/* AI-assistenten öppnas som en panel nere till vänster (AiPanel). */}
@@ -523,23 +482,6 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           >
             <AiMascot size={22} />
             AI-assistent
-          </button>
-        )}
-        <button
-          className="sidebar__item"
-          aria-current={activeKey === "__import__"}
-          onClick={() => selectAndClose("__import__")}
-        >
-          {ICONS.__import__}
-          Import
-        </button>
-        {onOpenSettings && (
-          <button className="sidebar__item" onClick={() => { onOpenSettings(); onCloseMobile?.(); }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-            </svg>
-            Inställningar
           </button>
         )}
         {user && (
