@@ -59,6 +59,20 @@ const ALL_TOOLS: ToolDef[] = [
     }, ["objectType"]),
   },
   {
+    name: "summarize_records",
+    description: "Räkna ut summa, medel, min och max för talfält över ALLA poster som matchar (inga poster skickas tillbaka). " +
+      "Använd alltid detta för summor och medelvärden (t.ex. antal portar) — summera aldrig själv från search_records. " +
+      "Samma filters/status/query som search_records. groupBy: valfri fältnyckel eller __status för en uppdelning.",
+    input_schema: obj({
+      objectType: { type: "string" },
+      fields: { type: "array", items: { type: "string" }, description: "Talfält att summera, t.ex. [\"portar\"]" },
+      query: { type: "string" },
+      status: { type: "string" },
+      filters: { type: "array", items: { type: "object" } },
+      groupBy: { type: "string" },
+    }, ["objectType", "fields"]),
+  },
+  {
     name: "search_everything",
     description: "Sök fritt i alla moduler samtidigt (namn, adresser, nummer). Bra när du inte vet var något ligger.",
     input_schema: obj({ query: { type: "string" } }, ["query"]),
@@ -366,6 +380,50 @@ async function runTool(supabase: SupabaseClient, name: string, input: any): Prom
         total: res?.total ?? 0,
         items: (res?.items ?? []).map((r: any) => ({ id: r.id, title: r.title, status: r.status, updatedAt: r.updated_at, data: r.data })),
       };
+    }
+    case "summarize_records": {
+      const filters = Array.isArray(input.filters) ? [...input.filters] : [];
+      if (input.status) filters.push({ field: "__status", op: "eq", value: input.status });
+      const fields: string[] = (Array.isArray(input.fields) ? input.fields : [input.fields]).filter(Boolean).map(String).slice(0, 10);
+      if (!fields.length) return { error: "Ange minst ett fält i fields." };
+      const SIDA = 500, MAX = 10000;
+      const rows: any[] = [];
+      let total = 0;
+      for (let offset = 0; offset < MAX; offset += SIDA) {
+        const res = await rpc(supabase, "list_records_filtered", {
+          p_object_type: input.objectType, p_search: input.query || null, p_filters: filters,
+          p_sort_field: "created_at", p_sort_dir: "asc", p_limit: SIDA, p_offset: offset,
+        });
+        total = res?.total ?? 0;
+        const items = (res?.items ?? []) as any[];
+        rows.push(...items);
+        if (items.length < SIDA || rows.length >= total) break;
+      }
+      const tal = (v: unknown): number | null => {
+        if (typeof v === "number") return Number.isFinite(v) ? v : null;
+        if (typeof v !== "string") return null;
+        const m = v.replace(/\s/g, "").replace(",", ".").match(/-?\d+(\.\d+)?/);
+        return m ? Number(m[0]) : null;
+      };
+      const rakna = (lista: any[]) => Object.fromEntries(fields.map((f) => {
+        const v = lista.map((r) => tal(r.data?.[f])).filter((x): x is number => x !== null);
+        const sum = v.reduce((a, b) => a + b, 0);
+        return [f, { summa: Math.round(sum * 100) / 100, medel: v.length ? Math.round((sum / v.length) * 100) / 100 : null,
+          min: v.length ? Math.min(...v) : null, max: v.length ? Math.max(...v) : null, medVarde: v.length, utanVarde: lista.length - v.length }];
+      }));
+      const ut: Record<string, unknown> = { antalPoster: rows.length, ...(rows.length < total ? { obs: `Bara ${rows.length} av ${total} poster räknades.` } : {}), falt: rakna(rows) };
+      if (input.groupBy) {
+        const g = String(input.groupBy);
+        const grupper = new Map<string, any[]>();
+        for (const r of rows) {
+          const raw = g === "__status" ? r.status : r.data?.[g];
+          const k = raw === null || raw === undefined || raw === "" ? "(tomt)" : (typeof raw === "object" ? JSON.stringify(raw) : String(raw));
+          if (!grupper.has(k)) grupper.set(k, []);
+          grupper.get(k)!.push(r);
+        }
+        ut.grupper = [...grupper.entries()].slice(0, 60).map(([k, l]) => ({ grupp: k, antalPoster: l.length, falt: rakna(l) }));
+      }
+      return ut;
     }
     case "search_everything": {
       const meta = await rpc(supabase, "get_metadata");
