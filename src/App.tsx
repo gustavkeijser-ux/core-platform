@@ -25,7 +25,8 @@ import { NummerbytenPage } from "@/components/NummerbytenPage";
 import { CasesPage } from "@/components/CasesPage";
 import { CaseView } from "@/components/CaseView";
 import { M365StatusPage } from "@/components/M365StatusPage";
-import { type CaseFilter, getCaseSummary } from "@/lib/cases";
+import { type CaseFilter, type CaseCounts, listArenden } from "@/lib/cases";
+import { SkapaArendePage } from "@/components/SkapaArende";
 import { ImportPage } from "@/components/ImportPage";
 import { FmoPage } from "@/components/FmoPage";
 import { arFmo } from "@/lib/fmo";
@@ -46,6 +47,7 @@ type View =
   | { kind: "nummerbyten" }
   | { kind: "cases"; filter: CaseFilter }
   | { kind: "case"; id: string }
+  | { kind: "newcase" }
   | { kind: "m365" }
   | { kind: "feedback" }
   | { kind: "fmo" };
@@ -63,6 +65,7 @@ function viewFromSegs(segs: string[]): View {
     case "nummerbyten": return { kind: "nummerbyten" };
     case "arenden": return { kind: "cases", filter: (CASE_FILTERS.includes(segs[1] as CaseFilter) ? segs[1] : "open") as CaseFilter };
     case "arende": if (segs[1]) return { kind: "case", id: segs[1] }; break;
+    case "nytt-arende": return { kind: "newcase" };
     case "m365": return { kind: "m365" };
     case "feedback": return { kind: "feedback" };
     case "fmo": return { kind: "fmo" };
@@ -72,12 +75,13 @@ function viewFromSegs(segs: string[]): View {
 }
 
 const CASE_FILTERS: CaseFilter[] = ["open", "all", "new", "mine", "unassigned", "in_progress", "waiting_customer",
-  "waiting_internal", "waiting_contractor", "resolved", "closed", "overdue"];
+  "waiting_internal", "waiting_contractor", "resolved", "closed", "overdue", "waiting"];
 
 const segsFromView = (v: View): string[] =>
   v.kind === "list" ? ["list", v.objectType]
   : v.kind === "cases" ? (v.filter === "open" ? ["arenden"] : ["arenden", v.filter])
   : v.kind === "case" ? ["arende", v.id]
+  : v.kind === "newcase" ? ["nytt-arende"]
   : [v.kind];
 
 export default function App() {
@@ -106,7 +110,7 @@ export default function App() {
   const [listReloadKey, setListReloadKey] = useState(0);
   const [visaInstallningar, setVisaInstallningar] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [unassignedCases, setUnassignedCases] = useState(0);
+  const [caseCounts, setCaseCounts] = useState<CaseCounts>({});
   const [newFeedback, setNewFeedback] = useState(0);
   // AI-assistenten: panel nere till vänster, öppnas från ikonen ovanför Import.
   const [aiOpen, setAiOpen] = useState(false);
@@ -143,15 +147,16 @@ export default function App() {
       .catch((e) => setMetaError(e.message ?? "Kunde inte hämta metadata."));
   }, [session]);
 
-  // Antal otilldelade ärenden i menyn — uppdateras varje minut.
+  // Antal per färdig ärendevy i menyn (Mina, Nya, Försenade …) — uppdateras
+  // varje minut och när man byter sida.
   useEffect(() => {
     if (!metaReady || !objects?.some((o) => o.key === "case")) return;
     let on = true;
-    const tick = () => getCaseSummary().then((s) => { if (on && s) setUnassignedCases(s.today.unassigned); });
+    const tick = () => listArenden("open", "", {}, 1, 0).then((r) => { if (on) setCaseCounts(r.counts ?? {}); }).catch(() => {});
     tick();
     const t = window.setInterval(tick, 60_000);
     return () => { on = false; window.clearInterval(t); };
-  }, [metaReady, objects]);
+  }, [metaReady, objects, route.segs[0]]);
 
   // Antal nya feedback (siffran vid Övrigt → Feedback, bara för administratörer).
   useEffect(() => {
@@ -226,6 +231,7 @@ export default function App() {
     : view?.kind === "dashboard" ? `${tenantName} · ${new Date().toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}`
     : view?.kind === "cases" ? "Följ upp kundernas ärenden"
     : view?.kind === "case" ? "Ärende från kundtjänst"
+    : view?.kind === "newcase" ? "För ärenden som kommer in per telefon, personligt eller internt"
     : view?.kind === "tasks" ? "Dina uppgifter i alla moduler"
     : view?.kind === "import" ? "Läs in data från fil"
     : view?.kind === "d2dbuilder" ? "Projekt, adresser och tilldelning"
@@ -252,7 +258,7 @@ export default function App() {
     : view?.kind === "import" ? "Import"
     : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" || view?.kind === "d2dpriser" ? "Door2Door"
     : view?.kind === "nummerbyten" ? (objectDefFor("nummerbyte")?.labelPlural ?? "Annat")
-    : view?.kind === "cases" || view?.kind === "case" ? "Ärenden"
+    : view?.kind === "cases" || view?.kind === "case" || view?.kind === "newcase" ? "Ärenden"
     : view?.kind === "m365" ? "Microsoft 365"
     : "Annat";
 
@@ -284,7 +290,7 @@ export default function App() {
         onCloseMobile={() => setMobileNavOpen(false)}
         canCases={canCases}
         isAdmin={isAdmin}
-        unassignedCases={unassignedCases}
+        caseCounts={caseCounts}
         newFeedback={newFeedback}
         user={{ id: session.user.id, email: session.user.email ?? "", role: isAdmin ? "Administratör" : isSeller ? "Säljare" : "Användare" }}
         onOpenSettings={() => setVisaInstallningar(true)}
@@ -301,8 +307,9 @@ export default function App() {
           : view?.kind === "d2davtal" ? "__d2davtal__"
           : view?.kind === "d2dpriser" ? "__d2dpriser__"
           : view?.kind === "nummerbyten" ? "nummerbyte"
-          : view?.kind === "cases" ? (view.filter === "unassigned" ? "__cases_unassigned__" : "__cases__")
-          : view?.kind === "case" ? "__cases__"
+          : view?.kind === "cases" ? `__cases_${view.filter}__`
+          : view?.kind === "case" ? null
+          : view?.kind === "newcase" ? "__newcase__"
           : view?.kind === "m365" ? "__m365__"
           : view?.kind === "feedback" ? "__feedback__"
           : view?.kind === "fmo" ? "__fmo__"
@@ -319,8 +326,8 @@ export default function App() {
             : key === "__d2davtal__" ? { kind: "d2davtal" }
             : key === "__d2dpriser__" ? { kind: "d2dpriser" }
             : key === "nummerbyte" ? { kind: "nummerbyten" }
-            : key === "__cases__" ? { kind: "cases", filter: "open" }
-            : key === "__cases_unassigned__" ? { kind: "cases", filter: "unassigned" }
+            : key === "__newcase__" ? { kind: "newcase" }
+            : key.startsWith("__cases_") ? { kind: "cases", filter: key.slice(8, -2) as CaseFilter }
             : key === "__m365__" ? { kind: "m365" }
             : key === "__feedback__" ? { kind: "feedback" }
             : key === "__fmo__" ? { kind: "fmo" }
@@ -357,6 +364,7 @@ export default function App() {
                 : view?.kind === "nummerbyten" ? "Nummerbyten"
                 : view?.kind === "cases" ? "Ärenden"
                 : view?.kind === "case" ? "Ärende"
+                : view?.kind === "newcase" ? "Skapa ärende"
                 : view?.kind === "m365" ? "Microsoft 365"
                 : view?.kind === "feedback" ? "Feedback"
                 : view?.kind === "fmo" ? "FMO-check"
@@ -403,6 +411,15 @@ export default function App() {
             filter={view.filter}
             statuses={objectDefFor("case")?.statuses ?? []}
             onFilter={(f) => navigate(segsFromView({ kind: "cases", filter: f }), undefined, true)}
+            onOpenCase={(id) => setView({ kind: "case", id })}
+            onCreate={() => setView({ kind: "newcase" })}
+          />
+        )}
+
+        {view?.kind === "newcase" && (
+          <SkapaArendePage
+            onCancel={() => goBack(() => setView({ kind: "cases", filter: "open" }))}
+            onCreated={(id) => navigate(["arende", id], undefined, true)}
             onOpenCase={(id) => setView({ kind: "case", id })}
           />
         )}
