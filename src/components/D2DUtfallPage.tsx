@@ -43,7 +43,7 @@ const STATUS: Record<string, string> = {
   sald: "Såld", scrive: "Signera med Scrive", aterkoppling: "Återkoppling", inte_intresserad: "Inte intresserad", befintlig_telia: "Befintlig Telia-kund", kall_kund: "Kall kund", ovrigt: "Övrigt", inte_hemma: "Inte hemma",
 };
 const KATEGORI: Array<[string, string]> = [
-  ["bredband", "Bredband"], ["tv", "TV"], ["mobil_huvud", "Mobil – huvudabonnemang"], ["mobil_extra", "Mobil – extraanvändare (antal)"],
+  ["bredband", "Bredband"], ["tv", "TV (utöver Start/Bas)"], ["mobil_huvud", "Mobil – huvudabonnemang"], ["mobil_extra", "Mobil – extraanvändare (antal)"],
   ["streaming_film", "Streaming film och serier"], ["streaming_sport", "Sportpaket"], ["trygghet", "Trygghetspaket"],
 ];
 const EJ_MER: Record<string, string> = {
