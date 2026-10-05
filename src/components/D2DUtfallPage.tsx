@@ -12,7 +12,8 @@ import { FilterPills, SkeletonRows } from "./PageChrome";
      • Totalt — båda tillsammans (en kund räknas en gång).
    ========================================================================== */
 
-type Kommentar = { id: string; adress: string; ort: string | null; kommentar: string | null; saljare: string | null };
+/** ai = AI:s tolkning av kommentaren (när säljaren inte själv valt skäl). */
+type Kommentar = { id: string; adress: string; ort: string | null; kommentar: string | null; saljare: string | null; ai?: string | null };
 type Rad = { id: string; adress: string; ort: string | null; status: string; bunden: string; tjanst: string[]; operator: string | null; saljare: string | null; kommentar: string | null };
 type Utfall = {
   besok: number;
@@ -116,6 +117,7 @@ function SkalLista({ rader, onOpen }: {
                 </button>
                 {k.saljare && <span className="utf__sub"> · {k.saljare}</span>}
                 <p className={k.kommentar ? "utf-skal__text" : "utf-skal__text utf-skal__text--tom"}>{k.kommentar ?? "Ingen kommentar."}</p>
+                {k.ai && <p className="utf-skal__ai"><span>AI-tolkning</span>{k.ai}</p>}
               </li>
             ))}
           </ul>
@@ -288,11 +290,11 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
                   ...Object.entries(u.sald.ejMer).sort((a, b) => (a[0] === "annat" ? 1 : 0) - (b[0] === "annat" ? 1 : 0) || b[1] - a[1])
                     .map(([k, n]) => ({ key: k, lbl: EJ_MER[k] ?? k, n, poster: u.ejMerKommentarer?.[k] ?? [] })),
                   ...(u.sald.ejMerUtanSkal > 0
-                    ? [{ key: "saknas", lbl: "Inget skäl valt", n: u.sald.ejMerUtanSkal, poster: u.ejMerKommentarer?.saknas ?? [] }]
+                    ? [{ key: "saknas", lbl: "Inget skäl valt eller i kommentaren", n: u.sald.ejMerUtanSkal, poster: u.ejMerKommentarer?.saknas ?? [] }]
                     : []),
                 ]}
               />
-              <p className="formfield__help">Klicka på ett skäl för att se säljarnas kommentarer.</p>
+              <p className="formfield__help">Klicka på ett skäl för att se säljarnas kommentarer. Har säljaren inte valt skäl läser AI kommentaren och tolkar varför kunden bara tog bredband; det uppdateras inom några minuter efter varje försäljning eller ändrad kommentar.</p>
             </div>
           </div>
         </section>
