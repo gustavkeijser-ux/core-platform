@@ -19,7 +19,7 @@ const fail = (e: { code?: string; message: string }): never => {
 export type CaseFilter =
   | "open" | "all" | "new" | "mine" | "unassigned" | "in_progress"
   | "waiting_customer" | "waiting_internal" | "waiting_contractor"
-  | "resolved" | "closed" | "overdue";
+  | "resolved" | "closed" | "overdue" | "waiting";
 
 export type SlaState = "ok" | "warning" | "breached" | "met" | null;
 export type CasePriority = "normal" | "high" | "critical" | "urgent";
@@ -42,13 +42,60 @@ export type CaseListItem = {
   id: string; caseNumber: string | null; title: string | null; status: string;
   priority: CasePriority; category: string | null; subcategory: string | null;
   categoryLabel: string | null; subcategoryLabel: string | null;
-  kundEpost: string | null; fastighet: string | null; lagenhet: string | null;
+  kundEpost: string | null; kundNamn?: string | null; fastighet: string | null; lagenhet: string | null;
   ownerUserId: string | null; channel: string | null;
   lastActivityAt: string | null; createdAt: string; sla: SlaState; nextDue: string | null;
+  deadline?: string | null;
   firstResponseAt: string | null; preview: string | null; lastDirection: "inbound" | "outbound" | null;
 };
 
-export type CaseCounts = Record<CaseFilter, number>;
+export type CaseCounts = Partial<Record<CaseFilter, number>>;
+
+/** Filter i ärendelistan (kombinerbara, körs på servern). */
+export type ArendeFilter = { status?: string; category?: string; priority?: string; owner?: string; sort?: "deadline" | "priority" | "created" | "activity" };
+
+/** Ärendelistan: färdig vy + sök + kombinerbara filter, sidvis. */
+export async function listArenden(vy: CaseFilter, search: string, f: ArendeFilter, limit = 50, offset = 0) {
+  const { data, error } = await supabase.rpc("list_arenden", {
+    p_filter: vy, p_search: search.trim() || null,
+    p_status: f.status || null, p_category: f.category || null, p_priority: f.priority || null,
+    p_owner: f.owner || null, p_sort: f.sort ?? "deadline", p_limit: limit, p_offset: offset,
+  });
+  if (error) fail(error);
+  return data as { items: CaseListItem[]; total: number; counts: CaseCounts };
+}
+
+export type NyttArende = {
+  title: string; channel: string; kundEpost?: string; kundNamn?: string; kundTelefon?: string; body: string;
+  priority: string; category: string; ansvarig?: string | null; deadline?: string | null; atgard?: string;
+  lagenhet?: string | null; property?: string | null;
+};
+
+export async function arendeSkapa(a: NyttArende) {
+  const { data, error } = await supabase.rpc("arende_skapa", {
+    p_title: a.title, p_channel: a.channel, p_kund_epost: a.kundEpost || null, p_kund_namn: a.kundNamn || null,
+    p_kund_telefon: a.kundTelefon || null, p_body: a.body || null, p_priority: a.priority, p_category: a.category || null,
+    p_ansvarig: a.ansvarig || null, p_deadline: a.deadline || null, p_atgard: a.atgard || null,
+    p_lagenhet: a.lagenhet || null, p_property: a.property || null,
+  });
+  if (error) fail(error);
+  return data as string;
+}
+
+export async function caseSetDeadline(id: string, deadline: string | null) {
+  const { error } = await supabase.rpc("case_set_deadline", { p_case: id, p_deadline: deadline });
+  if (error) fail(error);
+}
+
+export type LiknandeArende = { id: string; caseNumber: string | null; title: string | null; status: string; createdAt: string; varfor: string };
+export async function caseLiknande(p: { lagenhet?: string | null; property?: string | null; kundEpost?: string | null; category?: string | null }) {
+  const { data, error } = await supabase.rpc("case_liknande", {
+    p_lagenhet: p.lagenhet || null, p_property: p.property || null,
+    p_kund_epost: p.kundEpost?.trim() || null, p_category: p.category || null,
+  });
+  if (error) return [] as LiknandeArende[];
+  return (data ?? []) as LiknandeArende[];
+}
 
 export async function listCases(filter: CaseFilter, search: string, limit = 50, offset = 0) {
   const { data, error } = await supabase.rpc("list_cases", {
