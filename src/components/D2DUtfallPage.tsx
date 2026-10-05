@@ -5,7 +5,11 @@ import { FilterPills, SkeletonRows } from "./PageChrome";
 /* =============================================================================
    Door to door → Utfall. Vad som hände vid dörrarna: utfall, merförsäljning
    på sålda kunder, varför kunder säger nej och när deras bindningar löper ut
-   (med återringningslista). Allt räknas i databasen (d2d_utfall).
+   (med återringningslista). Allt räknas i databasen (d2d_utfall_kalla).
+   Tre flikar som på Avtal-sidan:
+     • Sålda — lägenheter med status "Såld" i D2D.
+     • Scrive — lägenheter med ett signerat Scrive-avtal.
+     • Totalt — båda tillsammans (en kund räknas en gång).
    ========================================================================== */
 
 type Kommentar = { id: string; adress: string; ort: string | null; kommentar: string | null; saljare: string | null };
@@ -17,10 +21,21 @@ type Utfall = {
   ejMerKommentarer?: Record<string, Kommentar[]>;
   ejIntresserad: Record<string, number>;
   bindningar: { hushall: number; ejSalda: number; svaradeEjSalda: number; perManad: Record<string, number>; tjanst: Record<string, number>; operator: Record<string, number> };
+  kalla?: Kalla;
+  scrive?: { skickade: number; signerade: number; vantar: number; avbrutna: number };
   perSaljare: Array<{ id: string; namn: string | null; besok: number; oppnade: number; salda: number; mer: number }>;
   aterringning: Rad[];
   projekt: Array<{ id: string; title: string | null }>;
   saljare: Array<{ id: string; namn: string | null }>;
+};
+
+type Kalla = "sald" | "scrive" | "totalt";
+const FLIKAR: Array<[Kalla, string]> = [["sald", "Sålda"], ["scrive", "Scrive"], ["totalt", "Totalt"]];
+/** Ord som skiljer sig mellan flikarna. */
+const ORD: Record<Kalla, { enhet: string; rubrik: string; kolumn: string }> = {
+  sald: { enhet: "sålda", rubrik: "Sålda kunder", kolumn: "Sålda" },
+  scrive: { enhet: "signerade", rubrik: "Kunder som signerat med Scrive", kolumn: "Signerade" },
+  totalt: { enhet: "sålda eller signerade", rubrik: "Sålda och signerade kunder", kolumn: "Sålda + signerade" },
 };
 
 const STATUS: Record<string, string> = {
@@ -119,21 +134,27 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
   const [period, setPeriod] = useState<Period>("30");
   const [projekt, setProjekt] = useState("");
   const [saljare, setSaljare] = useState("");
-  const [u, setU] = useState<Utfall | null>(null);
+  const [kalla, setKalla] = useState<Kalla>("sald");
+  const [alla, setAlla] = useState<Partial<Record<Kalla, Utfall>> | null>(null);
+  const u = alla?.[kalla] ?? null;
   const [fel, setFel] = useState<string | null>(null);
   const [horisont, setHorisont] = useState<"3" | "6" | "alla">("6");
 
+  // Alla tre flikarna hämtas på en gång, så att byte av flik går direkt.
   useEffect(() => {
     let on = true;
-    setU(null); setFel(null);
-    supabase.rpc("d2d_utfall", {
-      p_projekt: projekt || null, p_saljare: saljare || null, p_fran: periodFran(period), p_till: null,
-    }).then(({ data, error }) => {
-      if (!on) return;
-      if (error) setFel(error.message); else setU(data as Utfall);
-    });
+    setAlla(null); setFel(null);
+    const arg = { p_projekt: projekt || null, p_saljare: saljare || null, p_fran: periodFran(period), p_till: null };
+    Promise.all(FLIKAR.map(([k]) => supabase.rpc("d2d_utfall_kalla", { p_kalla: k, ...arg })))
+      .then((res) => {
+        if (!on) return;
+        const err = res.find((r) => r.error)?.error;
+        if (err) { setFel(err.message); return; }
+        setAlla(Object.fromEntries(FLIKAR.map(([k], i) => [k, res[i].data as Utfall])));
+      });
     return () => { on = false; };
   }, [period, projekt, saljare]);
+  const ord = ORD[kalla];
 
   // Bindningar per kvartal (år utan månad och okända för sig).
   const kvartal = useMemo(() => {
@@ -174,6 +195,18 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
 
   return (
     <div className="page utf">
+      <div className="tab-bar d2davt__flikar" role="tablist">
+        {FLIKAR.map(([k, label]) => {
+          const n = alla?.[k]?.sald.antal;
+          return (
+            <button key={k} role="tab" aria-selected={kalla === k} className={`tab-bar__tab${kalla === k ? " tab-bar__tab--active" : ""}`}
+              onClick={() => setKalla(k)}>
+              {label}{n != null && <span className="tab-bar__count">{n}</span>}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="utf__filter">
         <FilterPills
           active={period}
@@ -201,9 +234,27 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         <div className="utf__tiles">
           <div className="utf__tile"><b>{u.besok}</b><span>knackade dörrar</span></div>
           <div className="utf__tile"><b>{oppnade}</b><span>öppnade ({pct(oppnade, u.besok)} %)</span></div>
-          <div className="utf__tile"><b>{u.sald.antal}</b><span>sålda ({pct(u.sald.antal, oppnade)} % av öppnade)</span></div>
+          <div className="utf__tile"><b>{u.sald.antal}</b><span>{ord.enhet} ({pct(u.sald.antal, oppnade)} % av öppnade)</span></div>
           <div className="utf__tile"><b>{u.sald.merAnBredband} av {u.sald.antal}</b><span>köpte mer än bredband</span></div>
         </div>
+
+        {kalla === "scrive" && u.scrive && (
+          <section className="card utf__sek">
+            <h2>Scrive-avtal</h2>
+            <div className="utf__tiles">
+              <div className="utf__tile"><b>{u.scrive.skickade}</b><span>avtal skickade</span></div>
+              <div className="utf__tile"><b>{u.scrive.signerade}</b><span>signerade ({pct(u.scrive.signerade, u.scrive.skickade)} %)</span></div>
+              <div className="utf__tile"><b>{u.scrive.vantar}</b><span>väntar på signatur</span></div>
+              <div className="utf__tile"><b>{u.scrive.avbrutna}</b><span>avbrutna eller avvisade</span></div>
+            </div>
+          </section>
+        )}
+        {kalla === "totalt" && (
+          <p className="utf__ingress">
+            Totalt räknar lägenheter som är sålda i D2D eller har ett signerat Scrive-avtal. En kund som har båda räknas en gång
+            ({(alla?.sald?.sald.antal ?? 0)} sålda + {(alla?.scrive?.sald.antal ?? 0)} signerade = {u.sald.antal} kunder).
+          </p>
+        )}
 
         <section className="card utf__sek">
           <h2>Utfall av besöken</h2>
@@ -220,7 +271,7 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         </section>
 
         <section className="card utf__sek">
-          <h2>Sålda kunder</h2>
+          <h2>{ord.rubrik}</h2>
           <div className="utf__two">
             <div>
               <h3>Sålda tjänster</h3>
@@ -249,7 +300,7 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         <section className="card utf__sek">
           <h2>Bindningstider</h2>
           <p className="utf__ingress">
-            {u.bindningar.ejSalda} av {u.bindningar.svaradeEjSalda} som öppnade men inte köpte är bundna hos en annan operatör
+            {u.bindningar.ejSalda} av {u.bindningar.svaradeEjSalda} som öppnade men inte {kalla === "scrive" ? "signerade" : "köpte"} är bundna hos en annan operatör
             ({pct(u.bindningar.ejSalda, u.bindningar.svaradeEjSalda)} %). Totalt {u.bindningar.hushall} hushåll med bindning.
           </p>
           {kvartal.length > 0 && (
@@ -315,14 +366,14 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
             <h2>Per säljare</h2>
             <div className="rtable-scroll">
               <table className="rtable utf__tabell">
-                <thead><tr><th>Säljare</th><th>Besök</th><th>Öppnade</th><th>Sålda</th><th>Mer än bredband</th></tr></thead>
+                <thead><tr><th>Säljare</th><th>Besök</th><th>Öppnade</th><th>{ord.kolumn}</th><th>Mer än bredband</th></tr></thead>
                 <tbody>
                   {u.perSaljare.map((p) => (
                     <tr key={p.id} className="rtable__row">
                       <td className="rtable__title" data-label="Säljare">{p.namn ?? "Okänd"}</td>
                       <td data-label="Besök" className="utf__num">{p.besok}</td>
                       <td data-label="Öppnade" className="utf__num">{p.oppnade}</td>
-                      <td data-label="Sålda" className="utf__num">{p.salda} ({pct(p.salda, p.oppnade)} %)</td>
+                      <td data-label={ord.kolumn} className="utf__num">{p.salda} ({pct(p.salda, p.oppnade)} %)</td>
                       <td data-label="Mer än bredband" className="utf__num">{p.mer} av {p.salda}</td>
                     </tr>
                   ))}
