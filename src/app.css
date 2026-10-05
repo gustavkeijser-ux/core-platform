@@ -4870,3 +4870,5 @@ kbd {
 .d2davt .utf__sek { min-width: 0; overflow: hidden; }
 .d2davt .utf__sekhuvud .filter-pills { flex-wrap: wrap; }
 .d2davt .rtable td { overflow-wrap: anywhere; min-width: 0; }
+.d2davt__flikar { padding: 0; margin-bottom: calc(-1 * var(--sp-2)); overflow-x: auto; }
+.d2davt__summa td { border-top: 2px solid var(--border); background: var(--surface-alt); }
