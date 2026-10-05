@@ -1289,18 +1289,28 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
     <div className="d2d-app" style={brandVars as CSSProperties}>
       {/* Top header */}
       <div className="d2d-header">
-        <div className="d2d-header__brand">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M3 8l7-5 7 5v8a1 1 0 01-1 1H4a1 1 0 01-1-1V8z"/>
-            <path d="M8 17V11h4v6"/>
-          </svg>
-          Door 2 Door
+        <div className="d2d-header__left">
+          {/* Tillbaka till CRM:et ligger till vänster, som en tillbakaknapp. */}
+          {onExitD2D && (
+            <button className="d2d-header__crm" onClick={onExitD2D} aria-label="Tillbaka till CRM">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+              CRM
+            </button>
+          )}
+          <div className="d2d-header__brand">
+            <span className="d2d-header__mark">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M3 11l9-8 9 8" />
+                <path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10" />
+              </svg>
+            </span>
+            Door 2 Door
+          </div>
         </div>
         <div className="d2d-header__actions">
           <ThemeToggle />
-          {onExitD2D && (
-            <button className="btn btn--ghost btn--sm" onClick={onExitD2D}>CRM</button>
-          )}
           <button className="btn btn--ghost btn--sm" onClick={() => supabase.auth.signOut()}>Logga ut</button>
         </div>
       </div>
