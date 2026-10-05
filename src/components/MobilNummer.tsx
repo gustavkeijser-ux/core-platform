@@ -79,7 +79,14 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch }: Props) 
   const setVal = (v: string | null) => onPatch({ mobil_nummerval: v }, 0);
   const saveRows = (next: NummerRad[], delay = 800) => {
     setRows(next);
-    onPatch({ mobil_nummer: { rows: next } }, delay);
+    const patch: Record<string, unknown> = { mobil_nummer: { rows: next } };
+    // En extraanvändare bland numren är också en såld extraanvändare: markera
+    // valet "Extra användare" så att avtalsförslag, Scrive och Utfall tar med den.
+    const mobil = Array.isArray(data.salt_mobil) ? (data.salt_mobil as unknown[]).map(String) : [];
+    if (next.some((r) => r.typ === "extra") && !mobil.includes("extra_anvandare")) {
+      patch.salt_mobil = [...mobil, "extra_anvandare"];
+    }
+    onPatch(patch, delay);
   };
   const setCell = (i: number, key: keyof Omit<NummerRad, "typ">, v: string) =>
     saveRows(rows.map((r, j) => (j === i ? { ...r, [key]: v } : r)));
