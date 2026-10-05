@@ -18,7 +18,7 @@ type Rad = { id: string; adress: string; ort: string | null; status: string; bun
 type Utfall = {
   besok: number;
   statusar: Record<string, number>;
-  sald: { antal: number; merAnBredband: number; kategorier: Record<string, number>; ejMer: Record<string, number>; ejMerUtanSkal: number };
+  sald: { antal: number; merAnBredband: number; antalAvtal?: Record<string, number>; kategorier: Record<string, number>; ejMer: Record<string, number>; ejMerUtanSkal: number };
   ejMerKommentarer?: Record<string, Kommentar[]>;
   ejIntresserad: Record<string, number>;
   bindningar: { hushall: number; ejSalda: number; svaradeEjSalda: number; perManad: Record<string, number>; tjanst: Record<string, number>; operator: Record<string, number> };
@@ -281,6 +281,10 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
               {(u.sald.kategorier.bredbandUtanUppgift ?? 0) > 0 && (
                 <p className="formfield__help">{u.sald.kategorier.bredbandUtanUppgift} äldre affärer saknar ifyllda tjänster och räknas som bredband.</p>
               )}
+              <h3 className="utf__h3-mellan">Antal avtal per kund</h3>
+              <Staplar rader={["1", "2", "3", "4", "5", "6+"].map((k) => [`${k} avtal`, u.sald.antalAvtal?.[k] ?? 0] as [string, number])}
+                tom="Inga kunder." />
+              <p className="formfield__help">Ett avtal = en tjänst: bredband, TV (utöver Start/Bas), varje mobilabonnemang och extraanvändare, streaming och trygghetspaket.</p>
             </div>
             <div>
               <h3>Varför {baraBredband} bara tog bredband</h3>
