@@ -10,8 +10,11 @@
    - Primärfärg: teal #1E7A8C för CTA och aktiva lägen, navy #14213D för text.
    - Statusfärger konsekventa överallt: grön = klar/aktiv, amber = väntande,
      röd = fel/destruktiv, blå = pågående/info, grå = inaktiv.
-   - Hörnradier: 9–10 ikonchip, 11 fält/knapp, 12 nästlad ruta, 16 kort,
-     20 dialog.
+   - Hörnradier: 9–10 ikonbricka, 11 fält/knapp, 12 infobox, 13 stort
+     ikonmärke, 14 radkort, 16 panelkort, 20 dialog.
+   - Ikoner i konturstil, 2,1–2,4 px linje. Status bärs aldrig av färg
+     ensam: ikon eller ord följer alltid med.
+   (Fas 3 — startpunkt, punkt 2 "Designsystem i korthet".)
 
    En regel: komponenter refererar bara till variabler härifrån. Byt tema
    genom att sätta data-theme på <html> — allt annat följer med.
@@ -46,8 +49,9 @@
   --surface-alt:  #F4F6F9;
 
   --ink:            #14213D;
-  --ink-muted:      #6B7280;
-  --ink-faint:      #9AA4B2;
+  --ink-soft:       #3F4A5A;   /* brödtext i kort och listor */
+  --ink-muted:      #5B6472;   /* etiketter, undertexter */
+  --ink-faint:      #7A8494;   /* platshållare, metadata */
   --ink-on-canvas:  #14213D;
 
   --overlay-soft:   rgba(20,33,61,.04);
@@ -57,6 +61,14 @@
 
   --border:        #E4E9EF;
   --border-strong: #D7DEE6;
+  --border-input:  #CBD2DB;   /* fält och sekundärknappar */
+  --divider:       #EDF0F4;   /* linjer mellan rader */
+
+  --brand-ink:     #14606F;   /* text på tonad teal (aktivt menyval, länkar) */
+  --brand-tint:    #E3F3F2;   /* tonad teal-yta */
+  --danger-ink:    #B91C1C;   /* röd text på ljus botten */
+  --danger-soft:   #FEE2E2;
+  --neutral-soft:  #EDF0F4;   /* neutrala märken */
 
   --warn-soft: #FEF3E2;
   --warn-ink:  #B45309;
@@ -68,9 +80,9 @@
   --hue-violet: #6D28D9;
   --hue-amber:  #D97706;
   --hue-orange: #C2410C;
-  --hue-green:  #15803D;
-  --hue-red:    #DC2626;
-  --hue-zinc:   #9AA4B2;
+  --hue-green:  #16A34A;   /* aktiv, klar */
+  --hue-red:    #EF4444;   /* fel, destruktiv */
+  --hue-zinc:   #9AA4B2;   /* vakant, inaktiv */
 
   --shadow-sm: 0 1px 2px rgba(20,33,61,.04);
   --shadow-md: 0 1px 2px rgba(20,33,61,.04), 0 8px 24px rgba(20,33,61,.05);
@@ -100,11 +112,14 @@
   --tracking-label: 0.05em;
 
   /* --- Rundning (se skalan ovan) ------------------------------------------ */
-  --r-xs:   9px;
-  --r-sm:   11px;
-  --r-md:   16px;
+  --r-xs:   10px;   /* ikonbricka 9–10 */
+  --r-sm:   11px;   /* fält och knapp */
+  --r-box:  12px;   /* infobox */
+  --r-icon: 13px;   /* stort ikonmärke */
+  --r-row:  14px;   /* radkort */
+  --r-md:   16px;   /* panelkort */
   --r-lg:   16px;
-  --r-xl:   20px;
+  --r-xl:   20px;   /* dialog */
   --r-pill: 999px;
 
   /* --- Rytm -------------------------------------------------------------- */
@@ -127,8 +142,9 @@
   --surface-alt:  #1F2B42;
 
   --ink:            #EEF2F7;
+  --ink-soft:       #C9D1DD;
   --ink-muted:      #A3AEC0;
-  --ink-faint:      #6F7B90;
+  --ink-faint:      #7D8899;
   --ink-on-canvas:  #EEF2F7;
 
   --overlay-soft:   rgba(255,255,255,.05);
@@ -138,6 +154,14 @@
 
   --border:        rgba(255,255,255,.08);
   --border-strong: rgba(255,255,255,.15);
+  --border-input:  rgba(255,255,255,.16);
+  --divider:       rgba(255,255,255,.06);
+
+  --brand-ink:     #8FD3D8;
+  --brand-tint:    rgba(63,175,160,.16);
+  --danger-ink:    #F28B8B;
+  --danger-soft:   rgba(239,68,68,.16);
+  --neutral-soft:  rgba(255,255,255,.07);
 
   --warn-soft: rgba(217,119,6,.16);
   --warn-ink:  #F5B04C;
