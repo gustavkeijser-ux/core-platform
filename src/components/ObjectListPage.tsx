@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { ObjectDef, RecordRow, ListView, RecordFilter, FieldDef } from "@/lib/data";
 import { listRecords, deleteRecord, listSavedViews, saveListView, deleteListView, bulkAssign, DataError, supabase } from "@/lib/data";
 import { formatValue } from "@/lib/fields";
@@ -85,6 +86,42 @@ function pickColumns(def: ObjectDef) {
   return visible
     .filter((f) => f.fieldType !== "long_text" && f.fieldType !== "json")
     .slice(0, 3);
+}
+
+/**
+ * Lång text i en tabellcell (t.ex. kommentarer): upp till tre rader syns
+ * direkt. Får inte allt plats visas hela texten i en ruta när man hovrar
+ * (eller fokuserar cellen med tangentbordet).
+ */
+function LangText({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pop, setPop] = useState<{ x: number; y: number; upp: boolean } | null>(null);
+  if (!text || text === "—") return <>{text}</>;
+  const visa = () => {
+    const el = ref.current;
+    if (!el || el.scrollHeight <= el.clientHeight + 1) return;
+    const r = el.getBoundingClientRect();
+    const upp = r.bottom + 220 > window.innerHeight;
+    setPop({ x: Math.min(r.left, window.innerWidth - 380), y: upp ? r.top - 6 : r.bottom + 6, upp });
+  };
+  return (
+    <div
+      ref={ref}
+      className="rtable__lang"
+      tabIndex={0}
+      onMouseEnter={visa}
+      onMouseLeave={() => setPop(null)}
+      onFocus={visa}
+      onBlur={() => setPop(null)}
+    >
+      {text}
+      {pop && createPortal(
+        <div className={`rtable__pop${pop.upp ? " rtable__pop--upp" : ""}`} role="tooltip"
+          style={{ left: Math.max(8, pop.x), top: pop.y }}>{text}</div>,
+        document.body,
+      )}
+    </div>
+  );
 }
 
 type Cell = { kind: "title" } | { kind: "status" } | { kind: "field"; field: FieldDef };
@@ -764,7 +801,9 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
                           ].filter(Boolean).join(" ") || undefined}
                           data-label={c.label}
                         >
-                          {c.fieldType === "user" ? <UserBadge id={r.data[c.key] as string | null} /> : formatValue(c, r.data[c.key])}
+                          {c.fieldType === "user" ? <UserBadge id={r.data[c.key] as string | null} />
+                            : c.fieldType === "long_text" ? <LangText text={formatValue(c, r.data[c.key])} />
+                            : formatValue(c, r.data[c.key])}
                         </td>
                       );
                     })}
