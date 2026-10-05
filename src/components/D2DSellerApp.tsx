@@ -63,19 +63,21 @@ function d2dSegsFromView(v: D2DView): string[] {
   }
 }
 
-type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "intresserad" | "sald" | "scrive" | "ovrigt";
+type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "befintlig_telia" | "intresserad" | "sald" | "scrive" | "kall_kund";
 
 const STATUS_CONFIG: Record<KnockStatus, { label: string; color: string; cssClass: string }> = {
   ej_knackad:       { label: "Ej knackad",       color: "var(--hue-slate)",  cssClass: "d2d-status--slate" },
   inte_hemma:       { label: "Inte hemma",       color: "var(--hue-blue)",   cssClass: "d2d-status--blue" },
   aterkoppling:     { label: "Återkoppling",     color: "var(--hue-amber)",  cssClass: "d2d-status--amber" },
   inte_intresserad: { label: "Inte intresserad", color: "var(--hue-red)",    cssClass: "d2d-status--red" },
+  befintlig_telia:  { label: "Befintlig Telia-kund", color: "var(--hue-sky)", cssClass: "d2d-status--sky" },
   intresserad:      { label: "Intresserad",      color: "var(--hue-green)",  cssClass: "d2d-status--green" },
   sald:             { label: "Såld",             color: "var(--hue-green)",  cssClass: "d2d-status--green-solid" },
   // Som "Såld" men utan att registrera ett sälj: kunden signerar ett avtalsförslag
   // med Scrive (inte ett bindande avtal). Räknas inte som sålt i statistiken.
   scrive:           { label: "Signera med Scrive", color: "var(--hue-violet)", cssClass: "d2d-status--violet" },
-  ovrigt:           { label: "Övrigt",           color: "var(--hue-slate)",  cssClass: "d2d-status--slate" },
+  // Ersätter "Övrigt" (borttagen 2026-10, befintliga flyttades hit).
+  kall_kund:        { label: "Kall kund",        color: "var(--hue-zinc)",   cssClass: "d2d-status--zinc" },
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -636,6 +638,11 @@ function LagenhetForm({
   const [error, setError] = useState<string | null>(null);
   const [fastData, setFastData] = useState<Record<string, unknown>>({});
   const [showFieldConfig, setShowFieldConfig] = useState(false);
+  // Tid på adressen: från att adressen öppnas tills säljaren sätter en
+  // status. Sparas i tid_pa_adress (minuter) och syns bara för admin.
+  const oppnadRef = useRef(Date.now());
+  const tidSparadRef = useRef(false);
+  useEffect(() => { oppnadRef.current = Date.now(); tidSparadRef.current = false; }, [lagenhetId]);
 
   useEffect(() => {
     (async () => {
@@ -763,6 +770,17 @@ function LagenhetForm({
     if (key !== "ej_knackad") {
       patch.senast_kontakt = nuLokalTid();
       setData((d) => ({ ...d, senast_kontakt: patch.senast_kontakt }));
+    }
+    // Första statusbytet under besöket: spara hur länge adressen var öppen.
+    if (!tidSparadRef.current) {
+      tidSparadRef.current = true;
+      patch.tid_pa_adress = Math.round((Date.now() - oppnadRef.current) / 6000) / 10;
+    }
+    // Inte hemma: räkna upp antalet knackningar (säljaren kan ändra siffran).
+    if (key === "inte_hemma") {
+      const n = Number(data.antal_knackningar);
+      patch.antal_knackningar = (Number.isFinite(n) && n > 0 ? n : 0) + 1;
+      setData((d) => ({ ...d, antal_knackningar: patch.antal_knackningar }));
     }
     queueSave(patch, key, 0);
   };
@@ -932,6 +950,26 @@ function LagenhetForm({
           ))}
       </div>
 
+      {/* Inte hemma: hur många gånger dörren har knackats. */}
+      {status === "inte_hemma" && (() => {
+        const n = Number(data.antal_knackningar);
+        const antal = Number.isFinite(n) && n > 0 ? n : 0;
+        const satt = (v: number) => set("antal_knackningar", 600)(Math.max(0, Math.min(99, v)) || null);
+        return (
+          <div className="d2d-reason-panel d2d-knack">
+            <span className="label">Hur många gånger har dörren knackats?</span>
+            <div className="d2d-knack__rad">
+              <button type="button" className="d2d-knack__btn" aria-label="En färre" onClick={() => satt(antal - 1)}>−</button>
+              <input className="input d2d-knack__input" type="number" inputMode="numeric" min={0} max={99}
+                aria-label="Antal knackningar" value={antal || ""}
+                onChange={(e) => satt(Number(e.target.value))} />
+              <button type="button" className="d2d-knack__btn" aria-label="En till" onClick={() => satt(antal + 1)}>+</button>
+              <span className="d2d-knack__text">{antal === 1 ? "gång" : "gånger"}</span>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Anledning — visas så fort statusen är "Inte intresserad", så
           säljaren måste (eller i alla fall enkelt kan) ange varför. */}
       {status === "inte_intresserad" && (
@@ -1038,7 +1076,7 @@ function LagenhetForm({
       )}
 
       {/* Bindningstid hos nuvarande operatör — på alla besök där någon öppnade. */}
-      {!!status && ["sald", "scrive", "aterkoppling", "inte_intresserad", "ovrigt"].includes(status) && (
+      {!!status && ["sald", "scrive", "aterkoppling", "inte_intresserad", "kall_kund", "befintlig_telia"].includes(status) && (
         <BindningPanel fields={objectDef?.fields ?? []} data={data} set={set} />
       )}
 
