@@ -5277,3 +5277,21 @@ select.input {
   .rtable td:has(> .rtable__lang) { min-width: 0; max-width: none; }
   .rtable__lang { -webkit-line-clamp: 5; }
 }
+
+/* D2D: statusarna Befintlig Telia-kund (blå info) och Kall kund (grå). */
+.d2d-status--sky  .d2d-lag-card__badge { background: color-mix(in srgb, var(--hue-sky) 15%, transparent); color: color-mix(in srgb, var(--hue-sky) 75%, var(--ink)); }
+.d2d-status--zinc .d2d-lag-card__badge { background: color-mix(in srgb, var(--hue-zinc) 20%, transparent); color: var(--ink-muted); }
+.d2d-status--sky.d2d-status-btn--active  { border-color: var(--hue-sky); color: color-mix(in srgb, var(--hue-sky) 75%, var(--ink)); background: color-mix(in srgb, var(--hue-sky) 12%, transparent); }
+.d2d-status--zinc.d2d-status-btn--active { border-color: var(--hue-zinc); color: var(--ink-muted); background: color-mix(in srgb, var(--hue-zinc) 16%, transparent); }
+.utf__seg--befintlig_telia { background: color-mix(in srgb, var(--hue-sky) 25%, var(--surface)); color: var(--ink); }
+.utf__seg--kall_kund { background: var(--surface-alt); color: var(--ink); }
+
+/* D2D: antal knackningar vid Inte hemma */
+.d2d-knack__rad { display: flex; align-items: center; gap: 8px; }
+.d2d-knack__btn {
+  width: 44px; height: 44px; flex: none; border-radius: var(--r-sm); border: 1px solid var(--border-input);
+  background: var(--surface); color: var(--ink); font-size: 22px; font-weight: 700; line-height: 1; cursor: pointer;
+}
+.d2d-knack__btn:active { background: var(--surface-sunk); }
+.d2d-knack__input { width: 72px; min-height: 44px; text-align: center; font-family: var(--font-display); font-weight: 800; font-size: 18px; }
+.d2d-knack__text { color: var(--ink-muted); font-size: 13px; }
