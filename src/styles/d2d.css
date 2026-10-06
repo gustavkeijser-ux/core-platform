@@ -67,3 +67,103 @@
 @media (max-width: 480px) {
   .d2d-fbg-card__actions .btn { flex: 1 1 auto; justify-content: center; }
 }
+
+/* ── Tillfälliga fastigheter/lägenheter (väntar på admin) ───────────── */
+
+/* Liten pill vid namnet i listor och rubriker. */
+.d2d-tillf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--hue-amber) 16%, transparent);
+  color: color-mix(in srgb, var(--hue-amber) 80%, var(--ink));
+  white-space: nowrap;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.d2d-lag-row .d2d-tillf-badge { margin-left: var(--sp-1); }
+
+/* Banderoll högst upp i en tillfällig fastighet/lägenhet. */
+.d2d-tillf-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0 var(--sp-4) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--hue-amber) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--hue-amber) 35%, transparent);
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+.d2d-tillf-banner__icon { color: var(--hue-amber); flex-shrink: 0; }
+.d2d-tillf-banner__text { flex: 1; min-width: 0; }
+.d2d-tillf-banner__text strong { display: block; }
+.d2d-tillf-banner__text span { color: var(--ink-muted); }
+.d2d-tillf-banner .btn { flex-shrink: 0; }
+
+/* Knappraden under en lista ("+ Tillfällig fastighet/lägenhet"). */
+.d2d-tillf-actions {
+  display: flex;
+  justify-content: center;
+  padding: var(--sp-2) var(--sp-4) var(--sp-4);
+}
+.d2d-tillf-actions .btn { width: 100%; max-width: 420px; justify-content: center; }
+
+/* Formuläret — samma panelspråk som anledningspanelen. */
+.d2d-tillf-form {
+  margin: 0 var(--sp-4) var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--surface-alt);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.d2d-tillf-form h3 { font-size: var(--text-base); margin: 0; }
+.d2d-tillf-form p { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); }
+.d2d-tillf-form__falt { display: flex; flex-direction: column; gap: var(--sp-1); }
+.d2d-tillf-form__falt .label { margin: 0; }
+.d2d-tillf-form__falt .input { width: 100%; font-size: 16px; } /* 16px: ingen autozoom i iOS */
+.d2d-tillf-form__knappar { display: flex; gap: var(--sp-2); justify-content: flex-end; flex-wrap: wrap; }
+.d2d-tillf-form__fel { color: var(--hue-red); font-size: var(--text-sm); }
+
+/* ── Projektbyggaren: fliken "Att godkänna" ─────────────────────────── */
+.d2dpb-godk { display: flex; flex-direction: column; gap: var(--sp-4); }
+.d2dpb-godk__header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
+.d2dpb-godk__header h2 { font-size: var(--text-lg); margin: 0; }
+.d2dpb-godk__header p { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); }
+.d2dpb-godk h3 { font-size: var(--text-base); margin: var(--sp-2) 0 0; }
+.d2dpb-godk__rad {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-2) var(--sp-4);
+  align-items: center;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-row);
+}
+.d2dpb-godk__main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.d2dpb-godk__titel { font-weight: 600; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.d2dpb-godk__titel button { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.d2dpb-godk__titel button:hover { text-decoration: underline; }
+.d2dpb-godk__meta { font-size: var(--text-sm); color: var(--ink-muted); }
+.d2dpb-godk__lank { background: none; border: 0; padding: 0; font: inherit; color: var(--brand); cursor: pointer; }
+.d2dpb-godk__lank:hover { text-decoration: underline; }
+.d2dpb-godk__knappar { display: flex; gap: var(--sp-2); align-items: center; }
+.d2dpb-godk__antal {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px;
+  border-radius: var(--r-pill); font-size: 11px; font-weight: 700; line-height: 1;
+  background: var(--hue-amber); color: #fff;
+}
+@media (max-width: 640px) {
+  .d2dpb-godk__rad { grid-template-columns: 1fr; }
+  .d2dpb-godk__knappar { justify-content: flex-end; }
+}
