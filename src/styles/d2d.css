@@ -1,0 +1,69 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Door to door (Blitz) — områdets egen CSS. Bara tokens från src/tokens.css.
+   Äldre D2D-CSS ligger kvar i src/app.css tills Master flyttar ut den.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Feedback i säljarvyn (fliken Feedback) ─────────────────────────────── */
+
+.d2d-fb__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.d2d-fb__hint { margin: 0; font-size: var(--text-sm); color: var(--ink-muted); }
+.d2d-fb__text { width: 100%; resize: vertical; font-family: inherit; min-height: 96px; }
+.d2d-fb__send { align-self: flex-end; }
+.d2d-fb__error { font-size: var(--text-sm); color: var(--hue-red); }
+.d2d-fb__ok { font-size: var(--text-sm); color: var(--hue-green); }
+
+.d2d-fb-card { cursor: default; }
+.d2d-fb-card .d2d-card__main { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.d2d-fb-card__text { white-space: pre-wrap; word-break: break-word; }
+.d2d-fb-card__note { font-size: var(--text-sm); color: var(--ink-muted); white-space: pre-wrap; }
+
+.d2d-fb-status {
+  align-self: flex-start;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.d2d-fb-status--vantar  { background: color-mix(in srgb, var(--hue-amber) 15%, transparent); color: var(--hue-amber); }
+.d2d-fb-status--godkand { background: color-mix(in srgb, var(--hue-green) 15%, transparent); color: var(--hue-green); }
+.d2d-fb-status--nekad   { background: color-mix(in srgb, var(--hue-red) 15%, transparent);   color: var(--hue-red); }
+
+/* ── Granskning i CRM:et (Door to door → Säljarfeedback, bara granskaren) ── */
+
+.d2d-fbg { display: flex; flex-direction: column; gap: var(--sp-3); max-width: 760px; }
+.d2d-fbg__loading { padding: var(--sp-6); color: var(--ink-muted); }
+.d2d-fbg__intro { margin: 0 0 var(--sp-2); color: var(--ink-muted); font-size: var(--text-sm); }
+.d2d-fbg__h3 { display: flex; align-items: baseline; gap: var(--sp-2); margin: var(--sp-2) 0 0; font-size: var(--text-base); }
+.d2d-fbg__label { font-size: var(--text-xs); font-weight: 600; color: var(--ink-muted); }
+.d2d-fbg__orig { font-size: var(--text-sm); color: var(--ink-muted); }
+.d2d-fbg__orig summary { cursor: pointer; }
+.d2d-fbg__toggle { align-self: flex-start; margin-top: var(--sp-2); }
+
+.d2d-fbg-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.d2d-fbg-card--open { border-color: var(--brand); }
+.d2d-fbg-card--done { opacity: .85; }
+.d2d-fbg-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
+.d2d-fbg-card__text { white-space: pre-wrap; word-break: break-word; }
+.d2d-fbg-card__edit { display: flex; flex-direction: column; gap: var(--sp-2); }
+.d2d-fbg-card__actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-1); }
+
+@media (max-width: 480px) {
+  .d2d-fbg-card__actions .btn { flex: 1 1 auto; justify-content: center; }
+}
