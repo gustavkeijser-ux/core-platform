@@ -129,6 +129,8 @@
 .d2d-tillf-form p { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); }
 .d2d-tillf-form__falt { display: flex; flex-direction: column; gap: var(--sp-1); }
 .d2d-tillf-form__falt .label { margin: 0; }
+.d2d-tillf-form__rad { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--sp-2); }
+.d2d-tillf-form__rad .d2d-tillf-form__falt { min-width: 0; }
 .d2d-tillf-form__falt .input { width: 100%; font-size: 16px; } /* 16px: ingen autozoom i iOS */
 .d2d-tillf-form__knappar { display: flex; gap: var(--sp-2); justify-content: flex-end; flex-wrap: wrap; }
 .d2d-tillf-form__fel { color: var(--hue-red); font-size: var(--text-sm); }
