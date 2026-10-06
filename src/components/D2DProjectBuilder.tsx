@@ -1,3 +1,4 @@
+import "@/styles/d2d.css";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow, useReturnToRow } from "@/lib/returnRow";
@@ -1402,6 +1403,133 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
 }
 
 // =============================================================================
+// Att godkänna — tillfälliga fastigheter och lägenheter som säljare skapat
+// i D2D-vyn. Allt är tillfälligt (räknas inte i Utfall/topplistan) tills en
+// administratör godkänner det här. Godkänns en fastighet godkänns alla dess
+// lägenheter. DB: d2d_tillfalliga_lista, d2d_godkann_tillfallig.
+// =============================================================================
+
+type TillfFastighet = {
+  id: string; adress: string | null; ort: string | null; fastighetsbeteckning: string | null;
+  projekt: string | null; projektId: string | null; antalLagenheter: number; skapad: string; skapadAv: string | null;
+};
+type TillfLagenhet = {
+  id: string; lgh: string | null; alias: string | null; adress: string | null; ort: string | null; status: string | null;
+  fastighet: string | null; fastighetId: string | null; projekt: string | null; projektId: string | null;
+  skapad: string; skapadAv: string | null;
+};
+type TillfLista = { fastigheter: TillfFastighet[]; lagenheter: TillfLagenhet[] };
+
+async function hamtaTillfalliga(): Promise<TillfLista> {
+  const { data, error } = await supabase.rpc("d2d_tillfalliga_lista");
+  if (error) throw error;
+  const d = (data ?? {}) as Partial<TillfLista>;
+  return { fastigheter: d.fastigheter ?? [], lagenheter: d.lagenheter ?? [] };
+}
+
+function datumKort(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+}
+
+function AttGodkanna({ onOpenRecord, onOpenProjekt, onAntal }: {
+  onOpenRecord?: (id: string) => void; onOpenProjekt: (id: string) => void; onAntal: (n: number) => void;
+}) {
+  const [lista, setLista] = useState<TillfLista | null>(null);
+  const [fel, setFel] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const l = await hamtaTillfalliga();
+      setLista(l);
+      onAntal(l.fastigheter.length + l.lagenheter.length);
+    } catch {
+      setFel("Kunde inte hämta listan.");
+    }
+  }, [onAntal]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const godkann = async (id: string) => {
+    setBusy(id); setFel(null);
+    const { error } = await supabase.rpc("d2d_godkann_tillfallig", { p_id: id });
+    setBusy(null);
+    if (error) { setFel(error.message || "Kunde inte godkänna."); return; }
+    await load();
+  };
+
+  if (!lista && !fel) return <div className="d2d-loading">Laddar…</div>;
+  const tomt = !!lista && lista.fastigheter.length === 0 && lista.lagenheter.length === 0;
+
+  return (
+    <div className="d2dpb-godk">
+      <div className="d2dpb-godk__header">
+        <h2>Att godkänna</h2>
+        <p>Fastigheter och lägenheter som säljare lagt upp själva i D2D-vyn. De räknas inte i Utfall förrän du godkänt dem.</p>
+      </div>
+      {fel && <div className="d2d-error">{fel}</div>}
+      {tomt && <div className="d2d-empty">Inget väntar på godkännande.</div>}
+
+      {!!lista?.fastigheter.length && (
+        <>
+          <h3>Tillfälliga fastigheter ({lista.fastigheter.length})</h3>
+          {lista.fastigheter.map((f) => (
+            <div key={f.id} className="d2dpb-godk__rad">
+              <div className="d2dpb-godk__main">
+                <span className="d2dpb-godk__titel">
+                  <button type="button" onClick={() => onOpenRecord?.(f.id)} title="Öppna fastigheten">
+                    {f.adress ?? "Namnlös"}{f.fastighetsbeteckning ? ` (${f.fastighetsbeteckning})` : ""}
+                  </button>
+                  <span className="d2d-tillf-badge">Tillfällig</span>
+                </span>
+                <span className="d2dpb-godk__meta">
+                  {[f.ort, `${f.antalLagenheter} ${f.antalLagenheter === 1 ? "lägenhet" : "lägenheter"}`,
+                    f.skapadAv ? `av ${f.skapadAv}` : null, datumKort(f.skapad)].filter(Boolean).join(" · ")}
+                  {f.projektId && <> · <button type="button" className="d2dpb-godk__lank" onClick={() => onOpenProjekt(f.projektId!)}>{f.projekt ?? "Projekt"}</button></>}
+                </span>
+              </div>
+              <div className="d2dpb-godk__knappar">
+                <button className="btn btn--brand btn--sm" disabled={busy === f.id} onClick={() => { void godkann(f.id); }}>
+                  {busy === f.id ? "Godkänner…" : "Godkänn fastighet"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {!!lista?.lagenheter.length && (
+        <>
+          <h3>Tillfälliga lägenheter ({lista.lagenheter.length})</h3>
+          {lista.lagenheter.map((l) => (
+            <div key={l.id} className="d2dpb-godk__rad">
+              <div className="d2dpb-godk__main">
+                <span className="d2dpb-godk__titel">
+                  <button type="button" onClick={() => onOpenRecord?.(l.id)} title="Öppna lägenheten">
+                    {[l.adress, `lgh ${l.lgh ?? "—"}`].filter(Boolean).join(", ")}{l.alias ? ` (${l.alias})` : ""}
+                  </button>
+                  <span className="d2d-tillf-badge">Tillfällig</span>
+                </span>
+                <span className="d2dpb-godk__meta">
+                  {[l.fastighet, l.ort, l.skapadAv ? `av ${l.skapadAv}` : null, datumKort(l.skapad)].filter(Boolean).join(" · ")}
+                  {l.projektId && <> · <button type="button" className="d2dpb-godk__lank" onClick={() => onOpenProjekt(l.projektId!)}>{l.projekt ?? "Projekt"}</button></>}
+                </span>
+              </div>
+              <div className="d2dpb-godk__knappar">
+                <button className="btn btn--brand btn--sm" disabled={busy === l.id} onClick={() => { void godkann(l.id); }}>
+                  {busy === l.id ? "Godkänner…" : "Godkänn"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
 // Huvudkomponent
 // =============================================================================
 
@@ -1412,13 +1540,21 @@ export function D2DProjectBuilder({ objectDefFor, onOpenRecord }: {
   // omladdning stannar kvar i samma projekt.
   const route = useRoute();
   const sub = route.segs[0] === "d2dbuilder" ? route.segs.slice(1) : [];
-  const view: { kind: "list" } | { kind: "project"; id: string } | { kind: "karta" } =
+  const view: { kind: "list" } | { kind: "project"; id: string } | { kind: "karta" } | { kind: "godkanna" } =
     sub[0] === "projekt" && sub[1] ? { kind: "project", id: sub[1] }
     : sub[0] === "karta" ? { kind: "karta" }
+    : sub[0] === "godkanna" ? { kind: "godkanna" }
     : { kind: "list" };
   const setView = (v: typeof view) =>
     navigate(v.kind === "project" ? ["d2dbuilder", "projekt", v.id]
-      : v.kind === "karta" ? ["d2dbuilder", "karta"] : ["d2dbuilder"]);
+      : v.kind === "karta" ? ["d2dbuilder", "karta"]
+      : v.kind === "godkanna" ? ["d2dbuilder", "godkanna"] : ["d2dbuilder"]);
+
+  // Antal tillfälliga poster som väntar — visas som siffra på fliken.
+  const [antalGodk, setAntalGodk] = useState<number | null>(null);
+  useEffect(() => {
+    hamtaTillfalliga().then((l) => setAntalGodk(l.fastigheter.length + l.lagenheter.length)).catch(() => {});
+  }, [view.kind]);
 
   return (
     <div className={`d2dpb${view.kind === "project" ? " d2dpb--bred" : ""}`}>
@@ -1436,10 +1572,20 @@ export function D2DProjectBuilder({ objectDefFor, onOpenRecord }: {
           >
             Karta
           </button>
+          <button
+            className={`btn btn--sm ${view.kind === "godkanna" ? "btn--brand" : "btn--ghost"}`}
+            onClick={() => setView({ kind: "godkanna" })}
+          >
+            Att godkänna
+            {!!antalGodk && <span className="d2dpb-godk__antal">{antalGodk}</span>}
+          </button>
         </div>
       )}
       {view.kind === "list" && <ProjectList onOpen={(id) => setView({ kind: "project", id })} />}
       {view.kind === "karta" && <LeveransKarta />}
+      {view.kind === "godkanna" && (
+        <AttGodkanna onOpenRecord={onOpenRecord} onOpenProjekt={(id) => setView({ kind: "project", id })} onAntal={setAntalGodk} />
+      )}
       {view.kind === "project" && (
         <ProjectDetail projektId={view.id} onBack={() => goBack(() => setView({ kind: "list" }))}
           deliveryDef={objectDefFor?.("delivery")} onOpenRecord={onOpenRecord} />
