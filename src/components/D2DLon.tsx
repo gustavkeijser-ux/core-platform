@@ -17,8 +17,10 @@ import "@/styles/d2d.css";
    BlitzPinnar      — Blitz → Översikt: en stapel per säljare för innevarande
                       månad med trappstegen markerade. DB: d2d_pinnar_oversikt.
    D2DLonerPage     — Door to door → Löner (bara Lukas, Jonas, Gustav —
-                      tabellen d2d_lon_behorighet): kommande bonusar per månad,
-                      per säljare och produkt. DB: d2d_lon_prognos.
+                      tabellen d2d_lon_behorighet): lön per säljare och månad =
+                      provision (pinnar × kr/pinne) + bonus + justeringar
+                      (tillägg/avdrag med kommentar). DB: d2d_lon_prognos,
+                      d2d_lon_justering_lagg_till/ta_bort.
    ========================================================================== */
 
 type Trappsteg = { pinnar: number; bonus: number };
@@ -33,12 +35,17 @@ type Lonemodell = {
 type Niva = {
   niva: number | null; bonus: number; nastaNiva: number | null; nastaBonus: number | null; kvar: number | null;
 };
+type Justering = { id: string; belopp: number; kommentar: string; skapadAt: string; skapadAv: string | null };
 type SaljareRad = Niva & {
   id: string; namn: string; pinnar: number; vantar: number; affarer: number; affarerVantar: number;
   bonusInklVantar: number;
+  /** Lön (bara på Löner-sidan — Blitz får inte beloppen): provision = pinnar × kr/pinne,
+   *  lon = provision + bonus + justeringar. */
+  provision?: number; provisionInklVantar?: number; justeringar?: number; lon?: number; lonInklVantar?: number;
+  justeringarRader?: Justering[];
   produkter?: Array<{ nyckel: string; antal: number; pinnar: number }>;
 };
-type Manad = { manad: string; utbetalning: string; saljare: SaljareRad[] };
+type Manad = { manad: string; utbetalning: string; krPerPinne?: number; saljare: SaljareRad[] };
 
 const MANADER = ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"];
 /** "2026-10" → "oktober 2026" */
@@ -50,6 +57,8 @@ const kr = (n: number | null | undefined) =>
   n == null ? "—" : `${Math.round(n).toLocaleString("sv-SE")} kr`;
 const pn = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("sv-SE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const nar = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleDateString("sv-SE", { day: "numeric", month: "short" }) : "";
 
 /** Produktnyckel ("salt_tv:tv_bas") → etikett ("TV – TV Mini") via fältdefinitionerna. */
 function produktEtikett(nyckel: string, fields: FieldDef[]): string {
@@ -149,12 +158,13 @@ export function LonemodellEditor({ fields }: { fields: FieldDef[] }) {
     <div className="d2d-lon-editor">
       <h2 className="d2d-lon-editor__h2">Lönemodell</h2>
       <p className="field-config__hint">
-        Varje såld tjänst ger pinnar. Pinnarna per månad (sålda adresser och signerade Scrive-avtal) ger bonus enligt trappan.
-        Säljarna ser sina pinnar och nästa nivå i Blitz → Översikt; Löner-sidan visar kommande bonusar. TV Start och TV Bas ger inga pinnar.
+        Varje såld tjänst ger pinnar. Lön = pinnar × kr per pinne (provision) + trappans bonus när ett steg nås, räknat per månad på
+        sålda adresser och signerade Scrive-avtal. Säljarna ser sina pinnar och nästa nivå i Blitz → Översikt; sidan Löner visar lönen
+        per säljare med justeringar. TV Start och TV Bas ger inga pinnar.
       </p>
 
       <div className="d2d-lon-editor__villkor">
-        <label>Kr per pinne (information)
+        <label>Provision, kr per pinne
           <input className="input input--sm" inputMode="decimal" value={utkast.krPerPinne ?? ""}
             onChange={(e) => { setSparat(false); setUtkast((u) => u && ({ ...u, krPerPinne: tal(e.target.value) ?? undefined })); }} />
         </label>
@@ -187,7 +197,7 @@ export function LonemodellEditor({ fields }: { fields: FieldDef[] }) {
           <div className="d2d-lon-editor__trappa">
             <span className="d2d-lon-editor__th">Pinnar</span>
             <span className="d2d-lon-editor__th">Bonus (kr)</span>
-            <span className="d2d-lon-editor__th">Ger dig/pinne</span>
+            <span className="d2d-lon-editor__th">Bonus/pinne</span>
             <span />
             {utkast.trappa.map((s, i) => (
               <div key={i} className="d2d-lon-editor__steg">
@@ -311,29 +321,60 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
   const [fel, setFel] = useState<string | null>(null);
   const [antal, setAntal] = useState(3);
   const [oppen, setOppen] = useState<string | null>(null);     // "manad|saljare"
+  const [jBelopp, setJBelopp] = useState("");
+  const [jKommentar, setJKommentar] = useState("");
+  const [jFel, setJFel] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let on = true;
-    setData(null);
+  const ladda = useCallback(() => {
     supabase.rpc("d2d_lon_prognos", { p_manad: null, p_antal: antal }).then(({ data, error }) => {
-      if (!on) return;
       if (error) { setFel(error.message); return; }
       setData(data as { modell: Lonemodell; manader: Manad[] });
     });
-    return () => { on = false; };
   }, [antal]);
+  useEffect(() => { setData(null); ladda(); }, [ladda]);
+
+  function oppna(key: string) {
+    setOppen((o) => (o === key ? null : key)); setJBelopp(""); setJKommentar(""); setJFel(null);
+  }
+
+  async function laggTill(m: Manad, s: SaljareRad) {
+    const belopp = Number(jBelopp.replace(/\s/g, "").replace(",", "."));
+    if (!Number.isFinite(belopp) || belopp === 0) { setJFel("Ange ett belopp (minus för avdrag)."); return; }
+    if (!jKommentar.trim()) { setJFel("Skriv vad justeringen gäller."); return; }
+    setBusy(true); setJFel(null);
+    const { error } = await supabase.rpc("d2d_lon_justering_lagg_till", {
+      p_user: s.id, p_manad: `${m.manad}-01`, p_belopp: belopp, p_kommentar: jKommentar.trim(),
+    });
+    setBusy(false);
+    if (error) { setJFel(error.message); return; }
+    setJBelopp(""); setJKommentar(""); ladda();
+  }
+
+  async function taBort(j: Justering) {
+    if (!window.confirm(`Ta bort justeringen ${kr(j.belopp)} – ${j.kommentar}?`)) return;
+    setBusy(true);
+    const { error } = await supabase.rpc("d2d_lon_justering_ta_bort", { p_id: j.id });
+    setBusy(false);
+    if (error) { setJFel(error.message); return; }
+    ladda();
+  }
 
   if (fel) return <div className="page"><div className="formfield__error">{fel}</div></div>;
-  if (!data) return <div className="page"><p className="formfield__help">Räknar pinnar…</p></div>;
+  if (!data) return <div className="page"><p className="formfield__help">Räknar löner…</p></div>;
 
   const nu = data.manader[0];
+  const krPinne = data.modell.krPerPinne ?? 0;
+  const sum = (m: Manad, f: (s: SaljareRad) => number | undefined) => m.saljare.reduce((a, s) => a + (f(s) ?? 0), 0);
+
   return (
     <div className="page d2d-loner">
       <section className="card d2d-loner__intro">
         <p>
-          Bonus enligt lönemodellen (Inställningar → Priser). En adress räknas den månad den blev såld eller signerad i Scrive;
-          bonusen betalas ut {data.modell.utbetalningManaderEfter ?? 1} månad{(data.modell.utbetalningManaderEfter ?? 1) === 1 ? "" : "er"} efter.
-          Skickade men inte signerade avtal visas som "väntar" och ger ingen bonus förrän de signerats.
+          Lön = <strong>{kr(krPinne)} per pinne</strong> + bonus när ett trappsteg nås + justeringar. En adress räknas den månad den blev
+          såld eller signerad i Scrive; lönen betalas ut {data.modell.utbetalningManaderEfter ?? 1} månad{(data.modell.utbetalningManaderEfter ?? 1) === 1 ? "" : "er"} efter.
+          Skickade men inte signerade avtal visas som "väntar" och räknas inte förrän de signerats. Klicka på en säljare för underlag och justeringar.
+          Modellen ändras under Inställningar → Priser.
         </p>
         <label className="d2d-loner__antal">Visa
           <select className="input input--sm" value={antal} onChange={(e) => setAntal(Number(e.target.value))}>
@@ -346,8 +387,8 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
       </section>
 
       {data.manader.map((m) => {
-        const summa = m.saljare.reduce((a, s) => a + (s.bonus ?? 0), 0);
-        const summaInkl = m.saljare.reduce((a, s) => a + (s.bonusInklVantar ?? 0), 0);
+        const lon = sum(m, (s) => s.lon);
+        const lonInkl = sum(m, (s) => s.lonInklVantar);
         const arNu = m === nu;
         return (
           <section key={m.manad} className="card d2d-loner__manad">
@@ -357,46 +398,83 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
                 <span className="d2d-loner__sub">Utbetalas med lönen i {manadNamn(m.utbetalning)}</span>
               </div>
               <div className="d2d-loner__summa">
-                <span className="d2d-loner__summa-tal">{kr(summa)}</span>
-                <span className="d2d-loner__summa-text">att betala ut{summaInkl > summa ? ` · ${kr(summaInkl)} om väntande signeras` : ""}</span>
+                <span className="d2d-loner__summa-tal">{kr(lon)}</span>
+                <span className="d2d-loner__summa-text">
+                  att betala ut · provision {kr(sum(m, (s) => s.provision))} · bonus {kr(sum(m, (s) => s.bonus))}
+                  {sum(m, (s) => s.justeringar) !== 0 ? ` · justeringar ${kr(sum(m, (s) => s.justeringar))}` : ""}
+                  {lonInkl > lon ? ` · ${kr(lonInkl)} om väntande signeras` : ""}
+                </span>
               </div>
             </header>
 
             <div className="d2d-loner__tabell" role="table">
               <div className="d2d-loner__tr d2d-loner__tr--head" role="row">
-                <span>Säljare</span><span>Affärer</span><span>Pinnar</span><span>Väntar</span><span>Nivå</span><span>Nästa nivå</span><span>Bonus</span>
+                <span>Säljare</span><span>Affärer</span><span>Pinnar</span><span>Provision</span><span>Bonus</span><span>Justeringar</span><span>Lön</span>
               </div>
               {m.saljare.map((s) => {
                 const key = `${m.manad}|${s.id}`;
                 const open = oppen === key;
                 return (
                   <div key={s.id} className={`d2d-loner__rad${open ? " d2d-loner__rad--open" : ""}`}>
-                    <button type="button" className="d2d-loner__tr" role="row" aria-expanded={open} onClick={() => setOppen(open ? null : key)}>
+                    <button type="button" className="d2d-loner__tr" role="row" aria-expanded={open} onClick={() => oppna(key)}>
                       <span className="d2d-loner__namn">{s.namn}</span>
                       <span>{s.affarer}{s.affarerVantar ? <small> (+{s.affarerVantar})</small> : null}</span>
-                      <span className="d2d-loner__pinnar">{pn(s.pinnar)}</span>
-                      <span className="d2d-loner__vantar">{s.vantar > 0 ? pn(s.vantar) : "—"}</span>
-                      <span>{s.niva ?? "—"}</span>
-                      <span>{s.nastaNiva != null ? <>{s.nastaNiva} <small>({pn(s.kvar)} kvar)</small></> : "—"}</span>
-                      <span className={`d2d-loner__bonus${s.bonus > 0 ? " d2d-loner__bonus--ja" : ""}`}>
-                        {kr(s.bonus)}{s.bonusInklVantar > s.bonus ? <small> → {kr(s.bonusInklVantar)}</small> : null}
+                      <span className="d2d-loner__pinnar">{pn(s.pinnar)}{s.vantar > 0 ? <small className="d2d-loner__vantar"> +{pn(s.vantar)}</small> : null}</span>
+                      <span>{kr(s.provision)}</span>
+                      <span className={s.bonus > 0 ? "d2d-loner__bonus--ja" : undefined}>
+                        {s.bonus > 0 ? kr(s.bonus) : "—"}
+                        {s.nastaNiva != null && <small> {pn(s.kvar)} kvar till {s.nastaNiva}</small>}
+                      </span>
+                      <span className={s.justeringar ? (s.justeringar < 0 ? "d2d-loner__neg" : "d2d-loner__pos") : undefined}>{s.justeringar ? kr(s.justeringar) : "—"}</span>
+                      <span className="d2d-loner__lon">
+                        {kr(s.lon)}{(s.lonInklVantar ?? 0) > (s.lon ?? 0) ? <small> → {kr(s.lonInklVantar)}</small> : null}
                       </span>
                     </button>
                     {open && (
                       <div className="d2d-loner__detalj">
-                        {(s.produkter ?? []).length === 0 ? (
-                          <span className="d2d-loner__sub">Inga sålda eller signerade tjänster den här månaden.</span>
-                        ) : (
-                          <div className="d2d-loner__produkter">
-                            {(s.produkter ?? []).map((p) => (
-                              <div key={p.nyckel} className="d2d-loner__produkt">
-                                <span>{produktEtikett(p.nyckel, fields)}</span>
-                                <span>{p.antal} st</span>
-                                <span>{pn(p.pinnar)} p</span>
+                        <div className="d2d-loner__detalj-kol">
+                          <h4>Underlag</h4>
+                          {(s.produkter ?? []).length === 0 ? (
+                            <span className="d2d-loner__sub">Inga sålda eller signerade tjänster den här månaden.</span>
+                          ) : (
+                            <div className="d2d-loner__produkter">
+                              {(s.produkter ?? []).map((p) => (
+                                <div key={p.nyckel} className="d2d-loner__produkt">
+                                  <span>{produktEtikett(p.nyckel, fields)}</span>
+                                  <span>{p.antal} st</span>
+                                  <span>{pn(p.pinnar)} p</span>
+                                </div>
+                              ))}
+                              <div className="d2d-loner__produkt d2d-loner__produkt--summa">
+                                <span>{pn(s.pinnar)} pinnar × {kr(krPinne)}</span><span /><span>{kr(s.provision)}</span>
                               </div>
-                            ))}
+                              {s.bonus > 0 && (
+                                <div className="d2d-loner__produkt d2d-loner__produkt--summa">
+                                  <span>Bonus, nivå {s.niva}</span><span /><span>{kr(s.bonus)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="d2d-loner__detalj-kol">
+                          <h4>Justeringar</h4>
+                          {(s.justeringarRader ?? []).length === 0 && <span className="d2d-loner__sub">Inga justeringar.</span>}
+                          {(s.justeringarRader ?? []).map((j) => (
+                            <div key={j.id} className="d2d-loner__just">
+                              <span className={j.belopp < 0 ? "d2d-loner__neg" : "d2d-loner__pos"}>{j.belopp > 0 ? "+" : ""}{kr(j.belopp)}</span>
+                              <span className="d2d-loner__just-text">{j.kommentar}<small> · {j.skapadAv ?? ""} {nar(j.skapadAt)}</small></span>
+                              <button type="button" className="btn btn--ghost btn--sm" onClick={() => taBort(j)} disabled={busy} aria-label="Ta bort justering">×</button>
+                            </div>
+                          ))}
+                          <div className="d2d-loner__just-form">
+                            <input className="input input--sm" inputMode="decimal" placeholder="Belopp, t.ex. −500" value={jBelopp}
+                              onChange={(e) => { setJBelopp(e.target.value); setJFel(null); }} disabled={busy} aria-label="Belopp" />
+                            <input className="input input--sm" placeholder="Vad gäller det?" value={jKommentar} maxLength={300}
+                              onChange={(e) => { setJKommentar(e.target.value); setJFel(null); }} disabled={busy} aria-label="Kommentar" />
+                            <button type="button" className="btn btn--brand btn--sm" onClick={() => laggTill(m, s)} disabled={busy}>Lägg till</button>
                           </div>
-                        )}
+                          {jFel && <div className="d2d-fb__error" role="alert">{jFel}</div>}
+                        </div>
                       </div>
                     )}
                   </div>
