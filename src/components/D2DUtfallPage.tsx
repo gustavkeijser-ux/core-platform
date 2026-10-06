@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FilterPills, SkeletonRows } from "./PageChrome";
+import "@/styles/d2d.css";
 
 /* =============================================================================
    Door to door → Utfall. Vad som hände vid dörrarna: utfall, merförsäljning
@@ -18,13 +19,14 @@ type Rad = { id: string; adress: string; ort: string | null; status: string; bun
 type Utfall = {
   besok: number;
   statusar: Record<string, number>;
-  sald: { antal: number; merAnBredband: number; antalAvtal?: Record<string, number>; kategorier: Record<string, number>; ejMer: Record<string, number>; ejMerUtanSkal: number };
+  sald: { antal: number; merAnBredband: number; antalAvtal?: Record<string, number>; avtalSumma?: number; kategorier: Record<string, number>; ejMer: Record<string, number>; ejMerUtanSkal: number };
   ejMerKommentarer?: Record<string, Kommentar[]>;
   ejIntresserad: Record<string, number>;
   bindningar: { hushall: number; ejSalda: number; svaradeEjSalda: number; perManad: Record<string, number>; tjanst: Record<string, number>; operator: Record<string, number> };
   kalla?: Kalla;
   scrive?: { skickade: number; signerade: number; vantar: number; avbrutna: number };
-  perSaljare: Array<{ id: string; namn: string | null; besok: number; oppnade: number; salda: number; mer: number }>;
+  /** avtal = summa avtal (tjänster) hos säljarens sålda/signerade kunder; snittet räknas här. */
+  perSaljare: Array<{ id: string; namn: string | null; besok: number; oppnade: number; salda: number; mer: number; avtal?: number }>;
   aterringning: Rad[];
   projekt: Array<{ id: string; title: string | null }>;
   saljare: Array<{ id: string; namn: string | null }>;
@@ -64,6 +66,9 @@ const MANAD = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "o
 const manadStr = (m: string) => { const [y, mm] = m.split("-"); return `${MANAD[Number(mm) - 1] ?? mm} ${y}`; };
 const nuManad = () => new Date().toISOString().slice(0, 7);
 const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0);
+/** Snitt med en decimal, svenskt kommatecken; "–" när det inte finns något att dela på. */
+const snitt = (summa: number | undefined, antal: number) =>
+  antal > 0 && summa != null ? (summa / antal).toLocaleString("sv-SE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "–";
 
 type Period = "7" | "30" | "ar" | "allt";
 function periodFran(p: Period): string | null {
@@ -281,7 +286,7 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
               {(u.sald.kategorier.bredbandUtanUppgift ?? 0) > 0 && (
                 <p className="formfield__help">{u.sald.kategorier.bredbandUtanUppgift} äldre affärer saknar ifyllda tjänster och räknas som bredband.</p>
               )}
-              <h3 className="utf__h3-mellan">Antal avtal per kund</h3>
+              <h3 className="utf__h3-mellan">Antal avtal per kund <span className="utf__snitt">snitt {snitt(u.sald.avtalSumma, u.sald.antal)}</span></h3>
               <Staplar rader={["1", "2", "3", "4", "5", "6+"].map((k) => [`${k} avtal`, u.sald.antalAvtal?.[k] ?? 0] as [string, number])}
                 tom="Inga kunder." />
               <p className="formfield__help">Ett avtal = en tjänst: bredband, TV (utöver Start/Bas), varje mobilabonnemang och extraanvändare, streaming och trygghetspaket.</p>
@@ -370,9 +375,10 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         {u.perSaljare.length > 0 && (
           <section className="card utf__sek">
             <h2>Per säljare</h2>
+            <p className="utf__ingress">Snitt avtal/kund = antal avtal (tjänster) delat med antal {ord.enhet} kunder. Hela urvalet: {snitt(u.sald.avtalSumma, u.sald.antal)}.</p>
             <div className="rtable-scroll">
               <table className="rtable utf__tabell">
-                <thead><tr><th>Säljare</th><th>Besök</th><th>Öppnade</th><th>{ord.kolumn}</th><th>Mer än bredband</th></tr></thead>
+                <thead><tr><th>Säljare</th><th>Besök</th><th>Öppnade</th><th>{ord.kolumn}</th><th>Mer än bredband</th><th>Snitt avtal/kund</th></tr></thead>
                 <tbody>
                   {u.perSaljare.map((p) => (
                     <tr key={p.id} className="rtable__row">
@@ -381,6 +387,7 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
                       <td data-label="Öppnade" className="utf__num">{p.oppnade}</td>
                       <td data-label={ord.kolumn} className="utf__num">{p.salda} ({pct(p.salda, p.oppnade)} %)</td>
                       <td data-label="Mer än bredband" className="utf__num">{p.mer} av {p.salda}</td>
+                      <td data-label="Snitt avtal/kund" className="utf__num">{snitt(p.avtal, p.salda)}</td>
                     </tr>
                   ))}
                 </tbody>
