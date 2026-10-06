@@ -509,6 +509,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         <div className="sidebar__section-label">Administration</div>
         {canCases && isAdmin && item("__m365__", "Microsoft 365", ICONS.mail)}
         {isAdmin && item("__feedback__", "Feedback", ICONS.__feedback__, { n: newFeedback })}
+        {isAdmin && item("__users__", "Användare", ICONS.contact)}
         {item("__import__", "Import", ICONS.__import__)}
         {onOpenSettings && (
           <button className="sidebar__item" onClick={() => { onOpenSettings(); onCloseMobile?.(); }}>
