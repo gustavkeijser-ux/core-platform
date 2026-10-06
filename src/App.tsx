@@ -12,6 +12,7 @@ import { DashboardPage } from "@/components/DashboardPage";
 import { AiPanel } from "@/components/AiAssistant";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { FeedbackPage } from "@/components/FeedbackPage";
+import { UsersAdminPage } from "@/components/UsersAdminPage";
 import { ObjectListPage } from "@/components/ObjectListPage";
 import { D2DLagenheterPage } from "@/components/D2DLagenheterPage";
 import { RecordDrawer } from "@/components/RecordDrawer";
@@ -52,6 +53,7 @@ type View =
   | { kind: "newcase" }
   | { kind: "m365" }
   | { kind: "feedback" }
+  | { kind: "users" }
   | { kind: "fmo" };
 
 /** URL → vy. Okänt/tomt → översikten. */
@@ -71,6 +73,7 @@ function viewFromSegs(segs: string[]): View {
     case "nytt-arende": return { kind: "newcase" };
     case "m365": return { kind: "m365" };
     case "feedback": return { kind: "feedback" };
+    case "anvandare": return { kind: "users" };
     case "fmo": return { kind: "fmo" };
     case "list": if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
   }
@@ -85,6 +88,7 @@ const segsFromView = (v: View): string[] =>
   : v.kind === "cases" ? (v.filter === "open" ? ["arenden"] : ["arenden", v.filter])
   : v.kind === "case" ? ["arende", v.id]
   : v.kind === "newcase" ? ["nytt-arende"]
+  : v.kind === "users" ? ["anvandare"]
   : [v.kind];
 
 export default function App() {
@@ -264,6 +268,7 @@ export default function App() {
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
     : view?.kind === "m365" ? "Kopplingen till e-postlådan och e-postsignatur"
     : view?.kind === "feedback" ? "Fel, idéer och önskemål från användarna"
+    : view?.kind === "users" ? "Konton och roller i CRM:et"
     : view?.kind === "fmo" ? "Fastigheter som skickats på FMO-check"
     : tenantName;
 
@@ -337,6 +342,7 @@ export default function App() {
           : view?.kind === "newcase" ? "__newcase__"
           : view?.kind === "m365" ? "__m365__"
           : view?.kind === "feedback" ? "__feedback__"
+          : view?.kind === "users" ? "__users__"
           : view?.kind === "fmo" ? "__fmo__"
           : null
         }
@@ -356,6 +362,7 @@ export default function App() {
             : key.startsWith("__cases_") ? { kind: "cases", filter: key.slice(8, -2) as CaseFilter }
             : key === "__m365__" ? { kind: "m365" }
             : key === "__feedback__" ? { kind: "feedback" }
+            : key === "__users__" ? { kind: "users" }
             : key === "__fmo__" ? { kind: "fmo" }
             : { kind: "list", objectType: key }
           )
@@ -394,6 +401,7 @@ export default function App() {
                 : view?.kind === "newcase" ? "Skapa ärende"
                 : view?.kind === "m365" ? "Microsoft 365"
                 : view?.kind === "feedback" ? "Feedback"
+                : view?.kind === "users" ? "Användare"
                 : view?.kind === "fmo" ? "FMO-check"
                 : ""}
             </h1>
@@ -467,6 +475,7 @@ export default function App() {
         {view?.kind === "m365" && isAdmin && <M365StatusPage />}
 
         {view?.kind === "feedback" && <FeedbackPage isAdmin={isAdmin} />}
+        {view?.kind === "users" && isAdmin && <UsersAdminPage meId={session.user.id} />}
         {view?.kind === "fmo" && <FmoPage />}
 
         {view?.kind === "list" && view.objectType === "d2d_lagenhet" && objectDefFor(view.objectType) && (
