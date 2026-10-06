@@ -12,7 +12,6 @@ import { DashboardPage } from "@/components/DashboardPage";
 import { AiPanel } from "@/components/AiAssistant";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { FeedbackPage } from "@/components/FeedbackPage";
-import { UsersAdminPage } from "@/components/UsersAdminPage";
 import { ObjectListPage } from "@/components/ObjectListPage";
 import { D2DLagenheterPage } from "@/components/D2DLagenheterPage";
 import { RecordDrawer } from "@/components/RecordDrawer";
@@ -20,60 +19,56 @@ import { D2DSellerApp } from "@/components/D2DSellerApp";
 import { D2DProjectBuilder } from "@/components/D2DProjectBuilder";
 import { D2DUtfallPage } from "@/components/D2DUtfallPage";
 import { D2DAvtalPage } from "@/components/D2DAvtalPage";
-import { D2DPrislistaPage } from "@/components/D2DAvtal";
 import { D2DFeedbackGranskning, d2dFeedbackAntalVantar, d2dFeedbackArGranskare } from "@/components/D2DFeedback";
 import { MyTasksPage } from "@/components/MyTasksPage";
 import { NummerbytenPage } from "@/components/NummerbytenPage";
 import { CasesPage } from "@/components/CasesPage";
 import { CaseView } from "@/components/CaseView";
-import { M365StatusPage } from "@/components/M365StatusPage";
 import { type CaseFilter, type CaseCounts, listArenden } from "@/lib/cases";
 import { SkapaArendePage } from "@/components/SkapaArende";
-import { ImportPage } from "@/components/ImportPage";
 import { FmoPage } from "@/components/FmoPage";
 import { arFmo } from "@/lib/fmo";
-import { UserSettings } from "@/components/UserSettings";
+import { SettingsPage, isSettingsTab, SETTINGS_TABS, type SettingsTab } from "@/components/SettingsPage";
 import { useRoute, readRoute, navigate, goBack } from "@/lib/route";
 import { loadAllUsers, useUserName } from "@/lib/users";
 
 type View =
   | { kind: "dashboard" }
   | { kind: "tasks" }
-  | { kind: "import" }
   | { kind: "list"; objectType: string }
   | { kind: "d2d" }
   | { kind: "d2dbuilder" }
   | { kind: "d2dutfall" }
   | { kind: "d2davtal" }
-  | { kind: "d2dpriser" }
   | { kind: "d2dfeedback" }
   | { kind: "nummerbyten" }
   | { kind: "cases"; filter: CaseFilter }
   | { kind: "case"; id: string }
   | { kind: "newcase" }
-  | { kind: "m365" }
   | { kind: "feedback" }
-  | { kind: "users" }
+  | { kind: "settings"; tab: SettingsTab }
   | { kind: "fmo" };
 
 /** URL → vy. Okänt/tomt → översikten. */
 function viewFromSegs(segs: string[]): View {
   switch (segs[0]) {
     case "tasks": return { kind: "tasks" };
-    case "import": return { kind: "import" };
+    case "installningar": return { kind: "settings", tab: isSettingsTab(segs[1]) ? segs[1] : "profil" };
+    // Gamla adresser → motsvarande flik under Inställningar.
+    case "import": return { kind: "settings", tab: "import" };
+    case "m365": return { kind: "settings", tab: "m365" };
+    case "d2dpriser": return { kind: "settings", tab: "priser" };
+    case "anvandare": return { kind: "settings", tab: "anvandare" };
     case "d2d": return { kind: "d2d" };
     case "d2dbuilder": return { kind: "d2dbuilder" };
     case "d2dutfall": return { kind: "d2dutfall" };
     case "d2davtal": return { kind: "d2davtal" };
-    case "d2dpriser": return { kind: "d2dpriser" };
     case "d2dfeedback": return { kind: "d2dfeedback" };
     case "nummerbyten": return { kind: "nummerbyten" };
     case "arenden": return { kind: "cases", filter: (CASE_FILTERS.includes(segs[1] as CaseFilter) ? segs[1] : "open") as CaseFilter };
     case "arende": if (segs[1]) return { kind: "case", id: segs[1] }; break;
     case "nytt-arende": return { kind: "newcase" };
-    case "m365": return { kind: "m365" };
     case "feedback": return { kind: "feedback" };
-    case "anvandare": return { kind: "users" };
     case "fmo": return { kind: "fmo" };
     case "list": if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
   }
@@ -88,7 +83,7 @@ const segsFromView = (v: View): string[] =>
   : v.kind === "cases" ? (v.filter === "open" ? ["arenden"] : ["arenden", v.filter])
   : v.kind === "case" ? ["arende", v.id]
   : v.kind === "newcase" ? ["nytt-arende"]
-  : v.kind === "users" ? ["anvandare"]
+  : v.kind === "settings" ? ["installningar", v.tab]
   : [v.kind];
 
 export default function App() {
@@ -115,7 +110,6 @@ export default function App() {
   };
   const setView = (v: View) => navigate(segsFromView(v));
   const [listReloadKey, setListReloadKey] = useState(0);
-  const [visaInstallningar, setVisaInstallningar] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [caseCounts, setCaseCounts] = useState<CaseCounts>({});
   const [newFeedback, setNewFeedback] = useState(0);
@@ -259,16 +253,13 @@ export default function App() {
     : view?.kind === "case" ? "Ärende från kundtjänst"
     : view?.kind === "newcase" ? "För ärenden som kommer in per telefon, personligt eller internt"
     : view?.kind === "tasks" ? "Dina uppgifter i alla moduler"
-    : view?.kind === "import" ? "Läs in data från fil"
     : view?.kind === "d2dbuilder" ? "Projekt, adresser och tilldelning"
     : view?.kind === "d2dutfall" ? "Utfall, merförsäljning och bindningstider"
     : view?.kind === "d2davtal" ? "Avtal signerade med Scrive i D2D-vyn"
-    : view?.kind === "d2dpriser" ? "Priser och villkor för alla avtalsförslag i D2D"
     : view?.kind === "d2dfeedback" ? "Feedback från säljarna i Blitz — granskas innan den skickas vidare"
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
-    : view?.kind === "m365" ? "Kopplingen till e-postlådan och e-postsignatur"
     : view?.kind === "feedback" ? "Fel, idéer och önskemål från användarna"
-    : view?.kind === "users" ? "Konton och roller i CRM:et"
+    : view?.kind === "settings" ? (SETTINGS_TABS.find((t) => t.key === view.tab)?.sub ?? "")
     : view?.kind === "fmo" ? "Fastigheter som skickats på FMO-check"
     : tenantName;
 
@@ -283,11 +274,10 @@ export default function App() {
     view?.kind === "list" ? (listDef?.labelPlural ?? "Annat")
     : view?.kind === "dashboard" ? "Översikt"
     : view?.kind === "tasks" ? "Mina uppgifter"
-    : view?.kind === "import" ? "Import"
-    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" || view?.kind === "d2dpriser" || view?.kind === "d2dfeedback" ? "Door2Door"
+    : view?.kind === "settings" ? (view.tab === "import" ? "Import" : view.tab === "m365" ? "Microsoft 365" : view.tab === "priser" ? "Door2Door" : "Inställningar")
+    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" || view?.kind === "d2dfeedback" ? "Door2Door"
     : view?.kind === "nummerbyten" ? (objectDefFor("nummerbyte")?.labelPlural ?? "Annat")
     : view?.kind === "cases" || view?.kind === "case" || view?.kind === "newcase" ? "Ärenden"
-    : view?.kind === "m365" ? "Microsoft 365"
     : "Annat";
 
   // Vad användaren tittar på — skickas med till AI-assistenten.
@@ -322,7 +312,7 @@ export default function App() {
         newFeedback={newFeedback}
         d2dFeedback={d2dGranskare ? { vantar: d2dFeedbackVantar } : undefined}
         user={{ id: session.user.id, email: session.user.email ?? "", role: isAdmin ? "Administratör" : isSeller ? "Säljare" : "Användare" }}
-        onOpenSettings={() => setVisaInstallningar(true)}
+        onOpenSettings={() => setView({ kind: "settings", tab: "profil" })}
         onSignOut={() => supabase.auth.signOut()}
         onOpenAi={() => setAiOpen((o) => !o)}
         aiOpen={aiOpen}
@@ -330,19 +320,16 @@ export default function App() {
           view?.kind === "list" ? view.objectType
           : view?.kind === "dashboard" ? "__dashboard__"
           : view?.kind === "tasks" ? "__tasks__"
-          : view?.kind === "import" ? "__import__"
           : view?.kind === "d2dbuilder" ? "__d2dbuilder__"
           : view?.kind === "d2dutfall" ? "__d2dutfall__"
           : view?.kind === "d2davtal" ? "__d2davtal__"
-          : view?.kind === "d2dpriser" ? "__d2dpriser__"
           : view?.kind === "d2dfeedback" ? "__d2dfeedback__"
           : view?.kind === "nummerbyten" ? "nummerbyte"
           : view?.kind === "cases" ? `__cases_${view.filter}__`
           : view?.kind === "case" ? null
           : view?.kind === "newcase" ? "__newcase__"
-          : view?.kind === "m365" ? "__m365__"
           : view?.kind === "feedback" ? "__feedback__"
-          : view?.kind === "users" ? "__users__"
+          : view?.kind === "settings" ? "__settings__"
           : view?.kind === "fmo" ? "__fmo__"
           : null
         }
@@ -350,19 +337,16 @@ export default function App() {
           setView(
             key === "__dashboard__" ? { kind: "dashboard" }
             : key === "__tasks__" ? { kind: "tasks" }
-            : key === "__import__" ? { kind: "import" }
+            : key === "__settings__" ? { kind: "settings", tab: "profil" }
             : key === "__d2d__" ? { kind: "d2d" }
             : key === "__d2dbuilder__" ? { kind: "d2dbuilder" }
             : key === "__d2dutfall__" ? { kind: "d2dutfall" }
             : key === "__d2davtal__" ? { kind: "d2davtal" }
-            : key === "__d2dpriser__" ? { kind: "d2dpriser" }
             : key === "__d2dfeedback__" ? { kind: "d2dfeedback" }
             : key === "nummerbyte" ? { kind: "nummerbyten" }
             : key === "__newcase__" ? { kind: "newcase" }
             : key.startsWith("__cases_") ? { kind: "cases", filter: key.slice(8, -2) as CaseFilter }
-            : key === "__m365__" ? { kind: "m365" }
             : key === "__feedback__" ? { kind: "feedback" }
-            : key === "__users__" ? { kind: "users" }
             : key === "__fmo__" ? { kind: "fmo" }
             : { kind: "list", objectType: key }
           )
@@ -389,19 +373,16 @@ export default function App() {
               {view?.kind === "list" ? objectDefFor(view.objectType)?.labelPlural
                 : view?.kind === "dashboard" ? "Översikt"
                 : view?.kind === "tasks" ? "Mina uppgifter"
-                : view?.kind === "import" ? "Import"
                 : view?.kind === "d2dbuilder" ? "D2D – Projekt"
                 : view?.kind === "d2dutfall" ? "D2D – Utfall"
                 : view?.kind === "d2davtal" ? "D2D – Avtal"
-                : view?.kind === "d2dpriser" ? "D2D – Priser"
                 : view?.kind === "d2dfeedback" ? "Säljarfeedback"
                 : view?.kind === "nummerbyten" ? "Nummerbyten"
                 : view?.kind === "cases" ? "Ärenden"
                 : view?.kind === "case" ? "Ärende"
                 : view?.kind === "newcase" ? "Skapa ärende"
-                : view?.kind === "m365" ? "Microsoft 365"
                 : view?.kind === "feedback" ? "Feedback"
-                : view?.kind === "users" ? "Användare"
+                : view?.kind === "settings" ? "Inställningar"
                 : view?.kind === "fmo" ? "FMO-check"
                 : ""}
             </h1>
@@ -430,14 +411,9 @@ export default function App() {
 
         {view?.kind === "tasks" && <MyTasksPage onOpenRecord={openRecord} />}
 
-        {view?.kind === "import" && <ImportPage />}
-
         {view?.kind === "d2dbuilder" && <D2DProjectBuilder objectDefFor={objectDefFor} onOpenRecord={openRecord} />}
         {view?.kind === "d2dutfall" && <D2DUtfallPage onOpenRecord={openRecord} />}
         {view?.kind === "d2davtal" && <D2DAvtalPage onOpenRecord={openRecord} lagFields={objectDefFor("d2d_lagenhet")?.fields ?? []} />}
-        {view?.kind === "d2dpriser" && (isAdmin
-          ? <D2DPrislistaPage fields={objectDefFor("d2d_lagenhet")?.fields ?? []} />
-          : <div className="page"><p className="formfield__help">Bara administratörer kan ändra priserna.</p></div>)}
         {view?.kind === "d2dfeedback" && (d2dGranskare
           ? <D2DFeedbackGranskning onAntalAndrat={() => d2dFeedbackAntalVantar().then(setD2dFeedbackVantar)} />
           : <div className="page"><p className="formfield__help">Bara granskaren av säljarfeedback kan se den här sidan.</p></div>)}
@@ -472,10 +448,19 @@ export default function App() {
           />
         )}
 
-        {view?.kind === "m365" && isAdmin && <M365StatusPage />}
-
         {view?.kind === "feedback" && <FeedbackPage isAdmin={isAdmin} />}
-        {view?.kind === "users" && isAdmin && <UsersAdminPage meId={session.user.id} />}
+        {view?.kind === "settings" && (
+          <SettingsPage
+            tab={view.tab}
+            onTab={(t) => setView({ kind: "settings", tab: t })}
+            session={session}
+            isAdmin={isAdmin}
+            canCases={canCases}
+            branding={branding}
+            onBrandingChanged={reloadMetadata}
+            lagFields={objectDefFor("d2d_lagenhet")?.fields ?? []}
+          />
+        )}
         {view?.kind === "fmo" && <FmoPage />}
 
         {view?.kind === "list" && view.objectType === "d2d_lagenhet" && objectDefFor(view.objectType) && (
@@ -533,16 +518,6 @@ export default function App() {
         context={aiContext}
         hasOpenRecord={!!openRecordId || view?.kind === "case"}
       />
-
-      {visaInstallningar && (
-        <UserSettings
-          session={session}
-          branding={branding}
-          isAdmin={isAdmin}
-          onBrandingChanged={reloadMetadata}
-          onClose={() => setVisaInstallningar(false)}
-        />
-      )}
 
     </div>
   );
