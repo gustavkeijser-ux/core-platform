@@ -365,3 +365,120 @@
   .d2d-loner__detalj { grid-template-columns: 1fr; padding-left: var(--sp-3); }
   .d2d-loner__just-form { grid-template-columns: 1fr; }
 }
+
+/* ── Blitz → Översikt: profiler (D2DProfil.tsx) ────────────────────────── */
+.d2dd__rad--klick { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.d2dd__rad--klick:hover { border-color: var(--border-strong, var(--ink-faint)); }
+.d2dd__rad--klick:active { transform: scale(.99); }
+.d2d-pinnar__kort--klick { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.d2d-pinnar__kort--klick:hover { border-color: color-mix(in srgb, var(--brand) 45%, transparent); }
+.d2d-pinnar__lon {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px var(--sp-2); align-items: baseline;
+  margin-top: var(--sp-1); padding-top: var(--sp-2); border-top: 1px dashed var(--border);
+  font-size: var(--text-sm); color: var(--ink-muted);
+}
+.d2d-pinnar__lon strong { font-family: var(--font-display); font-size: 18px; font-weight: 800; color: var(--hue-green); }
+.d2d-pinnar__lon small { grid-column: 1 / -1; font-size: var(--text-xs); }
+
+/* Raden med profiler (sidledsskroll på mobil). */
+.d2dp-rad { display: flex; gap: var(--sp-2); overflow-x: auto; padding: 2px 2px var(--sp-2); scroll-snap-type: x proximity; scrollbar-width: none; }
+.d2dp-rad::-webkit-scrollbar { display: none; }
+.d2dp-rad__item {
+  flex: 0 0 auto; width: 76px; scroll-snap-align: start;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: var(--sp-2) 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  font: inherit; color: inherit; cursor: pointer; transition: transform var(--dur) var(--ease);
+}
+.d2dp-rad__item:active { transform: scale(.96); }
+.d2dp-rad__item--jag { border-color: color-mix(in srgb, var(--brand) 50%, transparent); background: color-mix(in srgb, var(--brand) 7%, var(--surface)); }
+.d2dp-rad__namn { font-size: var(--text-xs); font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d2dp-rad__plats { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+.d2dp-avatar {
+  position: relative; display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: color-mix(in srgb, var(--av) 18%, var(--surface)); color: var(--av);
+  border: 2px solid color-mix(in srgb, var(--av) 45%, transparent);
+  font-family: var(--font-display); font-weight: 800; font-size: 15px;
+}
+.d2dp-avatar--stor { width: 64px; height: 64px; font-size: 22px; }
+.d2dp-avatar__krona {
+  position: absolute; top: -9px; right: -6px; width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 50%; background: var(--hue-amber); color: var(--surface); box-shadow: 0 0 0 2px var(--surface);
+}
+.d2dp-avatar__krona svg { width: 13px; height: 13px; }
+.d2dp-avatar--stor .d2dp-avatar__krona { width: 28px; height: 28px; top: -10px; right: -8px; }
+.d2dp-avatar--stor .d2dp-avatar__krona svg { width: 16px; height: 16px; }
+
+/* Profilen som helskärmsark ovanpå Blitz. */
+.d2dp-ark {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column;
+  background: var(--canvas); animation: d2dp-in .22s var(--ease) both;
+}
+@keyframes d2dp-in { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+.d2dp-ark__topp {
+  display: flex; align-items: center; padding: var(--sp-2) var(--sp-3);
+  padding-top: calc(var(--sp-2) + env(safe-area-inset-top, 0));
+  background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.d2dp-ark__stang { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px 6px 4px; border: 0; background: none; color: var(--brand); font: inherit; font-weight: 700; cursor: pointer; border-radius: var(--r-sm); }
+.d2dp-ark__innehall {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: var(--sp-4) var(--sp-4) calc(var(--sp-6) + env(safe-area-inset-bottom, 0));
+  display: flex; flex-direction: column; gap: var(--sp-5);
+  width: 100%; max-width: 720px; margin: 0 auto;
+}
+.d2dp-huvud { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-4); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
+.d2dp-huvud--ledare { border-color: color-mix(in srgb, var(--hue-amber) 55%, transparent); background: color-mix(in srgb, var(--hue-amber) 9%, var(--surface)); }
+.d2dp-huvud__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.d2dp-huvud__text h2 { margin: 0; font-size: var(--text-xl, 20px); display: flex; align-items: center; gap: var(--sp-2); }
+.d2dp-huvud__plac { font-size: var(--text-sm); color: var(--ink-muted); }
+.d2dp-huvud__plac--ledare { color: color-mix(in srgb, var(--hue-amber) 80%, var(--ink)); font-weight: 700; }
+.d2dp-h3 { margin: 0; font-size: var(--text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--ink-faint); }
+.d2dd__kpis.d2dp-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* Sälj per dag (CSS-staplar, en per dag i månaden). */
+.d2dp-dagar { display: flex; align-items: flex-end; gap: 2px; height: 110px; padding: var(--sp-2); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
+.d2dp-dagar__stapel { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 0; }
+.d2dp-dagar__stapel span {
+  position: relative; display: block; width: 100%; min-height: 2px; border-radius: 3px 3px 1px 1px;
+  background: color-mix(in srgb, var(--brand) 70%, transparent);
+}
+.d2dp-dagar__stapel span em { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 9.5px; font-weight: 700; color: var(--ink-muted); }
+.d2dp-dagar__stapel--idag span { background: var(--hue-green); }
+.d2dp-dagar__stapel--framtid span { background: var(--border); }
+.d2dp-dagar__axel { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-faint); padding: 0 var(--sp-2); }
+
+.d2dp-rekord { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--sp-2); }
+.d2dp-rekord > div { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
+.d2dp-rekord strong { font-family: var(--font-display); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.d2dp-rekord span { font-size: var(--text-xs); color: var(--ink-muted); }
+.d2dp-rekord--guld strong { color: var(--hue-amber); }
+
+/* Fyrverkeri när man leder månaden. Klick stänger. */
+.d2dp-fyr {
+  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; cursor: pointer;
+  background: color-mix(in srgb, var(--canvas) 35%, transparent);
+  animation: d2dp-fyr-in .3s ease both; transition: opacity .5s ease;
+}
+.d2dp-fyr--tona { opacity: 0; }
+@keyframes d2dp-fyr-in { from { opacity: 0; } to { opacity: 1; } }
+.d2dp-fyr__canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.d2dp-fyr__text {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-6); border-radius: var(--r-lg, 20px);
+  background: color-mix(in srgb, var(--surface) 88%, transparent); border: 2px solid var(--hue-amber);
+  box-shadow: var(--shadow-modal);
+  font-family: var(--font-display); font-size: 22px; font-weight: 800; text-align: center; color: var(--ink);
+  animation: d2dp-pop .6s cubic-bezier(.2, 1.4, .4, 1) .15s both;
+}
+.d2dp-fyr__text svg { width: 40px; height: 40px; color: var(--hue-amber); }
+@keyframes d2dp-pop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .d2dp-ark, .d2dp-fyr, .d2dp-fyr__text { animation: none; }
+}
+@media (max-width: 480px) {
+  .d2dd__kpis.d2dp-kpis { gap: var(--sp-2); }
+  .d2dp-dagar { height: 90px; gap: 1px; padding: var(--sp-2) 4px; }
+  .d2dp-dagar__stapel span em { display: none; }
+}
