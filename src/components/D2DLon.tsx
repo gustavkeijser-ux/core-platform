@@ -234,11 +234,19 @@ export function BlitzPinnar({ minId }: { minId: string | null }) {
 
   if (fel || !data) return null;                    // tyst — översikten fungerar utan
   const trappa = [...(data.trappa ?? [])].sort((a, b) => a.pinnar - b.pinnar);
-  const sista = trappa[trappa.length - 1]?.pinnar ?? 100;
-  const max = Math.max(sista, ...data.saljare.map((s) => s.pinnar + s.vantar)) * 1.05;
   const jag = minId ?? data.jag;
-  const egen = data.saljare.find((s) => s.id === jag);
   const rader = data.saljare.filter((s) => s.pinnar + s.vantar > 0 || s.id === jag);
+
+  /** Varje säljare mäts mot sitt eget nästa delmål: stapeln fylls från
+   *  föregående nivå (eller 0) till nästa. Högsta nivån nådd = full stapel. */
+  const segment = (s: SaljareRad) => {
+    const fran = s.niva ?? 0;
+    const till = s.nastaNiva ?? s.niva ?? trappa[0]?.pinnar ?? 1;
+    const bredd = Math.max(till - fran, 0.0001);
+    const andel = s.nastaNiva == null ? 1 : Math.min(1, Math.max(0, (s.pinnar - fran) / bredd));
+    const vantarAndel = s.nastaNiva == null ? 0 : Math.min(1 - andel, s.vantar / bredd);
+    return { fran, till, andel, vantarAndel };
+  };
 
   return (
     <section className="d2dd__section d2d-pinnar">
@@ -246,40 +254,40 @@ export function BlitzPinnar({ minId }: { minId: string | null }) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M4 20V10M10 20V4M16 20v-8M22 20H2" /></svg>
         Pinnar — {manadNamn(data.manad)}
       </h2>
-      {egen && (
-        <div className="d2d-pinnar__egen">
-          <span className="d2d-pinnar__egen-tal">{pn(egen.pinnar)}</span>
-          <span className="d2d-pinnar__egen-text">
-            {egen.nastaNiva != null
-              ? <>pinnar · <strong>{pn(egen.kvar)}</strong> kvar till {egen.nastaNiva} ({kr(egen.nastaBonus)})</>
-              : <>pinnar · högsta nivån nådd</>}
-            {egen.bonus > 0 && <> · bonus hittills <strong>{kr(egen.bonus)}</strong></>}
-            {egen.vantar > 0 && <> · {pn(egen.vantar)} väntar på signering</>}
-          </span>
-        </div>
-      )}
       {rader.length === 0 ? (
         <div className="d2dd__tom">Inga pinnar ännu den här månaden</div>
       ) : (
-        <div className="d2d-pinnar__lista">
-          {rader.map((s) => (
-            <div key={s.id} className={`d2d-pinnar__rad${s.id === jag ? " d2d-pinnar__rad--jag" : ""}`}>
-              <span className="d2d-pinnar__namn">{s.namn}{s.id === jag ? " (du)" : ""}</span>
-              <div className="d2d-pinnar__stapel" title={`${pn(s.pinnar)} pinnar${s.vantar ? `, ${pn(s.vantar)} väntar` : ""}`}>
-                <div className="d2d-pinnar__fyll" style={{ width: `${Math.min(100, (s.pinnar / max) * 100)}%` }} />
-                {s.vantar > 0 && (
-                  <div className="d2d-pinnar__fyll d2d-pinnar__fyll--vantar"
-                    style={{ left: `${Math.min(100, (s.pinnar / max) * 100)}%`, width: `${Math.min(100 - (s.pinnar / max) * 100, (s.vantar / max) * 100)}%` }} />
-                )}
-                {trappa.map((t) => (
-                  <span key={t.pinnar} className={`d2d-pinnar__steg${s.pinnar >= t.pinnar ? " d2d-pinnar__steg--nadd" : ""}`}
-                    style={{ left: `${(t.pinnar / max) * 100}%` }} title={`${t.pinnar} pinnar → ${kr(t.bonus)}`} />
-                ))}
+        <div className="d2d-pinnar__kort-lista">
+          {rader.map((s) => {
+            const seg = segment(s);
+            const klar = s.nastaNiva == null && s.niva != null;
+            return (
+              <div key={s.id} className={`d2d-pinnar__kort${s.id === jag ? " d2d-pinnar__kort--jag" : ""}${klar ? " d2d-pinnar__kort--klar" : ""}`}>
+                <div className="d2d-pinnar__kort-head">
+                  <span className="d2d-pinnar__namn">{s.namn}{s.id === jag ? " (du)" : ""}</span>
+                  <span className="d2d-pinnar__tal">{pn(s.pinnar)} <small>pinnar</small></span>
+                </div>
+                <div className="d2d-pinnar__stapel" role="progressbar" aria-valuemin={seg.fran} aria-valuemax={seg.till} aria-valuenow={s.pinnar}
+                  title={`${pn(s.pinnar)} av ${seg.till} pinnar${s.vantar ? `, ${pn(s.vantar)} väntar på signering` : ""}`}>
+                  <div className="d2d-pinnar__fyll" style={{ width: `${seg.andel * 100}%` }} />
+                  {seg.vantarAndel > 0 && (
+                    <div className="d2d-pinnar__fyll d2d-pinnar__fyll--vantar" style={{ left: `${seg.andel * 100}%`, width: `${seg.vantarAndel * 100}%` }} />
+                  )}
+                </div>
+                <div className="d2d-pinnar__kort-fot">
+                  <span className="d2d-pinnar__delmal">
+                    {s.niva != null ? <span className="d2d-pinnar__nadd">✓ {s.niva} nådd · {kr(s.bonus)}</span> : <span>{seg.fran}</span>}
+                  </span>
+                  <span className="d2d-pinnar__kvar">
+                    {s.nastaNiva != null
+                      ? <><strong>{pn(s.kvar)}</strong> kvar till {s.nastaNiva} ({kr(s.nastaBonus)})</>
+                      : <>Högsta nivån nådd</>}
+                    {s.vantar > 0 && <span className="d2d-pinnar__vantar"> · {pn(s.vantar)} väntar</span>}
+                  </span>
+                </div>
               </div>
-              <span className="d2d-pinnar__tal">{pn(s.pinnar)}</span>
-              <span className="d2d-pinnar__bonus">{s.bonus > 0 ? kr(s.bonus) : ""}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {trappa.length > 0 && (
