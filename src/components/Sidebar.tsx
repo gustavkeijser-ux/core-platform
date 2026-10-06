@@ -313,7 +313,9 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
       >
         <div className="sidebar__brand">
           {branding?.logoUrl ? (
-            <img className="sidebar__logo" src={branding.logoUrl} alt={branding.name || "Logotyp"} />
+            <span className="sidebar__logo-plate">
+              <img className="sidebar__logo" src={branding.logoUrl} alt={branding.name || "Logotyp"} />
+            </span>
           ) : (
             <>
               <span className="sidebar__mark">
