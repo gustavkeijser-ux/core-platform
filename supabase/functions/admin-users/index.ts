@@ -154,13 +154,14 @@ Deno.serve(async (req: Request) => {
           });
           if (error || !data.user) return fail(error?.message ?? "Kunde inte skicka inbjudan (är e-post/SMTP konfigurerat i Supabase Auth?).");
           userId = data.user.id;
-          // Inbjudan kan inte sätta app_metadata — gör det nu så tenant hamnar i JWT.
-          const { error: e2 } = await db.auth.admin.updateUserById(userId, { app_metadata: { tenant_id: tenantId } });
-          if (e2) return fail(e2.message);
         }
+        // Auth skriver raden innan app_metadata sätts (och inbjudan kan inte sätta den alls),
+        // så sätt tenant_id uttryckligen efteråt — det är den som hamnar i JWT och styr RLS.
+        const { error: e2 } = await db.auth.admin.updateUserById(userId, { app_metadata: { tenant_id: tenantId } });
+        if (e2) return fail(e2.message);
 
-        // Profilen: triggern skapar den när tenant finns i app_metadata (password-läget);
-        // i invite-läget saknas tenant vid insert, så vi skriver raden själva.
+        // Profilen: triggern (handle_new_auth_user) hoppar över raden när tenant saknas vid
+        // insert, så vi skriver den själva här.
         const { error: e3 } = await db.from("users").upsert({
           id: userId, tenant_id: tenantId, email, full_name: fullName, must_change_password: true,
         }, { onConflict: "id" });
