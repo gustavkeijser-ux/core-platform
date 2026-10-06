@@ -15,6 +15,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## 2026-10-06
 
+- [D2D] Fliken Feedback i Blitz (säljarvyn): säljaren skriver feedback som går till Lukas för granskning (Door to door → Säljarfeedback i CRM:et, bara granskaren, siffra i menyn med antal som väntar). Lukas kan redigera texten och godkänna → raden hamnar i menyn Feedback (avsändare = säljaren, modul Blitz) och skickas till Teams; eller neka med anledning som säljaren ser. Säljarvyn heter nu Blitz (menyvalet "D2D-vy" och rubriken i appen). Filer: `D2DFeedback.tsx` (ny), `styles/d2d.css` (ny), `D2DSellerApp.tsx`, `App.tsx`, `Sidebar.tsx`. DB: `d2d_feedback`, `d2d_feedback_granskare` (Lukas), `d2d_feedback_skicka/lista/godkann/neka/antal_vantar/ar_granskare` (20261006_1014). Edge: `d2d-feedback-send` (verify_jwt true, samma Teams-webhook som feedback-send).
 - [Master] Arbetssätt för flera agenter: `AGENTS.md` (regler, ägarskap, push och Supabase), denna logg och `verktyg/gh_push.py` (push via GitHubs webbeditor). Nya migrationer döps `AAAAMMDD_HHMM_<omrade>_<vad>.sql`. Instruktionstexter för projekten i `agenter/PROJEKTINSTRUKTIONER.md`.
 
 ## 2026-10-05
