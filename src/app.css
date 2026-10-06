@@ -5301,3 +5301,38 @@ select.input {
   font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
   color: color-mix(in srgb, var(--brand) 80%, var(--ink)); background: var(--brand-soft); border-radius: var(--r-pill); padding: 1px 7px;
 }
+
+/* ── Administration → Användare ───────────────────────────────────────── */
+.usr__list { padding: 0; overflow: hidden; }
+.usr__row {
+  display: grid; grid-template-columns: 240px minmax(0, 1fr) auto; gap: var(--sp-4); align-items: start;
+  padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--border);
+}
+.usr__row:last-child { border-bottom: 0; }
+.usr__row--off { opacity: .55; }
+.usr__who { display: flex; gap: var(--sp-3); align-items: center; min-width: 0; }
+.usr__who-text { min-width: 0; }
+.usr__name { font-weight: 700; font-size: var(--text-sm); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.usr__me { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--brand); background: var(--brand-soft); padding: 1px 6px; border-radius: var(--r-pill); }
+.usr__email { font-size: var(--text-xs); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usr__roles { min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.usr__role { padding: 2px 10px; border-radius: var(--r-pill); background: var(--surface-sunk); color: var(--ink); font-size: var(--text-xs); font-weight: 600; }
+.usr__role--admin { background: var(--brand-soft); color: var(--brand); }
+.usr__norole { font-size: var(--text-xs); color: var(--ink-faint); font-style: italic; }
+.usr__meta { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--text-xs); color: var(--ink-faint); }
+.usr__flag { color: var(--warn-ink); }
+.usr__side { display: flex; gap: 6px; justify-content: flex-end; }
+.usr-dlg { width: min(560px, calc(100vw - 32px)); }
+.usr-dlg__body { display: flex; flex-direction: column; gap: var(--sp-4); }
+.usr-dlg__text { margin: 0; font-size: var(--text-sm); line-height: var(--leading-body); }
+.usr-dlg__radio { display: flex; gap: var(--sp-3); align-items: flex-start; font-size: var(--text-sm); line-height: var(--leading-body); cursor: pointer; padding: var(--sp-2) 0; }
+.usr-dlg__radio input { margin-top: 3px; accent-color: var(--brand); }
+.usr-dlg__opt { font-weight: 400; color: var(--ink-faint); }
+.usr-dlg__pw { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; padding: var(--sp-4); background: var(--surface-sunk); border-radius: var(--r-md); }
+.usr-dlg__pw code { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: 700; letter-spacing: .04em; user-select: all; }
+
+@media (max-width: 900px) {
+  .usr__row { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-4); }
+  .usr__side { justify-content: flex-start; }
+  .usr__side .btn { min-height: 38px; }
+}
