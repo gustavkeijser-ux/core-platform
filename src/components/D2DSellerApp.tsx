@@ -21,6 +21,8 @@ const rememberRow = (listKey: string, id: string) => rememberRowShared("d2d:" + 
 const useReturnToRow = (listKey: string, ready: boolean) => useReturnToRowShared("d2d:" + listKey, ready, "d2d-return-flash");
 import { useUserName } from "@/lib/users";
 import { D2DDashboard } from "./D2DDashboard";
+import { D2DFeedbackFlik } from "./D2DFeedback";
+import "@/styles/d2d.css";
 
 // =============================================================================
 // Typer & hjälpfunktioner
@@ -32,6 +34,7 @@ type D2DView =
   | { kind: "projekt"; id: string }
   | { kind: "signerade" }
   | { kind: "aterkopplingar" }
+  | { kind: "feedback" }
   | { kind: "fastighet"; id: string }
   | { kind: "lagenhet"; id: string; fastighetId: string; from?: "signerade" | "aterkopplingar" };
 
@@ -41,6 +44,7 @@ function d2dViewFromSegs(segs: string[]): D2DView {
   if (kind === "fastigheter") return { kind: "fastigheter" };
   if (kind === "signerade") return { kind: "signerade" };
   if (kind === "aterkopplingar") return { kind: "aterkopplingar" };
+  if (kind === "feedback") return { kind: "feedback" };
   if (kind === "projekt" && id) return { kind: "projekt", id };
   if (kind === "fastighet" && id) return { kind: "fastighet", id };
   if (kind === "lagenhet" && id) {
@@ -1250,7 +1254,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
 
   // ── Navigering
   const navTab = view.kind === "signerade" ? "signerade" : view.kind === "aterkopplingar" ? "aterkopplingar"
-    : view.kind === "oversikt" ? "oversikt" : "fastigheter";
+    : view.kind === "feedback" ? "feedback" : view.kind === "oversikt" ? "oversikt" : "fastigheter";
 
   function renderContent() {
     switch (view.kind) {
@@ -1314,10 +1318,14 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
             onOpenLagenhet={(id, fId) => setView({ kind: "lagenhet", id, fastighetId: fId, from: "aterkopplingar" })}
           />
         );
+
+      case "feedback":
+        // Säljarens feedback → Lukas granskar i CRM:et (D2DFeedback.tsx).
+        return <D2DFeedbackFlik />;
     }
   }
 
-  if (loading) return <div className="d2d-loading">Laddar D2D…</div>;
+  if (loading) return <div className="d2d-loading">Laddar Blitz…</div>;
 
   // Är vi i en detaljvy? Visa inte bottom-nav
   const inDetail = view.kind === "fastighet" || view.kind === "lagenhet";
@@ -1344,7 +1352,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
                 <path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10" />
               </svg>
             </span>
-            Door 2 Door
+            Blitz
           </div>
         </div>
         <div className="d2d-header__actions">
@@ -1399,6 +1407,15 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
               <path d="M3 10l3-3m-3 3l3 3"/>
             </svg>
             Återkoppling
+          </button>
+          <button
+            className={`d2d-nav-btn${navTab === "feedback" ? " d2d-nav-btn--active" : ""}`}
+            onClick={() => setView({ kind: "feedback" })}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 4h14v9H8l-4 3v-3H3z"/>
+            </svg>
+            Feedback
           </button>
         </nav>
       )}
