@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import "@/styles/d2d.css";
 
 // =============================================================================
 // D2D-dashboard — startsidan i Door to Door.
 // Topplista per period, Hall of Fame (antal #1-dagar/-månader), senaste sälj
 // och statistik per säljare. Allt räknas här i klienten från
 // d2d_saljstatistik() (ett sälj = en adress med status Såld + tidpunkten då
-// den sattes till Såld).
+// den sattes till Såld, eller en Scrive-signering: status "Signera med Scrive"
+// med signerat avtal, s = true). Scrive-signeringar räknas med i alla siffror
+// och visas dessutom inom parentes: "15 (3)" = 15 totalt varav 3 Scrive.
 // =============================================================================
 
-type Salj = { t: string; u: string; p: string | null };
+type Salj = { t: string; u: string; p: string | null; s?: boolean };
 type Saljare = { id: string; namn: string };
 type Data = { salj: Salj[]; saljare: Saljare[]; utanTid: number };
 
@@ -78,6 +81,9 @@ function relTid(t: Date): string {
   return d === 1 ? "i går" : `${d} dagar sedan`;
 }
 
+/** Antal Scrive-signeringar inom parentes efter en siffra; visas bara när det finns några. */
+const Scrive = ({ n }: { n: number }) => n > 0 ? <span className="d2dd__scrive">({n})</span> : null;
+
 const forNamn = (namn: string) => namn.split(/\s+/)[0] || namn;
 
 /** Alla som delar topplaceringen (flera #1 vid lika antal). */
@@ -143,22 +149,25 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
   const team = useMemo(() => {
     const nu = new Date();
     const dag = dagNyckel(nu), man = manadNyckel(nu), ar = nu.getFullYear();
-    let d = 0, m = 0, a = 0;
+    let d = 0, m = 0, a = 0, ds = 0, ms = 0, as = 0;
     for (const s of salj) {
-      if (dagNyckel(s.d) === dag) d++;
-      if (manadNyckel(s.d) === man) m++;
-      if (s.d.getFullYear() === ar) a++;
+      if (dagNyckel(s.d) === dag) { d++; if (s.s) ds++; }
+      if (manadNyckel(s.d) === man) { m++; if (s.s) ms++; }
+      if (s.d.getFullYear() === ar) { a++; if (s.s) as++; }
     }
-    return { d, m, a };
+    return { d, m, a, ds, ms, as };
   }, [salj]);
 
   // ── Topplista för vald period ──────────────────────────────────────────
   const topplista = useMemo(() => {
     const [fran, till] = periodIntervall(period, egenFran, egenTill);
-    const r = new Map<string, number>();
-    for (const s of salj) if (s.d >= fran && s.d < till) r.set(s.u, (r.get(s.u) ?? 0) + 1);
+    const r = new Map<string, number>(), sc = new Map<string, number>();
+    for (const s of salj) if (s.d >= fran && s.d < till) {
+      r.set(s.u, (r.get(s.u) ?? 0) + 1);
+      if (s.s) sc.set(s.u, (sc.get(s.u) ?? 0) + 1);
+    }
     const rader = [...r.entries()].sort((a, b) => b[1] - a[1] || namnPa(a[0]).localeCompare(namnPa(b[0]), "sv"));
-    return { rader, totalt: rader.reduce((s, [, n]) => s + n, 0) };
+    return { rader, scrive: sc, totalt: rader.reduce((s, [, n]) => s + n, 0), totaltScrive: [...sc.values()].reduce((s, n) => s + n, 0) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [salj, period, egenFran, egenTill, namn]);
 
@@ -243,10 +252,11 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
           Team — totalt antal sälj
         </h2>
         <div className="d2dd__kpis">
-          <div className="d2dd__kpi"><span className="d2dd__kpi-varde">{team.d}</span><span className="d2dd__kpi-etikett">Idag</span></div>
-          <div className="d2dd__kpi"><span className="d2dd__kpi-varde">{team.m}</span><span className="d2dd__kpi-etikett">Månad</span></div>
-          <div className="d2dd__kpi"><span className="d2dd__kpi-varde">{team.a}</span><span className="d2dd__kpi-etikett">År</span></div>
+          <div className="d2dd__kpi"><span className="d2dd__kpi-varde">{team.d}<Scrive n={team.ds} /></span><span className="d2dd__kpi-etikett">Idag</span></div>
+          <div className="d2dd__kpi"><span className="d2dd__kpi-varde">{team.m}<Scrive n={team.ms} /></span><span className="d2dd__kpi-etikett">Månad</span></div>
+          <div className="d2dd__kpi"><span className="d2dd__kpi-varde">{team.a}<Scrive n={team.as} /></span><span className="d2dd__kpi-etikett">År</span></div>
         </div>
+        {(team.ds + team.ms + team.as) > 0 && <p className="d2dd__scrive-hint">Siffran inom parentes = varav signerade med Scrive.</p>}
       </section>
 
       {/* Förra månadens toppsäljare */}
@@ -290,7 +300,7 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
             <div className="d2dd__rad d2dd__rad--totalt">
               <span className="d2dd__plats">Σ</span>
               <span className="d2dd__namn">Totalt</span>
-              <span className="d2dd__antal">{topplista.totalt}</span>
+              <span className="d2dd__antal">{topplista.totalt}<Scrive n={topplista.totaltScrive} /></span>
             </div>
             {topplista.rader.map(([u, n], i) => {
               const plats = topplista.rader.findIndex(([, m]) => m === n); // lika antal = delad placering
@@ -299,7 +309,7 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
                 <div key={u} className={`d2dd__rad${klass ? ` d2dd__rad--${klass}` : ""}${u === minId ? " d2dd__rad--jag" : ""}`}>
                   <span className="d2dd__plats">{plats === 0 ? <Krona /> : plats <= 2 ? <Medalj /> : i + 1}</span>
                   <span className="d2dd__namn">{namnPa(u)}{u === minId && <span className="d2dd__du">du</span>}</span>
-                  <span className="d2dd__antal">{n}</span>
+                  <span className="d2dd__antal">{n}<Scrive n={topplista.scrive.get(u) ?? 0} /></span>
                 </div>
               );
             })}
@@ -338,8 +348,8 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
             {aktivitet.length === 0 && <li className="d2dd__tom">Inga sälj registrerade ännu.</li>}
             {aktivitet.map((s, i) => (
               <li key={i}>
-                <span className="d2dd__plus">+1</span>
-                <span className="d2dd__akt-namn">{namnPa(s.u)}{s.p && <span className="d2dd__akt-projekt">{s.p}</span>}</span>
+                <span className={`d2dd__plus${s.s ? " d2dd__plus--scrive" : ""}`}>+1</span>
+                <span className="d2dd__akt-namn">{namnPa(s.u)}{s.s && <span className="d2dd__akt-scrive">Scrive</span>}{s.p && <span className="d2dd__akt-projekt">{s.p}</span>}</span>
                 <span className="d2dd__akt-tid" title={s.d.toLocaleString("sv-SE")}>{relTid(s.d)}</span>
               </li>
             ))}
@@ -384,7 +394,7 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
               </div>
             )}
             <p className="d2dd__fot">
-              Snitt per arbetsdag från första säljet. Streak = vardagar i rad med minst ett sälj; helger bryter inte, och sälj på en helgdag räknas som +1.
+              Scrive-signeringar räknas som sälj. Snitt per arbetsdag från första säljet. Streak = vardagar i rad med minst ett sälj; helger bryter inte, och sälj på en helgdag räknas som +1.
             </p>
           </div>
         )}
