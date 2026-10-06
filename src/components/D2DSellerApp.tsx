@@ -231,6 +231,158 @@ function InfraBox({ title, rows, emptyText }: { title: string; rows: InfoRow[]; 
 }
 
 // =============================================================================
+// Tillfälliga fastigheter och lägenheter
+// =============================================================================
+//
+// I specialsituationer (en port som saknas i underlaget, en lägenhet som
+// inte finns i Telias lista …) kan säljaren själv lägga upp en fastighet
+// eller lägenhet direkt i telefonen. Allt säljaren skapar är *tillfälligt*
+// (data.tillfallig = true) tills en administratör godkänner det — i
+// projektbyggaren (fliken "Att godkänna") eller här i säljarvyn. Tillfälliga
+// lägenheter räknas inte i Utfall/topplistan förrän de godkänts.
+// Databasen: d2d_skapa_tillfallig_fastighet, d2d_skapa_tillfallig_lagenhet,
+// d2d_godkann_tillfallig.
+
+const arTillfallig = (data: Record<string, unknown> | undefined | null) => data?.tillfallig === true;
+
+function TillfalligBadge() {
+  return <span className="d2d-tillf-badge" title="Skapad av säljare — väntar på att en administratör godkänner">Tillfällig</span>;
+}
+
+/** Banderoll högst upp i en tillfällig fastighet/lägenhet. Admin får en
+ *  Godkänn-knapp; efter godkännande anropas onGodkand så vyn laddas om. */
+function TillfalligBanner({ id, typ, isAdmin, onGodkand }: {
+  id: string; typ: "fastighet" | "lagenhet"; isAdmin: boolean; onGodkand: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [fel, setFel] = useState<string | null>(null);
+  const godkann = async () => {
+    setBusy(true); setFel(null);
+    const { error } = await supabase.rpc("d2d_godkann_tillfallig", { p_id: id });
+    setBusy(false);
+    if (error) { setFel(error.message || "Kunde inte godkänna."); return; }
+    onGodkand();
+  };
+  return (
+    <div className="d2d-tillf-banner" role="status">
+      <svg className="d2d-tillf-banner__icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="10" cy="10" r="7.5" /><path d="M10 6v4.5l3 1.5" />
+      </svg>
+      <div className="d2d-tillf-banner__text">
+        <strong>{typ === "fastighet" ? "Tillfällig fastighet" : "Tillfällig lägenhet"}</strong>
+        <span>
+          {fel ?? (typ === "fastighet"
+            ? "Skapad av säljare. Fastigheten och dess lägenheter blir ordinarie när en administratör godkänt den."
+            : "Skapad av säljare. Räknas i statistiken när en administratör godkänt den.")}
+        </span>
+      </div>
+      {isAdmin && (
+        <button className="btn btn--brand btn--sm" onClick={() => { void godkann(); }} disabled={busy}>
+          {busy ? "Godkänner…" : "Godkänn"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Formulär för att skapa en tillfällig fastighet i ett projekt — bara det
+ *  säljaren rimligen vet: gatuadress, ort och (om känd) beteckning. */
+function TillfalligFastighetForm({ projektId, onCreated, onCancel }: {
+  projektId: string; onCreated: (id: string) => void; onCancel: () => void;
+}) {
+  const [adress, setAdress] = useState("");
+  const [ort, setOrt] = useState("");
+  const [beteckning, setBeteckning] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [fel, setFel] = useState<string | null>(null);
+  const ok = adress.trim().length > 0 && ort.trim().length > 0;
+
+  const skapa = async () => {
+    if (!ok || busy) return;
+    setBusy(true); setFel(null);
+    const { data, error } = await supabase.rpc("d2d_skapa_tillfallig_fastighet", {
+      p_projekt_id: projektId === UTAN_PROJEKT ? null : projektId,
+      p_gatuadress: adress.trim(),
+      p_ort: ort.trim(),
+      p_fastighetsbeteckning: beteckning.trim() || null,
+    });
+    setBusy(false);
+    if (error || !data) { setFel(error?.message || "Kunde inte skapa fastigheten."); return; }
+    onCreated(String(data));
+  };
+
+  return (
+    <form className="d2d-tillf-form" onSubmit={(e) => { e.preventDefault(); void skapa(); }}>
+      <h3>Ny tillfällig fastighet</h3>
+      <p>Fastigheten blir tillfällig tills en administratör godkänt den. Lägenheter lägger du till inne i fastigheten.</p>
+      <label className="d2d-tillf-form__falt">
+        <span className="label">Gatuadress *</span>
+        <input className="input" value={adress} onChange={(e) => setAdress(e.target.value)} placeholder="t.ex. Storgatan 12" autoFocus autoComplete="off" />
+      </label>
+      <label className="d2d-tillf-form__falt">
+        <span className="label">Ort *</span>
+        <input className="input" value={ort} onChange={(e) => setOrt(e.target.value)} placeholder="t.ex. Umeå" autoComplete="off" />
+      </label>
+      <label className="d2d-tillf-form__falt">
+        <span className="label">Fastighetsbeteckning (om du vet)</span>
+        <input className="input" value={beteckning} onChange={(e) => setBeteckning(e.target.value)} placeholder="t.ex. Falken 9" autoComplete="off" />
+      </label>
+      {fel && <span className="d2d-tillf-form__fel">{fel}</span>}
+      <div className="d2d-tillf-form__knappar">
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onCancel} disabled={busy}>Avbryt</button>
+        <button type="submit" className="btn btn--brand btn--sm" disabled={!ok || busy}>{busy ? "Skapar…" : "Skapa fastighet"}</button>
+      </div>
+    </form>
+  );
+}
+
+/** Formulär för en tillfällig lägenhet i en fastighet. Adress, ort och
+ *  beteckning hämtas från fastigheten i databasen; säljaren fyller bara i
+ *  lägenhetsnummer (Skatteverket) och ev. internt nummer/alias. */
+function TillfalligLagenhetForm({ fastighetId, onCreated, onCancel }: {
+  fastighetId: string; onCreated: (id: string) => void; onCancel: () => void;
+}) {
+  const [nummer, setNummer] = useState("");
+  const [alias, setAlias] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [fel, setFel] = useState<string | null>(null);
+  const ok = nummer.trim().length > 0;
+
+  const skapa = async () => {
+    if (!ok || busy) return;
+    setBusy(true); setFel(null);
+    const { data, error } = await supabase.rpc("d2d_skapa_tillfallig_lagenhet", {
+      p_fastighet_id: fastighetId,
+      p_lgh_nummer: nummer.trim(),
+      p_alias: alias.trim() || null,
+    });
+    setBusy(false);
+    if (error || !data) { setFel(error?.message || "Kunde inte skapa lägenheten."); return; }
+    onCreated(String(data));
+  };
+
+  return (
+    <form className="d2d-tillf-form" onSubmit={(e) => { e.preventDefault(); void skapa(); }}>
+      <h3>Ny tillfällig lägenhet</h3>
+      <p>Adress och ort hämtas från fastigheten. Lägenheten blir tillfällig tills en administratör godkänt den.</p>
+      <label className="d2d-tillf-form__falt">
+        <span className="label">Lägenhetsnummer (Skatteverket) *</span>
+        <input className="input" value={nummer} onChange={(e) => setNummer(e.target.value)} placeholder="t.ex. 1101" inputMode="numeric" autoFocus autoComplete="off" />
+      </label>
+      <label className="d2d-tillf-form__falt">
+        <span className="label">Internt lgh-nummer / alias</span>
+        <input className="input" value={alias} onChange={(e) => setAlias(e.target.value)} placeholder="t.ex. 3 tr vänster" autoComplete="off" />
+      </label>
+      {fel && <span className="d2d-tillf-form__fel">{fel}</span>}
+      <div className="d2d-tillf-form__knappar">
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onCancel} disabled={busy}>Avbryt</button>
+        <button type="submit" className="btn btn--brand btn--sm" disabled={!ok || busy}>{busy ? "Skapar…" : "Skapa lägenhet"}</button>
+      </div>
+    </form>
+  );
+}
+
+// =============================================================================
 // Fastighetslista
 // =============================================================================
 
@@ -264,6 +416,17 @@ async function hamtaUrval(): Promise<D2DUrval> {
     for (const r of rels ?? []) fastSet.add(r.to_record_id as string);
     if (!rels || rels.length < PAGE) break;
   }
+  // Egna tillfälliga fastigheter utan lägenheter ännu syns inte via
+  // relationerna — ta med dem så säljaren hittar tillbaka till dem.
+  const { data: session } = await supabase.auth.getSession();
+  const minId = session.session?.user.id;
+  if (minId) {
+    const { data: egna } = await supabase.from("records").select("id")
+      .eq("object_type", "d2d_fastighet").eq("owner_user_id", minId)
+      .eq("data->>tillfallig", "true").is("deleted_at", null);
+    for (const r of egna ?? []) fastSet.add(r.id as string);
+  }
+
   const fastIds = Array.from(fastSet);
   if (fastIds.length === 0) return { fastigheter: [], projektFor: new Map(), projekt: [] };
 
@@ -367,6 +530,7 @@ function FastighetsLista({
   const [items, setItems] = useState<RecordRow[]>([]);
   const [projektNamn, setProjektNamn] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [nyTillfallig, setNyTillfallig] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -417,6 +581,7 @@ function FastighetsLista({
               <div className="d2d-card__main">
                 <span className="d2d-card__title">
                   {data.fastighetsbeteckning ? String(data.fastighetsbeteckning) : (item.title ?? "Namnlös")}
+                  {arTillfallig(data) && <> <TillfalligBadge /></>}
                 </span>
                 {!!(item.title || data.fastighetsagare) && (
                   <span className="d2d-card__sub">
@@ -429,6 +594,21 @@ function FastighetsLista({
           );
         })}
       </div>
+
+      {/* Specialsituation: en fastighet som saknas i underlaget. Säljaren
+          lägger upp den tillfälligt i det här projektet och går direkt in
+          i den för att lägga till lägenheter. */}
+      {nyTillfallig ? (
+        <TillfalligFastighetForm
+          projektId={projektId}
+          onCancel={() => setNyTillfallig(false)}
+          onCreated={(id) => { setNyTillfallig(false); rememberRow("fastigheter:" + projektId, id); onOpen(id); }}
+        />
+      ) : (
+        <div className="d2d-tillf-actions">
+          <button className="btn btn--ghost btn--sm" onClick={() => setNyTillfallig(true)}>+ Tillfällig fastighet</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -462,6 +642,7 @@ function FastighetsDetalj({
   const [related, setRelated] = useState<RelatedRecord[]>([]);
   const [lagenheter, setLagenheter] = useState<RecordRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nyTillfallig, setNyTillfallig] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -513,11 +694,15 @@ function FastighetsDetalj({
         </button>
         <div className="d2d-topbar__title">
           <h2>{fastighet.title ?? "Fastighet"}</h2>
-          {!!data.fastighetsbeteckning && (
-            <span className="d2d-topbar__sub">{String(data.fastighetsbeteckning)}</span>
+          {!!(data.fastighetsbeteckning || data.ort) && (
+            <span className="d2d-topbar__sub">{[data.fastighetsbeteckning, data.ort].filter(Boolean).map(String).join(" · ")}</span>
           )}
         </div>
       </div>
+
+      {arTillfallig(data) && (
+        <TillfalligBanner id={fastighet.id} typ="fastighet" isAdmin={isAdmin} onGodkand={() => { void loadData(); }} />
+      )}
 
       {/* Viktig info (varning) */}
       {!!data.viktigt_info && (
@@ -589,7 +774,10 @@ function FastighetsDetalj({
                   {isAdmin && <SaljareCell id={saljareId} />}
                   <span className="d2d-lag-row__cell d2d-lag-row__cell--addr">{gatuadress || "—"}</span>
                   <span className="d2d-lag-row__cell">{lagData.ingang ? String(lagData.ingang) : "—"}</span>
-                  <span className="d2d-lag-row__cell d2d-lag-row__cell--lgh">{lag.title ?? "—"}</span>
+                  <span className="d2d-lag-row__cell d2d-lag-row__cell--lgh">
+                    {lag.title ?? "—"}
+                    {arTillfallig(lagData) && !arTillfallig(data) && <TillfalligBadge />}
+                  </span>
                   <span className={`d2d-lag-row__cell${lagData.kund_namn ? "" : " d2d-lag-row__cell--empty"}`}>
                     {lagData.kund_namn ? String(lagData.kund_namn) : "—"}
                   </span>
@@ -611,6 +799,20 @@ function FastighetsDetalj({
           </div>
         )}
       </div>
+
+      {/* Specialsituation: en dörr som saknas i listan. Säljaren lägger upp
+          den tillfälligt; adressen hämtas från fastigheten. */}
+      {nyTillfallig ? (
+        <TillfalligLagenhetForm
+          fastighetId={fastighetId}
+          onCancel={() => setNyTillfallig(false)}
+          onCreated={(id) => { setNyTillfallig(false); rememberRow(listKey, id); onOpenLagenhet(id); }}
+        />
+      ) : (
+        <div className="d2d-tillf-actions">
+          <button className="btn btn--ghost btn--sm" onClick={() => setNyTillfallig(true)}>+ Tillfällig lägenhet</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -801,6 +1003,7 @@ function LagenhetForm({
   const headerUndertext = [
     ortRad || null,
     data.fastighetsbeteckning ? String(data.fastighetsbeteckning) : null,
+    data.alias ? `alias ${String(data.alias)}` : null,
   ].filter(Boolean).join(" · ");
 
   // Gruppera fält per sektion (dölj ai-sektionen samt de interna fälten för
@@ -921,6 +1124,18 @@ function LagenhetForm({
           <span>{error}</span>
           <button className="btn btn--ghost btn--sm" onClick={() => { void flush(); }}>Försök igen</button>
         </div>
+      )}
+
+      {/* Tillfällig lägenhet (skapad av säljare). Ligger den i en tillfällig
+          fastighet godkänns den tillsammans med fastigheten — då visas
+          ingen egen Godkänn-knapp här. */}
+      {arTillfallig(data) && (
+        <TillfalligBanner
+          id={lagenhetId}
+          typ="lagenhet"
+          isAdmin={isAdmin && !arTillfallig(fastData)}
+          onGodkand={() => setData((d) => ({ ...d, tillfallig: false }))}
+        />
       )}
 
       {showFieldConfig && (
