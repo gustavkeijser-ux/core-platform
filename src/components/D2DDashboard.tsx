@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import "@/styles/d2d.css";
+import { BlitzPinnar } from "./D2DLon";
 
 // =============================================================================
 // D2D-dashboard — startsidan i Door to Door.
@@ -258,6 +259,9 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
         </div>
         {(team.ds + team.ms + team.as) > 0 && <p className="d2dd__scrive-hint">Siffran inom parentes = varav signerade med Scrive.</p>}
       </section>
+
+      {/* Pinnar och bonustrappa den här månaden (lönemodellen, D2DLon.tsx) */}
+      <BlitzPinnar minId={minId} />
 
       {/* Förra månadens toppsäljare */}
       {hall.forraVinnare.length > 0 && (
