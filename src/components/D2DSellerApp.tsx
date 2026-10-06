@@ -627,6 +627,27 @@ function SaljareCell({ id }: { id: string | null }) {
   );
 }
 
+/** tel:-länk av ett inskrivet nummer: behåller siffror och inledande +,
+ *  svenskt nummer med inledande 0 blir +46. Tomt/ogiltigt → null. */
+function telefonLank(nr: string): string | null {
+  const s = nr.trim();
+  if (!s) return null;
+  let d = s.replace(/[^\d+]/g, "");
+  if (d.startsWith("00")) d = "+" + d.slice(2);
+  else if (d.startsWith("0")) d = "+46" + d.slice(1);
+  const siffror = d.replace(/\D/g, "");
+  if (siffror.length < 5) return null;
+  return `tel:${d}`;
+}
+
+function RingIkon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6.2 6.2l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>
+    </svg>
+  );
+}
+
 function FastighetsDetalj({
   fastighetId,
   isAdmin = false,
@@ -643,6 +664,23 @@ function FastighetsDetalj({
   const [lagenheter, setLagenheter] = useState<RecordRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [nyTillfallig, setNyTillfallig] = useState(false);
+  // Telefonnummer per lägenhet (kund_telefon) — redigeras direkt i listan.
+  // Lokalt värde medan säljaren skriver; sparas när fältet lämnas.
+  const [telefoner, setTelefoner] = useState<Record<string, string>>({});
+
+  const sparaTelefon = useCallback(async (lagId: string, varde: string, tidigare: string) => {
+    const nytt = varde.trim();
+    if (nytt === tidigare.trim()) return;
+    try {
+      await updateRecord(lagId, { kund_telefon: nytt || null });
+      setLagenheter((prev) => prev.map((l) =>
+        l.id === lagId ? { ...l, data: { ...(l.data as Record<string, unknown>), kund_telefon: nytt || null } } : l
+      ));
+    } catch {
+      // Återställ till det sparade värdet om det inte gick
+      setTelefoner((prev) => ({ ...prev, [lagId]: tidigare }));
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -663,7 +701,12 @@ function FastighetsDetalj({
           .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
           .in("id", lagIds)
           .order("title");
-        setLagenheter(((lagData ?? []) as RecordRow[]).sort(jamforLagenheter));
+        const rader = ((lagData ?? []) as RecordRow[]).sort(jamforLagenheter);
+        setLagenheter(rader);
+        setTelefoner(Object.fromEntries(rader.map((l) => {
+          const t = (l.data as Record<string, unknown>).kund_telefon;
+          return [l.id, t ? String(t) : ""];
+        })));
       } else {
         setLagenheter([]);
       }
@@ -746,8 +789,10 @@ function FastighetsDetalj({
               <span>Ingång</span>
               <span>Lgh</span>
               <span>Namn</span>
+              <span className="d2d-lag-table__tel-col">Telefon</span>
               <span className="d2d-lag-table__komm-col">Kommentar</span>
               <span className="d2d-lag-table__status-col">Status</span>
+              <span className="d2d-lag-table__ring-col" />
             </div>
 
             {lagenheter.map((lag) => {
@@ -757,12 +802,22 @@ function FastighetsDetalj({
               const gatuadress = [lagData.gatunamn, lagData.gatunummer].filter(Boolean).join(" ");
               const kommentar = lagData.kommentar ? String(lagData.kommentar) : "";
               const saljareId = (lagData.saljare ? String(lagData.saljare) : null) ?? lag.owner_user_id ?? null;
+              const sparadTelefon = lagData.kund_telefon ? String(lagData.kund_telefon) : "";
+              const telefon = telefoner[lag.id] ?? sparadTelefon;
+              const telHref = telefonLank(telefon);
+              const oppna = () => { rememberRow(listKey, lag.id); onOpenLagenhet(lag.id); };
+              // Raden är en div (inte button) eftersom den innehåller ett
+              // redigerbart telefonfält och en ringknapp — interaktiva
+              // element får inte ligga inuti en knapp.
               return (
-                <button
+                <div
                   key={lag.id}
                   {...returnRow(lag.id)}
+                  role="button"
+                  tabIndex={0}
                   className={`d2d-lag-row ${cfg.cssClass}`}
-                  onClick={() => { rememberRow(listKey, lag.id); onOpenLagenhet(lag.id); }}
+                  onClick={oppna}
+                  onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); oppna(); } }}
                   aria-label={formatLagenhetAdress(lagData, lag.title)}
                 >
                   <span className="d2d-lag-row__icon" style={{ "--st": cfg.color } as CSSProperties} aria-hidden="true">
@@ -781,6 +836,22 @@ function FastighetsDetalj({
                   <span className={`d2d-lag-row__cell${lagData.kund_namn ? "" : " d2d-lag-row__cell--empty"}`}>
                     {lagData.kund_namn ? String(lagData.kund_namn) : "—"}
                   </span>
+                  {/* Telefon: eget redigerbart fält direkt i raden (kund_telefon).
+                      Klick i fältet öppnar inte lägenheten. */}
+                  <span className="d2d-lag-row__cell d2d-lag-table__tel-col" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="off"
+                      className="d2d-lag-tel__input"
+                      value={telefon}
+                      placeholder="Telefon"
+                      aria-label={`Telefon, ${formatLagenhetAdress(lagData, lag.title)}`}
+                      onChange={(e) => setTelefoner((prev) => ({ ...prev, [lag.id]: e.target.value }))}
+                      onBlur={(e) => { void sparaTelefon(lag.id, e.target.value, sparadTelefon); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                    />
+                  </span>
                   <span
                     className={`d2d-lag-row__cell d2d-lag-row__cell--komm d2d-lag-table__komm-col${kommentar ? "" : " d2d-lag-row__cell--empty"}`}
                     title={kommentar || undefined}
@@ -788,12 +859,29 @@ function FastighetsDetalj({
                     {kommentar || "—"}
                   </span>
                   <span className="d2d-lag-card__badge d2d-lag-table__status-col">{cfg.label}</span>
+                  {/* Ringknapp — grön, till höger om status. tel:-länk så
+                      telefonen ringer upp direkt; nedtonad utan nummer. */}
+                  {telHref ? (
+                    <a
+                      href={telHref}
+                      className="d2d-lag-ring d2d-lag-table__ring-col"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Ring ${telefon}`}
+                      title={`Ring ${telefon}`}
+                    >
+                      <RingIkon />
+                    </a>
+                  ) : (
+                    <span className="d2d-lag-ring d2d-lag-ring--tom d2d-lag-table__ring-col" aria-hidden="true" title="Inget telefonnummer">
+                      <RingIkon />
+                    </span>
+                  )}
                   {!!kommentar && (
                     <span className="d2d-lag-row__comment">
                       {kommentar.slice(0, 80)}{kommentar.length > 80 ? "…" : ""}
                     </span>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
