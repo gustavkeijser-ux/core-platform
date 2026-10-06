@@ -624,9 +624,11 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
             </div>
           )}
 
-          {/* Status */}
+          {/* Status och fält. På postsidan ligger de i ett vitt kort (som
+              designens objektvy); utan sektioner är det ett enda kort. */}
+          <div className={isPage && !hasSections ? "form-section card" : undefined}>
           {resolvedDef.statuses.length > 0 && (
-            <div className="formfield" style={{ marginBottom: "20px" }}>
+            <div className={`formfield${isPage && hasSections ? " form-section card" : ""}`} style={{ marginBottom: "20px" }}>
               <label className="label" htmlFor="f-status">Status</label>
               <select
                 id="f-status"
@@ -664,6 +666,7 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
               ))}
             </div>
           )}
+          </div>
 
           {/* Ägare */}
           {record?.owner_user_id && !isPage && (
