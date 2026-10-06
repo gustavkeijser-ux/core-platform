@@ -289,33 +289,31 @@
 .d2d-lon-editor__trappa + .btn { align-self: flex-start; margin-top: var(--sp-2); }
 @media (max-width: 760px) { .d2d-lon-editor__kolumner { grid-template-columns: 1fr; } }
 
-/* ── Blitz → Översikt: pinnar den här månaden ──────────────────────────── */
-.d2d-pinnar__egen {
-  display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap;
+/* ── Blitz → Översikt: pinnar den här månaden ──────────────────────────────
+   Ett kort per säljare. Stapeln mäts mot säljarens eget nästa delmål
+   (från föregående nivå till nästa), inte mot hela trappan. */
+.d2d-pinnar__kort-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-3); }
+.d2d-pinnar__kort {
+  display: flex; flex-direction: column; gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
-  background: color-mix(in srgb, var(--brand) 8%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
-  border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
 }
-.d2d-pinnar__egen-tal { font-family: var(--font-display); font-size: 28px; font-weight: 800; color: var(--brand); line-height: 1; }
-.d2d-pinnar__egen-text { font-size: var(--text-sm); color: var(--ink-muted); }
-.d2d-pinnar__egen-text strong { color: var(--ink); }
-.d2d-pinnar__lista { display: flex; flex-direction: column; gap: var(--sp-2); }
-.d2d-pinnar__rad { display: grid; grid-template-columns: minmax(70px, 110px) 1fr 44px auto; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); }
-.d2d-pinnar__rad--jag .d2d-pinnar__namn { font-weight: 700; color: var(--brand); }
-.d2d-pinnar__namn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.d2d-pinnar__stapel { position: relative; height: 14px; background: var(--surface-sunk, var(--surface-alt)); border-radius: 999px; overflow: visible; }
+.d2d-pinnar__kort--jag { border-color: color-mix(in srgb, var(--brand) 45%, transparent); background: color-mix(in srgb, var(--brand) 6%, var(--surface)); }
+.d2d-pinnar__kort--jag .d2d-pinnar__namn { color: var(--brand); }
+.d2d-pinnar__kort--klar .d2d-pinnar__fyll { background: var(--hue-green); }
+.d2d-pinnar__kort-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); }
+.d2d-pinnar__namn { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d2d-pinnar__tal { font-family: var(--font-display); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; }
+.d2d-pinnar__tal small { font-family: var(--font-body); font-size: var(--text-xs); font-weight: 500; color: var(--ink-muted); }
+.d2d-pinnar__stapel { position: relative; height: 12px; background: var(--surface-sunk, var(--surface-alt)); border-radius: 999px; overflow: hidden; }
 .d2d-pinnar__fyll { position: absolute; top: 0; bottom: 0; left: 0; background: var(--brand); border-radius: 999px; transition: width var(--dur) var(--ease); }
-.d2d-pinnar__fyll--vantar { background: color-mix(in srgb, var(--hue-amber) 55%, transparent); border-radius: 0 999px 999px 0; }
-.d2d-pinnar__steg { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink-faint); opacity: .55; }
-.d2d-pinnar__steg--nadd { background: var(--hue-green); opacity: 1; }
-.d2d-pinnar__tal { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-.d2d-pinnar__bonus { font-size: var(--text-xs); color: var(--hue-green); font-weight: 700; min-width: 0; white-space: nowrap; }
+.d2d-pinnar__fyll--vantar { background: color-mix(in srgb, var(--hue-amber) 60%, transparent); border-radius: 0 999px 999px 0; }
+.d2d-pinnar__kort-fot { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-xs); color: var(--ink-muted); flex-wrap: wrap; }
+.d2d-pinnar__kort-fot strong { color: var(--ink); }
+.d2d-pinnar__nadd { color: var(--hue-green); font-weight: 700; }
+.d2d-pinnar__kvar { text-align: right; margin-left: auto; }
+.d2d-pinnar__vantar { color: var(--hue-amber); }
 .d2d-pinnar__trappa { margin: 0; font-size: var(--text-xs); color: var(--ink-faint); }
-@media (max-width: 480px) {
-  .d2d-pinnar__rad { grid-template-columns: 72px 1fr 40px; }
-  .d2d-pinnar__bonus { grid-column: 2 / -1; text-align: right; }
-}
 
 /* ── Door to door → Löner ──────────────────────────────────────────────── */
 .d2d-loner { display: flex; flex-direction: column; gap: var(--sp-4); }
