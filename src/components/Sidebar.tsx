@@ -84,7 +84,7 @@ const MENU_GROUPS: MenuGroup[] = [
         <path d="M6.5 14V10h3v4" />
       </svg>
     ),
-    keys: ["__d2dutfall__", "__d2davtal__", "__d2dpriser__", "d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte"],
+    keys: ["__d2dutfall__", "__d2davtal__", "d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte"],
   },
 ];
 
@@ -461,15 +461,6 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                           Utfall
                         </button>
                       )}
-                      {isAdmin && (
-                        <button
-                          className="sidebar__item sidebar__item--child"
-                          aria-current={activeKey === "__d2dpriser__"}
-                          onClick={() => selectAndClose("__d2dpriser__")}
-                        >
-                          Priser
-                        </button>
-                      )}
                     </>
                   )}
 
@@ -507,16 +498,8 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
 
         {/* ADMINISTRATION */}
         <div className="sidebar__section-label">Administration</div>
-        {canCases && isAdmin && item("__m365__", "Microsoft 365", ICONS.mail)}
         {isAdmin && item("__feedback__", "Feedback", ICONS.__feedback__, { n: newFeedback })}
-        {isAdmin && item("__users__", "Användare", ICONS.contact)}
-        {item("__import__", "Import", ICONS.__import__)}
-        {onOpenSettings && (
-          <button className="sidebar__item" onClick={() => { onOpenSettings(); onCloseMobile?.(); }}>
-            {ICONS.settings}
-            <span className="sidebar__label">Inställningar</span>
-          </button>
-        )}
+        {item("__settings__", "Inställningar", ICONS.settings)}
       </nav>
       <div className="sidebar__bottom">
         {/* AI-assistenten öppnas som en panel nere till vänster (AiPanel). */}
