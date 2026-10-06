@@ -20,6 +20,7 @@ import { D2DProjectBuilder } from "@/components/D2DProjectBuilder";
 import { D2DUtfallPage } from "@/components/D2DUtfallPage";
 import { D2DAvtalPage } from "@/components/D2DAvtalPage";
 import { D2DFeedbackGranskning, d2dFeedbackAntalVantar, d2dFeedbackArGranskare } from "@/components/D2DFeedback";
+import { D2DLonerPage, d2dLonBehorig } from "@/components/D2DLon";
 import { MyTasksPage } from "@/components/MyTasksPage";
 import { NummerbytenPage } from "@/components/NummerbytenPage";
 import { CasesPage } from "@/components/CasesPage";
@@ -41,6 +42,7 @@ type View =
   | { kind: "d2dutfall" }
   | { kind: "d2davtal" }
   | { kind: "d2dfeedback" }
+  | { kind: "d2dloner" }
   | { kind: "nummerbyten" }
   | { kind: "cases"; filter: CaseFilter }
   | { kind: "case"; id: string }
@@ -64,6 +66,7 @@ function viewFromSegs(segs: string[]): View {
     case "d2dutfall": return { kind: "d2dutfall" };
     case "d2davtal": return { kind: "d2davtal" };
     case "d2dfeedback": return { kind: "d2dfeedback" };
+    case "d2dloner": return { kind: "d2dloner" };
     case "nummerbyten": return { kind: "nummerbyten" };
     case "arenden": return { kind: "cases", filter: (CASE_FILTERS.includes(segs[1] as CaseFilter) ? segs[1] : "open") as CaseFilter };
     case "arende": if (segs[1]) return { kind: "case", id: segs[1] }; break;
@@ -114,6 +117,7 @@ export default function App() {
   const [caseCounts, setCaseCounts] = useState<CaseCounts>({});
   const [newFeedback, setNewFeedback] = useState(0);
   const [d2dGranskare, setD2dGranskare] = useState(false);
+  const [d2dLoner, setD2dLoner] = useState(false);
   const [d2dFeedbackVantar, setD2dFeedbackVantar] = useState(0);
   // AI-assistenten: panel nere till vänster, öppnas från ikonen ovanför Import.
   const [aiOpen, setAiOpen] = useState(false);
@@ -178,6 +182,8 @@ export default function App() {
     if (!metaReady) return;
     let on = true;
     d2dFeedbackArGranskare().then((g) => { if (on) setD2dGranskare(g); });
+    // Löner (Door to door → Löner): bara de i d2d_lon_behorighet (Lukas, Jonas, Gustav).
+    d2dLonBehorig().then((b) => { if (on) setD2dLoner(b); });
     return () => { on = false; };
   }, [metaReady]);
   useEffect(() => {
@@ -257,6 +263,7 @@ export default function App() {
     : view?.kind === "d2dutfall" ? "Utfall, merförsäljning och bindningstider"
     : view?.kind === "d2davtal" ? "Avtal signerade med Scrive i D2D-vyn"
     : view?.kind === "d2dfeedback" ? "Feedback från säljarna i Blitz — granskas innan den skickas vidare"
+    : view?.kind === "d2dloner" ? "Kommande bonusar enligt lönemodellen — pinnar per säljare och månad"
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
     : view?.kind === "feedback" ? "Fel, idéer och önskemål från användarna"
     : view?.kind === "settings" ? (SETTINGS_TABS.find((t) => t.key === view.tab)?.sub ?? "")
@@ -275,7 +282,7 @@ export default function App() {
     : view?.kind === "dashboard" ? "Översikt"
     : view?.kind === "tasks" ? "Mina uppgifter"
     : view?.kind === "settings" ? (view.tab === "import" ? "Import" : view.tab === "m365" ? "Microsoft 365" : view.tab === "priser" ? "Door2Door" : "Inställningar")
-    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" || view?.kind === "d2dfeedback" ? "Door2Door"
+    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" || view?.kind === "d2dfeedback" || view?.kind === "d2dloner" ? "Door2Door"
     : view?.kind === "nummerbyten" ? (objectDefFor("nummerbyte")?.labelPlural ?? "Annat")
     : view?.kind === "cases" || view?.kind === "case" || view?.kind === "newcase" ? "Ärenden"
     : "Annat";
@@ -311,6 +318,7 @@ export default function App() {
         caseCounts={caseCounts}
         newFeedback={newFeedback}
         d2dFeedback={d2dGranskare ? { vantar: d2dFeedbackVantar } : undefined}
+        d2dLoner={d2dLoner}
         user={{ id: session.user.id, email: session.user.email ?? "", role: isAdmin ? "Administratör" : isSeller ? "Säljare" : "Användare" }}
         onOpenSettings={() => setView({ kind: "settings", tab: "profil" })}
         onSignOut={() => supabase.auth.signOut()}
@@ -324,6 +332,7 @@ export default function App() {
           : view?.kind === "d2dutfall" ? "__d2dutfall__"
           : view?.kind === "d2davtal" ? "__d2davtal__"
           : view?.kind === "d2dfeedback" ? "__d2dfeedback__"
+          : view?.kind === "d2dloner" ? "__d2dloner__"
           : view?.kind === "nummerbyten" ? "nummerbyte"
           : view?.kind === "cases" ? `__cases_${view.filter}__`
           : view?.kind === "case" ? null
@@ -343,6 +352,7 @@ export default function App() {
             : key === "__d2dutfall__" ? { kind: "d2dutfall" }
             : key === "__d2davtal__" ? { kind: "d2davtal" }
             : key === "__d2dfeedback__" ? { kind: "d2dfeedback" }
+            : key === "__d2dloner__" ? { kind: "d2dloner" }
             : key === "nummerbyte" ? { kind: "nummerbyten" }
             : key === "__newcase__" ? { kind: "newcase" }
             : key.startsWith("__cases_") ? { kind: "cases", filter: key.slice(8, -2) as CaseFilter }
@@ -377,6 +387,7 @@ export default function App() {
                 : view?.kind === "d2dutfall" ? "D2D – Utfall"
                 : view?.kind === "d2davtal" ? "D2D – Avtal"
                 : view?.kind === "d2dfeedback" ? "Säljarfeedback"
+                : view?.kind === "d2dloner" ? "Löner"
                 : view?.kind === "nummerbyten" ? "Nummerbyten"
                 : view?.kind === "cases" ? "Ärenden"
                 : view?.kind === "case" ? "Ärende"
@@ -417,6 +428,9 @@ export default function App() {
         {view?.kind === "d2dfeedback" && (d2dGranskare
           ? <D2DFeedbackGranskning onAntalAndrat={() => d2dFeedbackAntalVantar().then(setD2dFeedbackVantar)} />
           : <div className="page"><p className="formfield__help">Bara granskaren av säljarfeedback kan se den här sidan.</p></div>)}
+        {view?.kind === "d2dloner" && (d2dLoner
+          ? <D2DLonerPage fields={objectDefFor("d2d_lagenhet")?.fields ?? []} />
+          : <div className="page"><p className="formfield__help">Du har inte behörighet till löner.</p></div>)}
 
         {view?.kind === "nummerbyten" && <NummerbytenPage />}
 
