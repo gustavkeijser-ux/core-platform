@@ -32,8 +32,8 @@ do $$ begin
   end if;
 end $$;
 
--- Vem granskar säljarnas feedback. Just nu Lukas. Byt granskare genom att
--- ändra raden här (ingen kod behöver ändras).
+-- Vem granskar säljarnas feedback. Lukas och Gustav. Byt granskare genom att
+-- ändra raderna här (ingen kod behöver ändras).
 create table if not exists public.d2d_feedback_granskare (
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   user_id   uuid not null references public.users(id) on delete cascade,
@@ -41,7 +41,7 @@ create table if not exists public.d2d_feedback_granskare (
 );
 alter table public.d2d_feedback_granskare enable row level security;
 insert into public.d2d_feedback_granskare (tenant_id, user_id)
-  select u.tenant_id, u.id from public.users u where u.email = 'lukas@connectestate.se'
+  select u.tenant_id, u.id from public.users u where u.email in ('lukas@connectestate.se', 'gustav@connectestate.se')
   on conflict do nothing;
 
 /** Är den inloggade granskare av säljarfeedback? (Styr menyvalet i CRM:et.) */
