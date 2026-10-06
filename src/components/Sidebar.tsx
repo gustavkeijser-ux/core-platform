@@ -31,6 +31,8 @@ type Props = {
   /** Säljarfeedback från Blitz (D2D). Sätts bara för granskaren (Lukas):
    *  då visas menyvalet Door to door → Säljarfeedback med antal som väntar. */
   d2dFeedback?: { vantar: number };
+  /** Door to door → Löner visas bara för dem med lönebehörighet (Lukas, Jonas, Gustav). */
+  d2dLoner?: boolean;
 };
 
 function initialer(namn: string) {
@@ -259,7 +261,7 @@ function Chevron({ open }: { open: boolean }) {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -396,7 +398,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           const groupObjects = group.keys
             .map((k) => objMap.get(k))
             .filter(Boolean) as ObjectDef[];
-          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__", "__d2dfeedback__"].includes(activeKey ?? ""));
+          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__", "__d2dfeedback__", "__d2dloner__"].includes(activeKey ?? ""));
 
           // Hoppa över om inga objekt i gruppen finns
           if (groupObjects.length === 0) return null;
@@ -445,6 +447,16 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                         >
                           Säljarfeedback
                           {!!d2dFeedback.vantar && <span className="sidebar__badge">{d2dFeedback.vantar}</span>}
+                        </button>
+                      )}
+                      {/* Löner — kommande bonusar enligt lönemodellen (bara lönebehöriga) */}
+                      {d2dLoner && (
+                        <button
+                          className="sidebar__item sidebar__item--child"
+                          aria-current={activeKey === "__d2dloner__"}
+                          onClick={() => selectAndClose("__d2dloner__")}
+                        >
+                          Löner
                         </button>
                       )}
                       <button
