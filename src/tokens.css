@@ -49,29 +49,38 @@
   --surface-alt:  #F4F6F9;
 
   --ink:            #14213D;
-  --ink-soft:       #3F4A5A;   /* brödtext i kort och listor */
-  --ink-muted:      #5B6472;   /* etiketter, undertexter */
-  --ink-faint:      #7A8494;   /* platshållare, metadata */
+  --ink-soft:       #4B5768;   /* brödtext i kort och listor, menyval */
+  --ink-muted:      #64748B;   /* tabellceller, etiketter */
+  --ink-faint:      #8B95A6;   /* undertexter, metadata */
+  --ink-ghost:      #9AA4B2;   /* platshållare, tabellrubriker, små etiketter */
+  --ink-icon:       #7C8898;   /* ikoner i menyn, inaktiva flikar */
   --ink-on-canvas:  #14213D;
 
   --overlay-soft:   rgba(20,33,61,.04);
   --overlay-hover:  rgba(20,33,61,.04);
   --overlay-solid:  #FFFFFF;
-  --scrim:          rgba(20,33,61,.35);
+  --scrim:          rgba(20,33,61,.4);
 
   --border:        #E4E9EF;
   --border-strong: #D7DEE6;
   --border-input:  #CBD2DB;   /* fält och sekundärknappar */
-  --divider:       #EDF0F4;   /* linjer mellan rader */
+  --divider:       #EEF1F5;   /* linjer under rubrikrader, i kort */
+  --divider-soft:  #F5F6F8;   /* linjer mellan tabellrader */
 
   --brand-ink:     #14606F;   /* text på tonad teal (aktivt menyval, länkar) */
   --brand-tint:    #E3F3F2;   /* tonad teal-yta */
-  --danger-ink:    #B91C1C;   /* röd text på ljus botten */
+  --danger-ink:    #DC2626;   /* röd text på ljus botten */
   --danger-soft:   #FEE2E2;
-  --neutral-soft:  #EDF0F4;   /* neutrala märken */
+  --neutral-soft:  #EEF1F4;   /* neutrala märken (flikräknare) */
+  --neutral-pill:  #F1EEEA;   /* grått statusmärke (vakant, ej aktiverad) */
+  --neutral-ink:   #6B7280;
 
   --warn-soft: #FEF3E2;
   --warn-ink:  #B45309;
+  --ok-soft:   #F0FDF4;       /* grönt märke: aktiv, klar */
+  --ok-ink:    #15803D;
+  --info-soft: #E7F1FB;       /* blått märke: pågående, info */
+  --info-ink:  #1D4ED8;
 
   --hue-slate:  #8B95A6;
   --hue-sky:    #0EA5E9;
@@ -86,8 +95,9 @@
 
   --shadow-sm: 0 1px 2px rgba(20,33,61,.04);
   --shadow-md: 0 1px 2px rgba(20,33,61,.04), 0 8px 24px rgba(20,33,61,.05);
-  --shadow-lg: 0 24px 48px rgba(20,33,61,.12);
-  --shadow-brand: 0 8px 16px rgba(30,122,140,.28);
+  --shadow-lg: 0 24px 48px rgba(20,33,61,.10);
+  --shadow-modal: 0 40px 80px rgba(20,33,61,.30);
+  --shadow-brand: 0 6px 14px rgba(30,122,140,.28);
 
   /* --- AI-maskoten (skärm och ansikte) --------------------------------- */
   --ai-screen: #14213D;
@@ -145,6 +155,8 @@
   --ink-soft:       #C9D1DD;
   --ink-muted:      #A3AEC0;
   --ink-faint:      #7D8899;
+  --ink-ghost:      #6E7A8C;
+  --ink-icon:       #8E9AAE;
   --ink-on-canvas:  #EEF2F7;
 
   --overlay-soft:   rgba(255,255,255,.05);
@@ -156,15 +168,22 @@
   --border-strong: rgba(255,255,255,.15);
   --border-input:  rgba(255,255,255,.16);
   --divider:       rgba(255,255,255,.06);
+  --divider-soft:  rgba(255,255,255,.04);
 
   --brand-ink:     #8FD3D8;
   --brand-tint:    rgba(63,175,160,.16);
   --danger-ink:    #F28B8B;
   --danger-soft:   rgba(239,68,68,.16);
   --neutral-soft:  rgba(255,255,255,.07);
+  --neutral-pill:  rgba(255,255,255,.08);
+  --neutral-ink:   #A3AEC0;
 
   --warn-soft: rgba(217,119,6,.16);
   --warn-ink:  #F5B04C;
+  --ok-soft:   rgba(22,163,74,.16);
+  --ok-ink:    #5BD38F;
+  --info-soft: rgba(29,78,216,.2);
+  --info-ink:  #8FB4FF;
 
   --brand:        var(--teal-400);
   --brand-hover:  var(--teal-300);
@@ -186,6 +205,7 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
   --shadow-md: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
   --shadow-lg: 0 24px 48px rgba(0,0,0,.45);
+  --shadow-modal: 0 40px 80px rgba(0,0,0,.6);
 }
 
 * { box-sizing: border-box; }
