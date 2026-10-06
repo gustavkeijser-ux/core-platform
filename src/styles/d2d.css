@@ -248,3 +248,13 @@
   .d2d-lag-tel__input { min-height: 36px; max-width: 12rem; }
   .d2d-lag-ring { width: 2rem; height: 2rem; }
 }
+
+/* ── Utfall: snitt antal avtal per kund ─────────────────────────────────── */
+
+.utf__snitt {
+  margin-left: var(--sp-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
