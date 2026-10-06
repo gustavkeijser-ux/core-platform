@@ -167,3 +167,84 @@
   .d2dpb-godk__rad { grid-template-columns: 1fr; }
   .d2dpb-godk__knappar { justify-content: flex-end; }
 }
+
+/* ── Adresslistan: telefonkolumn + ringknapp ─────────────────────────────
+   Ikon | (Säljare) | Adress | Ingång | Lgh | Namn | Telefon | Kommentar |
+   Status | Ring. Telefonfältet redigeras direkt i raden (kund_telefon) och
+   ringknappen är en tel:-länk till höger om statusen. På mobil (≤480 px)
+   hamnar telefonfältet på en egen rad under kolumnerna och ringknappen
+   stannar längst till höger i huvudraden. */
+
+.d2d-detail .d2d-lag-table {
+  --lag-cols: 2.5rem minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.1fr) 8.5rem minmax(0, 1.6fr) 8.5rem 2.25rem;
+}
+.d2d-detail .d2d-lag-table--admin {
+  --lag-cols: 2.5rem minmax(0, 1fr) minmax(0, 1.3fr) 4rem 4rem minmax(0, 1fr) 8.5rem minmax(0, 1.5fr) 8.5rem 2.25rem;
+}
+
+.d2d-lag-row:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.d2d-lag-tel__input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 2px var(--sp-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: text;
+}
+.d2d-lag-tel__input::placeholder { color: var(--ink-faint); }
+.d2d-lag-tel__input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent);
+}
+
+/* Grön ringknapp — samma gröna accent som Såld/Intresserad. */
+.d2d-lag-ring {
+  justify-self: end;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  background: var(--hue-green);
+  color: #fff;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: filter var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.d2d-lag-ring:hover { filter: brightness(1.08); }
+.d2d-lag-ring:active { transform: scale(.95); }
+.d2d-lag-ring:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.d2d-lag-ring--tom {
+  background: color-mix(in srgb, var(--hue-green) 18%, transparent);
+  color: color-mix(in srgb, var(--hue-green) 55%, transparent);
+  cursor: default;
+}
+
+@media (max-width: 480px) {
+  .d2d-detail .d2d-lag-table {
+    --lag-cols: 2rem minmax(0, 1.25fr) 2.75rem 2.75rem minmax(0, 1fr) 2rem;
+  }
+  .d2d-detail .d2d-lag-table--admin {
+    --lag-cols: 2rem minmax(0, .9fr) minmax(0, 1.2fr) 2.25rem 2.75rem minmax(0, .9fr) 2rem;
+  }
+  /* Telefonfältet på egen rad under kolumnerna (ovanför kommentaren). */
+  .d2d-lag-table__head .d2d-lag-table__tel-col { display: none; }
+  .d2d-lag-row .d2d-lag-table__tel-col {
+    grid-column: 2 / -1;
+    margin-top: var(--sp-1);
+    order: 1;             /* efter ringknappen i huvudraden */
+  }
+  .d2d-lag-row .d2d-lag-row__comment { order: 2; }
+  .d2d-lag-tel__input { min-height: 36px; max-width: 12rem; }
+  .d2d-lag-ring { width: 2rem; height: 2rem; }
+}
