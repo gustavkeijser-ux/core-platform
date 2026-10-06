@@ -28,6 +28,9 @@ type Props = {
   aiOpen?: boolean;
   /** Antal nya (ohanterade) feedback, visas som siffra vid menyvalet. */
   newFeedback?: number;
+  /** Säljarfeedback från Blitz (D2D). Sätts bara för granskaren (Lukas):
+   *  då visas menyvalet Door to door → Säljarfeedback med antal som väntar. */
+  d2dFeedback?: { vantar: number };
 };
 
 function initialer(namn: string) {
@@ -256,7 +259,7 @@ function Chevron({ open }: { open: boolean }) {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -391,7 +394,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           const groupObjects = group.keys
             .map((k) => objMap.get(k))
             .filter(Boolean) as ObjectDef[];
-          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__"].includes(activeKey ?? ""));
+          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__", "__d2dfeedback__"].includes(activeKey ?? ""));
 
           // Hoppa över om inga objekt i gruppen finns
           if (groupObjects.length === 0) return null;
@@ -406,12 +409,15 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
               >
                 {group.icon}
                 <span className="sidebar__label">{group.label}</span>
+                {group.id === "d2d" && !isOpen && !!d2dFeedback?.vantar && (
+                  <span className="sidebar__badge" title="Säljarfeedback som väntar">{d2dFeedback.vantar}</span>
+                )}
                 <Chevron open={isOpen} />
               </button>
 
               {isOpen && (
                 <div className="sidebar__children">
-                  {/* D2D-gruppen: projektbyggaren och D2D-vyn (säljarnas vy) först */}
+                  {/* D2D-gruppen: projektbyggaren och Blitz (säljarnas vy) först */}
                   {group.id === "d2d" && (
                     <>
                       <button
@@ -426,8 +432,19 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                         aria-current={activeKey === "__d2d__"}
                         onClick={() => selectAndClose("__d2d__")}
                       >
-                        D2D-vy
+                        Blitz
                       </button>
+                      {/* Säljarfeedback från Blitz — bara granskaren (Lukas) */}
+                      {d2dFeedback && (
+                        <button
+                          className="sidebar__item sidebar__item--child"
+                          aria-current={activeKey === "__d2dfeedback__"}
+                          onClick={() => selectAndClose("__d2dfeedback__")}
+                        >
+                          Säljarfeedback
+                          {!!d2dFeedback.vantar && <span className="sidebar__badge">{d2dFeedback.vantar}</span>}
+                        </button>
+                      )}
                       <button
                         className="sidebar__item sidebar__item--child"
                         aria-current={activeKey === "__d2davtal__"}
