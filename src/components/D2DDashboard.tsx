@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import "@/styles/d2d.css";
-import { BlitzPinnar } from "./D2DLon";
+import { BlitzPinnar, usePinnOversikt } from "./D2DLon";
+import { ProfilRad, SaljarProfil, Fyrverkeri, manadsPlacering } from "./D2DProfil";
 
 // =============================================================================
 // D2D-dashboard — startsidan i Door to Door.
@@ -123,6 +124,10 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
   const [visaAktivitet, setVisaAktivitet] = useState(true);
   const [visaStatistik, setVisaStatistik] = useState(false);
   const [valdaStat, setValdaStat] = useState<string[]>([]);
+  // Säljarprofil (D2DProfil.tsx) och fyrverkeri när man leder månaden.
+  const [profil, setProfil] = useState<string | null>(null);
+  const [fira, setFira] = useState(false);
+  const pinnData = usePinnOversikt();
 
   useEffect(() => {
     let avbruten = false;
@@ -235,8 +240,20 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
     });
   }, [salj, valdaStat]);
 
+  // Fyrverkeri när den inloggade leder månadens topplista — en gång per dag
+  // och webbläsarsession när man går in i översikten (sessionStorage kan
+  // saknas/kasta, då visas det bara som vanligt).
+  const ledarManad = useMemo(() => manadsPlacering(salj).ledare, [salj]);
+  useEffect(() => {
+    if (!minId || !ledarManad.includes(minId)) return;
+    const nyckel = `blitz-fyrverkeri:${minId}:${dagNyckel(new Date())}`;
+    try { if (sessionStorage.getItem(nyckel)) return; sessionStorage.setItem(nyckel, "1"); } catch { /* visa ändå */ }
+    setFira(true);
+  }, [minId, ledarManad]);
+
   if (fel) return <div className="d2d-empty">{fel}</div>;
   if (!data) return <div className="d2d-loading">Laddar översikten…</div>;
+  const fullNamn = (id: string) => data.saljare.find((s) => s.id === id)?.namn ?? namnPa(id);
 
   const periodEtikett = PERIODER.find((p) => p.key === period)?.label ?? "";
   const aktivitet = salj.slice(0, 12);
@@ -246,6 +263,19 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
 
   return (
     <div className="d2dd">
+      {fira && (
+        <Fyrverkeri
+          text={ledarManad.length > 1 ? `Du delar förstaplatsen i ${MANADER[new Date().getMonth()]}!` : `Du leder ${MANADER[new Date().getMonth()]}!`}
+          onDone={() => setFira(false)} />
+      )}
+      {profil && (
+        <SaljarProfil id={profil} namn={fullNamn(profil)} minId={minId} salj={salj} namnPa={namnPa} pinnar={pinnData}
+          onClose={() => setProfil(null)} onFira={() => setFira(true)} />
+      )}
+
+      {/* Profiler — alla säljare, du först. Klick öppnar profilen. */}
+      <ProfilRad saljare={data.saljare} minId={minId} salj={salj} onOpen={setProfil} />
+
       {/* Team — totalt */}
       <section className="d2dd__section">
         <h2 className="d2dd__rubrik">
@@ -261,7 +291,7 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
       </section>
 
       {/* Pinnar och bonustrappa den här månaden (lönemodellen, D2DLon.tsx) */}
-      <BlitzPinnar minId={minId} />
+      <BlitzPinnar minId={minId} data={pinnData} onOpenProfil={setProfil} />
 
       {/* Förra månadens toppsäljare */}
       {hall.forraVinnare.length > 0 && (
@@ -310,11 +340,12 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
               const plats = topplista.rader.findIndex(([, m]) => m === n); // lika antal = delad placering
               const klass = plats === 0 ? "guld" : plats === 1 ? "silver" : plats === 2 ? "brons" : "";
               return (
-                <div key={u} className={`d2dd__rad${klass ? ` d2dd__rad--${klass}` : ""}${u === minId ? " d2dd__rad--jag" : ""}`}>
+                <button type="button" key={u} onClick={() => setProfil(u)} title={`Öppna ${namnPa(u)}s profil`}
+                  className={`d2dd__rad d2dd__rad--klick${klass ? ` d2dd__rad--${klass}` : ""}${u === minId ? " d2dd__rad--jag" : ""}`}>
                   <span className="d2dd__plats">{plats === 0 ? <Krona /> : plats <= 2 ? <Medalj /> : i + 1}</span>
                   <span className="d2dd__namn">{namnPa(u)}{u === minId && <span className="d2dd__du">du</span>}</span>
                   <span className="d2dd__antal">{n}<Scrive n={topplista.scrive.get(u) ?? 0} /></span>
-                </div>
+                </button>
               );
             })}
           </div>
