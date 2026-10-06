@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FieldDef } from "@/lib/data";
+import { LonemodellEditor } from "./D2DLon";
 import {
   beraknaAvtal, kr, loadPrislista, onPrislista, savePrislista,
   ENGANG_FALT, ROUTER_FALT, type Prislista, type Pris, type RouterPris,
@@ -253,6 +254,8 @@ export function D2DPrislistaPage({ fields }: { fields: FieldDef[] }) {
         {fel && <div className="formfield__error">Kunde inte hämta prislistan: {fel}</div>}
         {!lista && !fel && <p className="formfield__help">Hämtar prislistan…</p>}
         {lista && <PrislistaForm lista={lista} soldFields={soldFields} />}
+        {/* Lönemodellen (pinnar och bonustrappa) ligger i egen tabell — prislistan kan aldrig skriva över den. */}
+        {lista && <LonemodellEditor fields={fields} />}
       </section>
     </div>
   );
