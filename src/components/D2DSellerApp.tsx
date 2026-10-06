@@ -336,25 +336,36 @@ function TillfalligFastighetForm({ projektId, onCreated, onCancel }: {
   );
 }
 
-/** Formulär för en tillfällig lägenhet i en fastighet. Adress, ort och
- *  beteckning hämtas från fastigheten i databasen; säljaren fyller bara i
+/** Formulär för en tillfällig lägenhet i en fastighet. Ort, postnummer,
+ *  beteckning och portkod hämtas från fastigheten i databasen. Adressen kan
+ *  skilja sig inom samma fastighet, så gatunamn, gatunummer och ingång
+ *  fylls i av säljaren (gatunamn/nummer förifyllda från fastigheten), plus
  *  lägenhetsnummer (Skatteverket) och ev. internt nummer/alias. */
-function TillfalligLagenhetForm({ fastighetId, onCreated, onCancel }: {
-  fastighetId: string; onCreated: (id: string) => void; onCancel: () => void;
+function TillfalligLagenhetForm({ fastighetId, fastData, onCreated, onCancel }: {
+  fastighetId: string; fastData: Record<string, unknown>; onCreated: (id: string) => void; onCancel: () => void;
 }) {
+  // "Storgatan 12B" → gatunamn "Storgatan", gatunummer "12B" som förslag.
+  const fastAdress = String(fastData.adress ?? fastData.name ?? "").trim();
+  const m = fastAdress.match(/^(.*\S)\s+(\d+\s?[A-Za-z]?)$/);
+  const [gatunamn, setGatunamn] = useState(m ? m[1] : fastAdress);
+  const [gatunummer, setGatunummer] = useState(m ? m[2] : "");
+  const [ingang, setIngang] = useState("");
   const [nummer, setNummer] = useState("");
   const [alias, setAlias] = useState("");
   const [busy, setBusy] = useState(false);
   const [fel, setFel] = useState<string | null>(null);
-  const ok = nummer.trim().length > 0;
+  const ok = nummer.trim().length > 0 && gatunamn.trim().length > 0;
 
   const skapa = async () => {
     if (!ok || busy) return;
     setBusy(true); setFel(null);
-    const { data, error } = await supabase.rpc("d2d_skapa_tillfallig_lagenhet", {
+    const { data, error } = await supabase.rpc("d2d_skapa_tillfallig_adress", {
       p_fastighet_id: fastighetId,
       p_lgh_nummer: nummer.trim(),
       p_alias: alias.trim() || null,
+      p_gatunamn: gatunamn.trim(),
+      p_gatunummer: gatunummer.trim() || null,
+      p_ingang: ingang.trim() || null,
     });
     setBusy(false);
     if (error || !data) { setFel(error?.message || "Kunde inte skapa lägenheten."); return; }
@@ -364,7 +375,21 @@ function TillfalligLagenhetForm({ fastighetId, onCreated, onCancel }: {
   return (
     <form className="d2d-tillf-form" onSubmit={(e) => { e.preventDefault(); void skapa(); }}>
       <h3>Ny tillfällig lägenhet</h3>
-      <p>Adress och ort hämtas från fastigheten. Lägenheten blir tillfällig tills en administratör godkänt den.</p>
+      <p>Ort och fastighetsinfo hämtas från fastigheten. Ändra adressen om den skiljer sig från fastighetens. Lägenheten blir tillfällig tills en administratör godkänt den.</p>
+      <div className="d2d-tillf-form__rad">
+        <label className="d2d-tillf-form__falt d2d-tillf-form__falt--bred">
+          <span className="label">Gatunamn *</span>
+          <input className="input" value={gatunamn} onChange={(e) => setGatunamn(e.target.value)} placeholder="t.ex. Storgatan" autoComplete="off" />
+        </label>
+        <label className="d2d-tillf-form__falt">
+          <span className="label">Gatunr</span>
+          <input className="input" value={gatunummer} onChange={(e) => setGatunummer(e.target.value)} placeholder="12B" autoComplete="off" />
+        </label>
+        <label className="d2d-tillf-form__falt">
+          <span className="label">Ingång</span>
+          <input className="input" value={ingang} onChange={(e) => setIngang(e.target.value)} placeholder="A" autoComplete="off" />
+        </label>
+      </div>
       <label className="d2d-tillf-form__falt">
         <span className="label">Lägenhetsnummer (Skatteverket) *</span>
         <input className="input" value={nummer} onChange={(e) => setNummer(e.target.value)} placeholder="t.ex. 1101" inputMode="numeric" autoFocus autoComplete="off" />
@@ -893,6 +918,7 @@ function FastighetsDetalj({
       {nyTillfallig ? (
         <TillfalligLagenhetForm
           fastighetId={fastighetId}
+          fastData={data}
           onCancel={() => setNyTillfallig(false)}
           onCreated={(id) => { setNyTillfallig(false); rememberRow(listKey, id); onOpenLagenhet(id); }}
         />
