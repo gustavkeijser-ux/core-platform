@@ -260,3 +260,13 @@
   color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Översikt (D2DDashboard): Scrive-signeringar inom parentes ─────────── */
+.d2dd__scrive { font-size: 0.6em; font-weight: 600; color: var(--ink-muted); margin-left: 4px; }
+.d2dd__scrive-hint { margin: var(--sp-2) 0 0; font-size: var(--text-xs); color: var(--ink-muted); }
+.d2dd__plus--scrive { background: color-mix(in srgb, var(--hue-violet) 14%, transparent); color: var(--hue-violet); }
+.d2dd__akt-scrive {
+  display: inline-block; align-self: flex-start; margin: 2px 0 0; padding: 1px 6px; border-radius: var(--r-pill);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  background: color-mix(in srgb, var(--hue-violet) 14%, transparent); color: var(--hue-violet);
+}
