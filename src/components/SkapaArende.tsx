@@ -66,7 +66,7 @@ export function SkapaArendePage({ onCancel, onCreated, onOpenCase }: {
     return () => window.clearTimeout(t);
   }, [lagenhet, fastighet, epost, kategori]);
 
-  const huvudkat = cats.filter((c) => !c.parent_key);
+  const huvudkat = cats.filter((c) => !c.parent_key && !c.felanmalan); // felanmälningar skapas från säljarvyn
   const saknas = useMemo(() => {
     const s: string[] = [];
     if (!okand && !namn.trim() && !epost.trim() && !telefon.trim()) s.push("vem som anmäler (eller okänd avsändare)");
