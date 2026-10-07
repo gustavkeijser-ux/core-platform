@@ -44,6 +44,8 @@ function antalExtra(data: Record<string, any>): number {
   const rader = Array.isArray(data.mobil_nummer?.rows) ? data.mobil_nummer.rows.filter((r: any) => r?.typ === "extra").length : 0;
   return Math.max(angivet, rader);
 }
+// Telias egna sportpaket ingår Netflix (kan väljas "utan Netflix"); TV4/Viaplay-paketen gör det inte.
+const SPORT_MED_NETFLIX = new Set(["lilla_sportpaketet", "stora_sportpaketet", "storsta_sportpaketet"]);
 const tal = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 
@@ -81,7 +83,7 @@ function berakna(data: Record<string, any>, fields: Field[], lista: any) {
       if (f.key === "salt_bredband" && !tv && tal(p.kampanjUtanTv) != null) k = tal(p.kampanjUtanTv);
       if (f.key === "salt_tv" && !bb) k = o;
       if (f.key === "salt_trygghet" && !bb && tal(p.kampanjUtanBredband) != null) k = tal(p.kampanjUtanBredband);
-      if (f.key === "salt_streaming_sport" && utanNetflix && tal(p.kampanjUtanNetflix) != null) k = tal(p.kampanjUtanNetflix);
+      if (f.key === "salt_streaming_sport" && utanNetflix && SPORT_MED_NETFLIX.has(val) && tal(p.kampanjUtanNetflix) != null) k = tal(p.kampanjUtanNetflix);
       // Extraanvändare: priset gäller per användare.
       const st = f.key === "salt_mobil" && val === "extra_anvandare" ? antalExtra(data) : 1;
       const ggr = (x: number | null) => (x == null ? null : x * st);
@@ -112,6 +114,9 @@ const KRYSS: Record<string, string> = {
   "salt_streaming_film:streaming_mer": "film_mer", "salt_streaming_film:streaming_maxad": "film_maxad", "salt_streaming_film:streaming_mest": "film_mest",
   "salt_streaming_sport:lilla_sportpaketet": "sport_lilla", "salt_streaming_sport:stora_sportpaketet": "sport_stora",
   "salt_streaming_sport:storsta_sportpaketet": "sport_storsta",
+  // Sportpaket från TV4 och Viaplay — kryssrutor i mallen med samma namn som i CRM:et.
+  "salt_streaming_sport:tv4_sport_hockey": "tv4_play_sport_hockey", "salt_streaming_sport:tv4_sport_total": "tv4_play_sport_total",
+  "salt_streaming_sport:viaplay_all_sport": "all_sport_fran_viaplay",
   "salt_mobil:10_gb": "mobil_10gb", "salt_mobil:20_gb": "mobil_20gb", "salt_mobil:obegransad": "mobil_obegransad",
   "salt_mobil:obegransad_plus": "mobil_obegransad_plus", "salt_mobil:obegransad_plus_1_streaming": "mobil_plus_1_streaming",
   "salt_mobil:obegransad_plus_3_streaming": "mobil_plus_3_streaming", "salt_mobil:extra_anvandare": "mobil_extra",
@@ -135,6 +140,10 @@ const ALIAS: Record<string, string> = {
   kampanjpris_trygghetspaket: "trygghet_kampanj", ordinariepris_trygghetspaket: "trygghet_ordinarie",
   total_manadskostnad_kampanjpris: "total_kampanj", total_manadskostnad_ord_pris: "total_ordinarie",
   tjansteleverantor: "leverantor",
+  tv4_sport_hockey: "tv4_play_sport_hockey", tv4_hockey: "tv4_play_sport_hockey",
+  tv4_sport_total: "tv4_play_sport_total", tv4_total: "tv4_play_sport_total",
+  all_sport_viaplay: "all_sport_fran_viaplay", viaplay_all_sport: "all_sport_fran_viaplay", viaplay: "all_sport_fran_viaplay",
+  sportpaket: "sport_namn", sportpaket_namn: "sport_namn",
   // Kryssrutorna i mallen heter "checkbox 1" … "checkbox 24" (i den ordning de lades ut).
   checkbox_1: "bb150", checkbox_2: "bb300", checkbox_3: "bb600", checkbox_4: "bb1000",
   checkbox_5: "tv_bas", checkbox_6: "tv_mellan", checkbox_7: "tv_mycket",
@@ -171,7 +180,9 @@ function avtalsfalt(data: Record<string, any>, a: ReturnType<typeof berakna>, li
   const tvbox = a.engang.find((r) => r.falt === "salt_tvbox");
   if (a.bb) { v[router ? "router_ja" : "router_nej"] = "X"; if (router) v.router_kostnad = kr(router.kampanj); }
   if (a.tv) { v[tvbox ? "tvbox_ja" : "tvbox_nej"] = "X"; if (tvbox) v.tvbox_kostnad = tvbox.kampanj === 0 ? "Ingår" : kr(tvbox.kampanj); }
-  if (data.salt_sport_utan_netflix === true && a.manad.some((r) => r.falt === "salt_streaming_sport")) v.sport_utan_netflix = "X";
+  const sport = a.manad.find((r) => r.falt === "salt_streaming_sport");
+  if (data.salt_sport_utan_netflix === true && sport && SPORT_MED_NETFLIX.has(sport.val)) v.sport_utan_netflix = "X";
+  if (sport) v.sport_namn = sport.label;
   v.total_kampanj = kr(a.totalKampanj);
   v.total_ordinarie = kr(a.totalOrdinarie);
   v.bindningstid = `${a.bindningManader} månader`;
@@ -256,7 +267,7 @@ Deno.serve(async (req: Request) => {
           const falt = (d.parties ?? []).flatMap((p: any) => (p.fields ?? []).filter((f: any) => f.type === "text" || f.type === "checkbox"));
           const namn = falt.map((f: any) => String(f.name ?? ""));
           const kanda = new Set([...Object.values(ALIAS), ...Object.values(KRYSS), "bindningstid", "kampanjperiod", "startdatum",
-            "gatuadress", "lagenhetsnummer", "telefon", "epost", "namn", "personnummer", "ort", "datum", "sport_utan_netflix"]);
+            "gatuadress", "lagenhetsnummer", "telefon", "epost", "namn", "personnummer", "ort", "datum", "sport_utan_netflix", "sport_namn"]);
           granskning.push({ id, titel: d.title, andrad: d.mtime, antalFalt: namn.length,
             kanda: namn.filter((n: string) => kanda.has(faltnyckel(n))).length,
             okanda: namn.filter((n: string) => !kanda.has(faltnyckel(n))).slice(0, 30) });
