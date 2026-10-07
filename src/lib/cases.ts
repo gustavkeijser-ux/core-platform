@@ -19,7 +19,8 @@ const fail = (e: { code?: string; message: string }): never => {
 export type CaseFilter =
   | "open" | "all" | "new" | "mine" | "unassigned" | "in_progress"
   | "waiting_customer" | "waiting_internal" | "waiting_contractor"
-  | "resolved" | "closed" | "overdue" | "waiting";
+  | "resolved" | "closed" | "overdue" | "waiting"
+  | "waiting_telia" | "felanmalan" | "felanmalan_alla";
 
 export type SlaState = "ok" | "warning" | "breached" | "met" | null;
 export type CasePriority = "normal" | "high" | "critical" | "urgent";
@@ -35,7 +36,7 @@ export const priorityLabel = (p: string | null | undefined) =>
 
 export const SOURCE_LABEL: Record<string, string> = {
   email: "E-post", phone: "Telefon", app: "App", web: "Webb", sms: "SMS",
-  internal: "Intern", api: "API", partner: "Partner",
+  internal: "Intern", api: "API", partner: "Partner", d2d: "Door to door",
 };
 
 export type CaseListItem = {
@@ -126,7 +127,7 @@ export type CaseDetail = {
   };
   canUpdate: boolean;
   categoryLabel: string | null; subcategoryLabel: string | null;
-  sla: { firstResponse: SlaState; resolution: SlaState };
+  sla: { firstResponse: SlaState; resolution: SlaState; paused?: boolean };
   messages: CaseMessage[];
   events: CaseEvent[];
   related: Array<{ relType: string; label: string; id: string; objectType: string; title: string | null; status: string | null }>;
@@ -193,13 +194,13 @@ export async function attachmentUrl(a: CaseAttachment) {
   return data.signedUrl;
 }
 
-export type CaseCategory = { key: string; parent_key: string | null; label: string; sort_order: number };
+export type CaseCategory = { key: string; parent_key: string | null; label: string; sort_order: number; felanmalan?: boolean };
 let catCache: Promise<CaseCategory[]> | null = null;
 export function caseCategories() {
   if (!catCache) {
     catCache = (async () => {
       const { data, error } = await supabase.from("case_categories")
-        .select("key,parent_key,label,sort_order").eq("is_active", true).order("sort_order");
+        .select("key,parent_key,label,sort_order,felanmalan").eq("is_active", true).order("sort_order");
       if (error) { catCache = null; return []; }
       return (data ?? []) as CaseCategory[];
     })();
@@ -227,6 +228,18 @@ export async function searchLinkTargets(type: "property" | "d2d_lagenhet", q: st
 
 export async function caseLink(id: string, relType: "case_property" | "case_lagenhet", target: string | null) {
   const { error } = await supabase.rpc("case_link", { p_case: id, p_rel_type: relType, p_target: target });
+  if (error) fail(error);
+}
+
+/** Ärendenummer hos Telia (felanmälningar). Tom text tar bort det. */
+export async function caseSetTelia(id: string, nr: string) {
+  const { error } = await supabase.rpc("case_set_telia", { p_case: id, p_nr: nr });
+  if (error) fail(error);
+}
+
+/** Bevakare: får mejl när ärendet ändras (felanmälningar: Lukas som standard). */
+export async function caseSetBevakare(id: string, users: string[]) {
+  const { error } = await supabase.rpc("case_set_bevakare", { p_case: id, p_users: users });
   if (error) fail(error);
 }
 
