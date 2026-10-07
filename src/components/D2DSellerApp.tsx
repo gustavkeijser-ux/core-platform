@@ -1188,7 +1188,7 @@ function LagenhetForm({
   const fields = configurableFields.filter((f) => !f.options.seller_hidden);
   // Signera med Scrive: kundens uppgifter ligger mellan avtalsförslaget och
   // signeringen (och visas då inte en gång till i formuläret nedanför).
-  const KUND_FALT = ["kund_namn", "personnummer", "kund_epost", "kund_telefon", "startdatum_tjanst"];
+  const KUND_FALT = ["kund_namn", "personnummer", "kund_epost", "kund_telefon", "startdatum_tjanst", "scrive_ovrigt"];
   const kundFalt = status === "scrive"
     ? KUND_FALT.map((k) => configurableFields.find((f) => f.key === k)).filter((f): f is FieldDef => !!f)
     : [];
