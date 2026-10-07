@@ -1,0 +1,19 @@
+/* Ärenden — områdets egen CSS (se AGENTS.md). */
+
+/* Bevakare i ärendevyn: chips + "Lägg till" */
+.bevakare { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.bevakare__tom { font-size: var(--text-xs); }
+.bevakare__chip {
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  min-height: 30px; padding: 0 6px 0 12px;
+  border: 1px solid var(--border); border-radius: var(--r-pill);
+  background: var(--surface-sunk); color: var(--ink-soft);
+  font-size: var(--text-xs); font-weight: 600;
+}
+.bevakare__chip button {
+  width: 22px; height: 22px; border: 0; border-radius: var(--r-pill);
+  background: transparent; color: var(--ink-muted); cursor: pointer; font-size: 15px; line-height: 1;
+}
+.bevakare__chip button:hover { background: var(--surface); color: var(--ink); }
+.bevakare__add { width: auto; min-width: 140px; flex: 0 1 auto; }
+@media (max-width: 640px) { .bevakare__add { flex: 1 1 100%; } }
