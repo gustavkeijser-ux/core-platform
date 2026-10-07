@@ -22,6 +22,7 @@ const useReturnToRow = (listKey: string, ready: boolean) => useReturnToRowShared
 import { useUserName } from "@/lib/users";
 import { D2DDashboard } from "./D2DDashboard";
 import { D2DFeedbackFlik } from "./D2DFeedback";
+import { FelanmalanPanel } from "./D2DFelanmalan";
 import "@/styles/d2d.css";
 
 // =============================================================================
@@ -786,6 +787,12 @@ function FastighetsDetalj({
       {/* Fastighetsinfo — alla ifyllda infrastruktur-/TV-fakta om
           fastigheten (utgångsläget; enskilda adresser kan avvika). */}
       <InfraBox title="Fastighetsinfo" rows={infraRows(data)} emptyText="Ingen fastighetsinfo ifylld ännu." />
+
+      {/* Felanmälan på adressen → Ärenden → Felanmälningar (leveransansvarig + Lukas). */}
+      <FelanmalanPanel
+        fastighetId={fastighetId}
+        lagenheter={lagenheter.map((l) => ({ id: l.id, label: formatLagenhetAdress(l.data as Record<string, unknown>, l.title) }))}
+      />
 
       {/* Lägenhetslista */}
       <div className="d2d-lag-list">
