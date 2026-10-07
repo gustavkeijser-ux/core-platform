@@ -144,6 +144,16 @@ const ALIAS: Record<string, string> = {
   tv4_sport_total: "tv4_play_sport_total", tv4_total: "tv4_play_sport_total",
   all_sport_viaplay: "all_sport_fran_viaplay", viaplay_all_sport: "all_sport_fran_viaplay", viaplay: "all_sport_fran_viaplay",
   sportpaket: "sport_namn", sportpaket_namn: "sport_namn",
+  // Fältnamnen i mallen från 7 okt 2026 (kryssrutor och prisfält med klartextnamn).
+  streaming_mer: "film_mer", streaming_mest: "film_mest", streaming_maxad: "film_maxad",
+  lilla_sportpaketet: "sport_lilla", stora_sportpaketet: "sport_stora", storsta_sportpaketet: "sport_storsta",
+  mobil_10_gb: "mobil_10gb", mobil_20_gb: "mobil_20gb", mobil_extra_anvandare: "mobil_extra",
+  mobil_obegransad_plus_streaming: "mobil_plus_streaming", trygghetspaket: "trygghet",
+  film_serie_kampanjpris: "film_kampanj", film_serie_ordinarie_pris: "film_ordinarie",
+  sport_kampanjpris: "sport_kampanj", sport_ordinarie_pris: "sport_ordinarie",
+  mobil_kampanjpris: "mobil_kampanj", mobil_ordinarie_pris: "mobil_ordinarie",
+  trygghet_kampanjpris: "trygghet_kampanj", trygghet_ordinarie_pris: "trygghet_ordinarie",
+  ovrigt: "ovrigt", ovrigt_text: "ovrigt", ovriga_kommentarer: "ovrigt", ovrig_information: "ovrigt", ovrigt_avtal: "ovrigt",
   // Kryssrutorna i mallen heter "checkbox 1" … "checkbox 24" (i den ordning de lades ut).
   checkbox_1: "bb150", checkbox_2: "bb300", checkbox_3: "bb600", checkbox_4: "bb1000",
   checkbox_5: "tv_bas", checkbox_6: "tv_mellan", checkbox_7: "tv_mycket",
@@ -199,6 +209,7 @@ function avtalsfalt(data: Record<string, any>, a: ReturnType<typeof berakna>, li
   if (data.kund_namn) v.namn = String(data.kund_namn);
   if (data.personnummer) v.personnummer = String(data.personnummer);
   if (data.postort) v.ort = String(data.postort);
+  if (String(data.scrive_ovrigt ?? "").trim()) v.ovrigt = String(data.scrive_ovrigt).trim();
   v.datum = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
   return v;
 }
@@ -237,10 +248,10 @@ Deno.serve(async (req: Request) => {
   let b: Record<string, any> = {};
   try { b = await req.json(); } catch { /* */ }
   const action = String(b.action ?? "check");
-  // Mall-id: från databasen (scrive_installningar), annars secret SCRIVE_TEMPLATE_ID.
+  // Mall-id: från databasen (scrive_installningar) i första hand, annars secret SCRIVE_TEMPLATE_ID.
   const { data: inst } = await db.from("scrive_installningar").select("tenant_id, mall_id");
   const mallFor = (tenantId?: string) =>
-    (inst ?? []).find((r: any) => r.tenant_id === tenantId)?.mall_id ?? Deno.env.get("SCRIVE_TEMPLATE_ID") ?? (inst ?? [])[0]?.mall_id ?? null;
+    (inst ?? []).find((r: any) => r.tenant_id === tenantId)?.mall_id ?? (inst ?? [])[0]?.mall_id ?? Deno.env.get("SCRIVE_TEMPLATE_ID") ?? null;
   const missing = scriveMissing().filter((k) => k !== "SCRIVE_TEMPLATE_ID" || !mallFor());
 
   if (action === "check") return json({ configured: missing.length === 0, missing });
@@ -267,8 +278,8 @@ Deno.serve(async (req: Request) => {
           const falt = (d.parties ?? []).flatMap((p: any) => (p.fields ?? []).filter((f: any) => f.type === "text" || f.type === "checkbox"));
           const namn = falt.map((f: any) => String(f.name ?? ""));
           const kanda = new Set([...Object.values(ALIAS), ...Object.values(KRYSS), "bindningstid", "kampanjperiod", "startdatum",
-            "gatuadress", "lagenhetsnummer", "telefon", "epost", "namn", "personnummer", "ort", "datum", "sport_utan_netflix", "sport_namn"]);
-          granskning.push({ id, titel: d.title, andrad: d.mtime, antalFalt: namn.length,
+            "gatuadress", "lagenhetsnummer", "telefon", "epost", "namn", "personnummer", "ort", "datum", "sport_utan_netflix", "sport_namn", "ovrigt"]);
+          granskning.push({ id, titel: d.title, andrad: d.mtime, antalFalt: namn.length, falt: namn.map((n: string) => `${n} → ${faltnyckel(n)}`),
             kanda: namn.filter((n: string) => kanda.has(faltnyckel(n))).length,
             okanda: namn.filter((n: string) => !kanda.has(faltnyckel(n))).slice(0, 30) });
         } catch (e) { granskning.push({ id, fel: String(e) }); }
