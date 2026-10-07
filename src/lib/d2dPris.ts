@@ -91,6 +91,22 @@ export type Avtal = {
   harTv: boolean;
 };
 
+/** Fältet med antalet extraanvändare (mobil) och valet i salt_mobil. */
+export const EXTRA_ANTAL_FALT = "mobil_extra_antal";
+export const EXTRA_VAL = "extra_anvandare";
+
+/**
+ * Antal extraanvändare när "Extra användare" är vald: det angivna antalet,
+ * eller fler om det finns fler extrarader bland mobilnumren. Minst 1.
+ */
+export function antalExtra(data: Record<string, unknown>): number {
+  const n = Number(data[EXTRA_ANTAL_FALT]);
+  const angivet = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+  const v = data.mobil_nummer as { rows?: unknown } | null | undefined;
+  const rader = Array.isArray(v?.rows) ? (v!.rows as { typ?: string }[]).filter((r) => r?.typ === "extra").length : 0;
+  return Math.max(angivet, rader);
+}
+
 const tal = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 
@@ -169,9 +185,13 @@ export function beraknaAvtal(data: Record<string, unknown>, soldFields: FieldDef
       if (f.key === "salt_trygghet" && !harBredband && tal(p.kampanjUtanBredband) != null) { kampanj = tal(p.kampanjUtanBredband); not = "utan bredband"; }
       if (f.key === "salt_trygghet" && harBredband) not = "första månaden gratis";
       if (f.key === "salt_streaming_sport" && utanNetflix && tal(p.kampanjUtanNetflix) != null) { kampanj = tal(p.kampanjUtanNetflix); not = "utan Netflix"; }
-      if (f.key === "salt_mobil") antalMobil++;
+      // Extraanvändare: priset gäller per användare.
+      const st = f.key === "salt_mobil" && val === EXTRA_VAL ? antalExtra(data) : 1;
+      if (f.key === "salt_mobil") antalMobil += st;
       if (kampanj == null && ordinarie == null) saknas.push(label);
-      manad.push({ falt: f.key, kategori: f.label, label, kampanj: kampanj ?? ordinarie, ordinarie: ordinarie ?? kampanj, not });
+      const ggr = (x: number | null) => (x == null ? null : x * st);
+      manad.push({ falt: f.key, kategori: f.label, label: st > 1 ? `${label} × ${st}` : label,
+        kampanj: ggr(kampanj ?? ordinarie), ordinarie: ggr(ordinarie ?? kampanj), not });
     }
   }
 
