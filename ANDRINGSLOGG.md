@@ -12,7 +12,12 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Parkerat: kommentarerna i projektet "umeå 2".
 - [Master] Flytta ut områdes-CSS ur `src/app.css` till `src/styles/<omrade>.css`.
 - [Master] Gustav: för "Inbjudan per e-post" på sidan Användare — konfigurera SMTP i Supabase Auth och lägg till `https://crm.connectestate.se` under Redirect URLs.
+- [D2D] Gustav (valfritt): lägg till ett textfält "Antal extraanvändare" i Scrive-mallen om antalet ska stå separat i avtalet (fylls i automatiskt).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
+
+## 2026-10-07
+
+- [D2D] Antal extraanvändare: under Mobil i "Vad såldes?" och "Vad ska kunden signera?" visas en stegräknare "Antal extraanvändare" när "Extra användare" är vald (1–20, startar på 1, försvinner när valet tas bort). Fler extrarader bland mobilnumren höjer antalet automatiskt. Priset för extraanvändare gånger antalet i avtalsförslaget ("Extra användare × 3") och i Scrive-avtalet (mobilpriserna, totalen och "Antal" mobilabonnemang räknar med alla); fältet `mobil_extra_antal` fylls också i om mallen har ett textfält "Antal extraanvändare". Utfall, antal avtal per kund och pinnar/lön räknar antalet. Filer: `D2DSellerApp.tsx`, `MobilNummer.tsx`, `src/lib/d2dPris.ts` (`antalExtra`), `styles/d2d.css` (`.d2d-extra`). Edge: `scrive-sign` v21. DB: fältet `mobil_extra_antal`, `d2d_extra_antal(d)`; `d2d_utfall`, `d2d_utfall_kalla`, `d2d_antal_avtal`, `d2d_pinnar_rader` (`20261007_0930_d2d_antal_extraanvandare.sql`).
 
 ## 2026-10-06
 
