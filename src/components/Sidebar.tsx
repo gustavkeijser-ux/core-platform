@@ -105,6 +105,7 @@ const CASE_VIEWS: Array<{ key: string; label: string; count?: string; alert?: bo
   { key: "overdue", label: "Försenade", count: "overdue", alert: true },
   { key: "waiting", label: "Väntar på svar", count: "waiting" },
   { key: "unassigned", label: "Ej tilldelade", count: "unassigned" },
+  { key: "felanmalan", label: "Felanmälningar", count: "felanmalan" },
 ];
 /** Ärenden har egen inkorg under Kundservice (inte den generiska listan). */
 const OWN_VIEW = new Set(["case"]);
