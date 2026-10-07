@@ -13,7 +13,7 @@ import { MobilNummerPanel } from "./MobilNummer";
 import { AvtalsSammanfattning } from "./D2DAvtal";
 import { ScriveSignering } from "./D2DScrive";
 import { BindningPanel, EjMerPanel } from "./D2DBindning";
-import { UTAN_NETFLIX_FALT } from "@/lib/d2dPris";
+import { UTAN_NETFLIX_FALT, EXTRA_ANTAL_FALT, EXTRA_VAL, antalExtra } from "@/lib/d2dPris";
 import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
 
@@ -1148,6 +1148,13 @@ function LagenhetForm({
     if (f.fieldType === "multi_select") {
       const cur: string[] = Array.isArray(data[f.key]) ? (data[f.key] as unknown[]).map(String) : [];
       const next = cur.includes(choice) ? cur.filter((c) => c !== choice) : [...cur, choice];
+      if (f.key === "salt_mobil" && choice === EXTRA_VAL) {
+        // Extra användare: antalet följer valet (1 när det väljs, bort när det avmarkeras).
+        const patch = { [f.key]: next.length ? next : null, [EXTRA_ANTAL_FALT]: next.includes(EXTRA_VAL) ? 1 : null };
+        setData((d) => ({ ...d, ...patch }));
+        queueSave(patch, null, 0);
+        return;
+      }
       set(f.key, 0)(next.length ? next : null);
     } else {
       // Tryck igen på valt alternativ = avmarkera.
@@ -1375,6 +1382,24 @@ function LagenhetForm({
                   </button>
                 ))}
               </div>
+              {f.key === "salt_mobil" && isPicked(f, EXTRA_VAL) && (() => {
+                const antal = antalExtra(data);
+                const satt = (n: number) => set(EXTRA_ANTAL_FALT, 0)(Math.max(1, Math.min(20, Math.floor(n) || 1)));
+                return (
+                  <div className="d2d-extra">
+                    <span className="d2d-sold-panel__hint">Antal extraanvändare</span>
+                    <div className="d2d-knack__rad">
+                      <button type="button" className="d2d-knack__btn" aria-label="En färre" disabled={antal <= 1}
+                        onClick={() => satt(antal - 1)}>−</button>
+                      <input className="input d2d-knack__input" type="number" inputMode="numeric" min={1} max={20}
+                        aria-label="Antal extraanvändare" value={antal}
+                        onChange={(e) => { if (e.target.value !== "") satt(Number(e.target.value)); }} />
+                      <button type="button" className="d2d-knack__btn" aria-label="En till" onClick={() => satt(antal + 1)}>+</button>
+                      <span className="d2d-knack__text">st</span>
+                    </div>
+                  </div>
+                );
+              })()}
               {f.key === "salt_streaming_sport" && !!data[f.key] && (
                 <button
                   type="button"
