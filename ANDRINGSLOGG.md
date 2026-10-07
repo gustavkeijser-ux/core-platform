@@ -6,7 +6,6 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## Öppna punkter
 
-- [D2D] Gustav: döp textfältet för övrigt i Scrive-mallen till exakt "Övrigt" (mall 9222115557591481195 har inget fält med det namnet ännu).
 - [D2D] Gustav: ta bort secret `SCRIVE_TEMPLATE_ID` i Supabase (mall-id ligger nu i databasen, migration 0057).
 - [D2D] Gustav: lägg till kryssrutorna "TV Start" och "TV Mini" i Scrive-mallen.
 - [D2D] Gustav: rotera Scrive-nycklarna (de har synts i en chatt).
@@ -14,11 +13,12 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [Master] Flytta ut områdes-CSS ur `src/app.css` till `src/styles/<omrade>.css`.
 - [Master] Gustav: för "Inbjudan per e-post" på sidan Användare — konfigurera SMTP i Supabase Auth och lägg till `https://crm.connectestate.se` under Redirect URLs.
 - [D2D] Gustav (valfritt): lägg till ett textfält "Antal extraanvändare" i Scrive-mallen om antalet ska stå separat i avtalet (fylls i automatiskt).
-- [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser, och lägg till kryssrutor med de namnen i Scrive-mallen.
+- [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
 ## 2026-10-07
 
+- [D2D] Scrive-mallen bytt till den aktiva `9222115557591481415`: `…481195` ligger i papperskorgen ("Scrive 409: The template is in Trash"). Mallen har 51 fält, alla kända — även TV4/Viaplay-kryssrutorna och "Övrigt", som är ett flerradigt textfält (`multi_line_text`) och därför filtrerades bort förut (det var fel att det saknades). `scrive-sign` fyller nu även flerradiga textfält, och åtgärden "test" visar ändrad-tid och papperskorg per mall. Edge: `scrive-sign` v24. DB: `scrive_installningar.mall_id` (`20261007_1215_d2d_scrive_aktiv_mall.sql`).
 - [D2D] Rättning: `9222115557591506152` är ett dokument, inte en mall ("Scrive 409: The document is not a template", ett avtal fick status fel 13:16). Mall-id återställt till `9222115557591481195` (mall). Ett id från Scrive måste vara en mall (Mallar/Templates), inte ett dokument skapat från mallen.
 - [D2D] Scrive-mallen bytt till `9222115557591506152` (Gustav, 7 okt 11:02). Alla 50 fält känns igen, men mallen har fortfarande inget text- eller kryssfält som heter "Övrigt". DB: `scrive_installningar.mall_id` (do-block).
 - [D2D] Scrive: ny mall `9222115557591481195` (fältnamn i klartext — "Streaming Mer", "Sport – kampanjpris", "Mobil – antal" m.fl. — alla 50 fält känns igen) och fältet "Övrigt (står i avtalet)" (`scrive_ovrigt`) under Kunduppgifter vid Signera med Scrive; texten skrivs i mallens textfält "Övrigt". Mall-id läses nu i första hand från `scrive_installningar` (secret `SCRIVE_TEMPLATE_ID` är reserv). Åtgärden "test" visar alla mallens fält och vad de kopplas till. Filer: `D2DSellerApp.tsx` (`KUND_FALT`). Edge: `scrive-sign` v23. DB: `scrive_installningar.mall_id`, fältet `scrive_ovrigt` (`20261007_1120_d2d_scrive_ovrigt_ny_mall.sql`). Obs: en ensam UPDATE via Supabase-verktyget hängde — samma sats i ett `do`-block gick direkt. Väntar: mallen saknar ännu ett textfält som heter "Övrigt" (Gustav).
