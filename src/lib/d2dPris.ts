@@ -34,6 +34,8 @@ export const UTAN_NETFLIX_FALT = "salt_sport_utan_netflix";
 /** TV-paket där TV-boxen ingår utan kostnad (TV Start, TV Bas). */
 export const TV_GRATIS_BOX = new Set(["tv_start", "tv_basic"]);
 /** Kategorier som är engångskostnader (inte per månad). */
+/** Telias egna sportpaket (ingår Netflix → kan väljas "utan Netflix"). TV4/Viaplay-paketen gör det inte. */
+export const SPORT_MED_NETFLIX = new Set(["lilla_sportpaketet", "stora_sportpaketet", "storsta_sportpaketet"]);
 export const ENGANG_FALT = new Set([ROUTER_FALT, TVBOX_FALT]);
 
 let cache: Promise<Prislista> | null = null;
@@ -184,7 +186,7 @@ export function beraknaAvtal(data: Record<string, unknown>, soldFields: FieldDef
       if (f.key === "salt_tv" && !harBredband) { kampanj = ordinarie; not = "utan bredband"; }
       if (f.key === "salt_trygghet" && !harBredband && tal(p.kampanjUtanBredband) != null) { kampanj = tal(p.kampanjUtanBredband); not = "utan bredband"; }
       if (f.key === "salt_trygghet" && harBredband) not = "första månaden gratis";
-      if (f.key === "salt_streaming_sport" && utanNetflix && tal(p.kampanjUtanNetflix) != null) { kampanj = tal(p.kampanjUtanNetflix); not = "utan Netflix"; }
+      if (f.key === "salt_streaming_sport" && utanNetflix && SPORT_MED_NETFLIX.has(val) && tal(p.kampanjUtanNetflix) != null) { kampanj = tal(p.kampanjUtanNetflix); not = "utan Netflix"; }
       // Extraanvändare: priset gäller per användare.
       const st = f.key === "salt_mobil" && val === EXTRA_VAL ? antalExtra(data) : 1;
       if (f.key === "salt_mobil") antalMobil += st;
