@@ -482,3 +482,7 @@
   .d2dp-dagar { height: 90px; gap: 1px; padding: var(--sp-2) 4px; }
   .d2dp-dagar__stapel span em { display: none; }
 }
+
+/* Antal extraanvändare under Mobil i "Vad såldes?" / "Vad ska kunden signera?" */
+.d2d-extra { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.d2d-extra .d2d-knack__btn:disabled { opacity: .4; cursor: default; }
