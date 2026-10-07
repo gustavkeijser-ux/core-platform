@@ -13,10 +13,12 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [Master] Flytta ut områdes-CSS ur `src/app.css` till `src/styles/<omrade>.css`.
 - [Master] Gustav: för "Inbjudan per e-post" på sidan Användare — konfigurera SMTP i Supabase Auth och lägg till `https://crm.connectestate.se` under Redirect URLs.
 - [D2D] Gustav (valfritt): lägg till ett textfält "Antal extraanvändare" i Scrive-mallen om antalet ska stå separat i avtalet (fylls i automatiskt).
+- [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser, och lägg till kryssrutor med de namnen i Scrive-mallen.
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
 ## 2026-10-07
 
+- [D2D] Nya sportpaket i "Vad såldes?" och "Vad ska kunden signera?": TV4 Play Sport Hockey (`tv4_sport_hockey`), TV4 Play Sport Total (`tv4_sport_total`) och All Sport från Viaplay (`viaplay_all_sport`). "Utan Netflix" visas bara för Telias egna sportpaket (`SPORT_MED_NETFLIX`). Scrive: priset hamnar i Kampanjpris/Ordinariepris sportpaket; kryssrutor i mallen som heter "TV4 Play Sport Hockey", "TV4 Play Sport Total" och "All Sport från Viaplay" kryssas, och ett textfält "Sportpaket" får paketets namn. Filer: `D2DSellerApp.tsx`, `src/lib/d2dPris.ts`. Edge: `scrive-sign` v22. DB: valen i fältet `salt_streaming_sport` (`20261007_1010_d2d_sportpaket_tv4_viaplay.sql`). Väntar: priser (Inställningar → Priser) och kryssrutor i Scrive-mallen (Gustav).
 - [D2D] Antal extraanvändare: under Mobil i "Vad såldes?" och "Vad ska kunden signera?" visas en stegräknare "Antal extraanvändare" när "Extra användare" är vald (1–20, startar på 1, försvinner när valet tas bort). Fler extrarader bland mobilnumren höjer antalet automatiskt. Priset för extraanvändare gånger antalet i avtalsförslaget ("Extra användare × 3") och i Scrive-avtalet (mobilpriserna, totalen och "Antal" mobilabonnemang räknar med alla); fältet `mobil_extra_antal` fylls också i om mallen har ett textfält "Antal extraanvändare". Utfall, antal avtal per kund och pinnar/lön räknar antalet. Filer: `D2DSellerApp.tsx`, `MobilNummer.tsx`, `src/lib/d2dPris.ts` (`antalExtra`), `styles/d2d.css` (`.d2d-extra`). Edge: `scrive-sign` v21. DB: fältet `mobil_extra_antal`, `d2d_extra_antal(d)`; `d2d_utfall`, `d2d_utfall_kalla`, `d2d_antal_avtal`, `d2d_pinnar_rader` (`20261007_0930_d2d_antal_extraanvandare.sql`).
 
 ## 2026-10-06
