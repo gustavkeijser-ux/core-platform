@@ -6,12 +6,13 @@ import {
   type CaseAttachment, type CaseCategory, type CaseDetail, type CaseMessage,
   PRIORITIES, SLA_META, SOURCE_LABEL,
   assignableUsers, attachmentUrl, caseAddNote, caseCategories, caseLink, caseReply, caseSet, caseSetDeadline,
-  caseSetCustomerEmail, fmtDateTime, formatBytes, getCase, getMessageHtml, relTime, searchLinkTargets, sendQueued,
+  caseSetBevakare, caseSetCustomerEmail, caseSetTelia, fmtDateTime, formatBytes, getCase, getMessageHtml, relTime, searchLinkTargets, sendQueued,
 } from "@/lib/cases";
 import { StatusPill } from "./StatusPill";
-import { KanalIkon, PriorityTag, deadlineText } from "./CasesPage";
+import { KanalIkon, PAUSAD, PriorityTag, deadlineText } from "./CasesPage";
 import { useUserName } from "@/lib/users";
 import { supabase } from "@/integrations/supabase/client";
+import "@/styles/arenden.css";
 
 /**
  * Ett ärende. Byggd för att en handläggare inom 3 sekunder ska se:
@@ -148,6 +149,9 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
   const data = c.data;
   const lagenhet = d.related.find((r) => r.relType === "case_lagenhet");
   const fastighet = d.related.find((r) => r.relType === "case_property");
+  const d2dAdress = d.related.find((r) => r.relType === "case_d2d_fastighet");
+  const felanmalan = data.channel === "d2d";
+  const bevakare: string[] = Array.isArray(data.bevakare) ? data.bevakare : [];
   const lastEmail = [...d.messages].reverse().find((m) => m.channel === "email");
   const lastMsg = d.messages.length ? [...d.messages].sort((x, y) => x.occurredAt.localeCompare(y.occurredAt))[d.messages.length - 1] : undefined;
   const lastMsgId = lastMsg?.id;
@@ -171,6 +175,8 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
     next = { text: `Väntar på kundens svar sedan ${fmtDateTime(lastEmail?.occurredAt)}.`, tone: "wait" };
   } else if (c.status === "waiting_internal") {
     next = { text: "Väntar på internt svar — följ upp med kollegan.", tone: "wait" };
+  } else if (c.status === "waiting_telia") {
+    next = { text: `Väntar på Telia${data.telia_arendenr ? ` (ärende ${data.telia_arendenr})` : ""} — SLA-klockan står still. Följ upp med Telia om inget hänt.`, tone: "wait" };
   } else if (c.status === "waiting_contractor") {
     next = { text: "Väntar på entreprenören — följ upp om inget hänt.", tone: "wait" };
   } else if (c.status === "resolved") {
@@ -198,22 +204,28 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
           <KanalIkon kanal={data.channel as string} /> {d.categoryLabel ?? "Ingen kategori"} · anmält {fmtDateTime(c.created_at)}
         </div>
 
-        <StatusSteg status={c.status} deadline={resDue} ansvarig={c.owner_user_id} atgard={data.planerad_atgard as string | undefined} />
+        <StatusSteg status={c.status} paused={!!d.sla.paused} deadline={resDue} ansvarig={c.owner_user_id} atgard={data.planerad_atgard as string | undefined} />
 
         {/* De sju frågorna, på en rad */}
         <div className="case__facts">
-          <Fact label="Kund">
-            {data.kund_epost ? <a href={`mailto:${data.kund_epost}`}>{data.kund_epost}</a> : <span className="ink-faint">Okänd</span>}
-          </Fact>
-          <Fact label="Fastighet / lägenhet">
-            {fastighet || lagenhet
-              ? <>{fastighet?.title ?? ""}{fastighet && lagenhet ? " · " : ""}{lagenhet ? data.lagenhet_namn ?? lagenhet.title : ""}</>
+          {felanmalan ? (
+            <Fact label="Anmäld av"><AnmaldAv id={data.anmald_av as string | undefined} /></Fact>
+          ) : (
+            <Fact label="Kund">
+              {data.kund_epost ? <a href={`mailto:${data.kund_epost}`}>{data.kund_epost}</a> : <span className="ink-faint">Okänd</span>}
+            </Fact>
+          )}
+          <Fact label={felanmalan ? "Adress / lägenhet" : "Fastighet / lägenhet"}>
+            {fastighet || lagenhet || d2dAdress
+              ? <>{d2dAdress?.title ?? fastighet?.title ?? ""}{(d2dAdress || fastighet) && lagenhet ? " · " : ""}{lagenhet ? data.lagenhet_namn ?? lagenhet.title : ""}</>
               : <span className="ink-faint">Ej kopplad</span>}
           </Fact>
           <Fact label="Status">
             <StatusPill status={c.status} def={statusDef.get(c.status)} /> <PriorityTag p={data.priority ?? "normal"} />
           </Fact>
-          {(firstDue || resDue) && (
+          {d.sla.paused ? (
+            <Fact label="Svarstider"><span className="ink-faint">Pausade — väntar på Telia</span></Fact>
+          ) : (firstDue || resDue) && (
             <Fact label="Svarstider">
               <SlaLine label="Svar" state={d.sla.firstResponse} due={firstDue} doneAt={data.first_response_at} />
               <SlaLine label="Lösning" state={d.sla.resolution} due={resDue} doneAt={data.resolved_at} />
@@ -285,6 +297,14 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
               )}
             </div>
 
+            <label className="label" htmlFor="cs-telia">Ärendenummer hos Telia</label>
+            <TextSave id="cs-telia" value={(data.telia_arendenr as string | undefined) ?? ""} disabled={!d.canUpdate}
+              placeholder="T.ex. 1-23456789" onSave={(v) => act(() => caseSetTelia(c.id, v))} />
+
+            <span className="label">Bevakare</span>
+            <BevakareEditor value={bevakare} users={users} disabled={!d.canUpdate}
+              onSave={(v) => act(() => caseSetBevakare(c.id, v))} />
+
             <label className="label" htmlFor="cs-dl">Deadline</label>
             <DeadlineEditor value={resDue ?? null} disabled={!d.canUpdate} onSave={(v) => act(() => caseSetDeadline(c.id, v))} />
 
@@ -292,7 +312,8 @@ export function CaseView({ caseId, statuses, onBack, onOpenCase }: Props) {
             <select id="cs-cat" className="input" value={data.category ?? ""} disabled={!d.canUpdate}
               onChange={(e) => e.target.value && void act(() => caseSet(c.id, { category: e.target.value }))}>
               <option value="">Välj kategori…</option>
-              {cats.filter((x) => !x.parent_key).map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+              {cats.filter((x) => !x.parent_key && (!!x.felanmalan === felanmalan || x.key === data.category))
+                .map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
             </select>
             {data.category && (
               <select className="input" value={data.subcategory ?? ""} disabled={!d.canUpdate} aria-label="Underkategori"
@@ -601,6 +622,54 @@ const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Compose
   );
 });
 
+function AnmaldAv({ id }: { id?: string }) {
+  const name = useUserName(id ?? null);
+  return id ? <>{name}</> : <span className="ink-faint">Okänd</span>;
+}
+
+/** Textfält som sparas när man lämnar det (Enter sparar också). */
+function TextSave({ id, value, disabled, placeholder, onSave }: {
+  id: string; value: string; disabled: boolean; placeholder?: string; onSave: (v: string) => Promise<void>;
+}) {
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
+  return (
+    <input id={id} className="input" value={v} disabled={disabled} placeholder={placeholder}
+      onChange={(e) => setV(e.target.value)}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      onBlur={() => { if (v.trim() !== value) void onSave(v.trim()); }} />
+  );
+}
+
+/** Bevakare: valda personer som chips, lägg till via listan. */
+function BevakareEditor({ value, users, disabled, onSave }: {
+  value: string[]; users: Array<{ id: string; name: string }>; disabled: boolean; onSave: (v: string[]) => Promise<void>;
+}) {
+  const namn = (id: string) => users.find((u) => u.id === id)?.name ?? "Okänd";
+  const kvar = users.filter((u) => !value.includes(u.id));
+  return (
+    <div className="bevakare">
+      {value.length === 0 && <span className="ink-faint bevakare__tom">Inga bevakare</span>}
+      {value.map((id) => (
+        <span key={id} className="bevakare__chip">
+          {namn(id)}
+          {!disabled && (
+            <button type="button" aria-label={`Ta bort ${namn(id)} som bevakare`}
+              onClick={() => void onSave(value.filter((x) => x !== id))}>×</button>
+          )}
+        </span>
+      ))}
+      {!disabled && kvar.length > 0 && (
+        <select className="input bevakare__add" value="" aria-label="Lägg till bevakare"
+          onChange={(e) => e.target.value && void onSave([...value, e.target.value])}>
+          <option value="">+ Lägg till…</option>
+          {kvar.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
 function EmailEditor({ value, disabled, onSave }: { value: string; disabled: boolean; onSave: (v: string) => Promise<void> }) {
   const [v, setV] = useState(value);
   useEffect(() => setV(value), [value]);
@@ -667,14 +736,14 @@ function LinkPicker({ label, type, current, disabled, onPick }: {
 const STEG: Array<{ label: string; keys: string[] }> = [
   { label: "Mottagen", keys: ["new"] },
   { label: "Pågående", keys: ["assigned", "in_progress"] },
-  { label: "Väntar på svar", keys: ["waiting_customer", "waiting_internal", "waiting_contractor"] },
+  { label: "Väntar på svar", keys: ["waiting_customer", "waiting_internal", "waiting_contractor", "waiting_telia"] },
   { label: "Avslutad", keys: ["resolved", "closed"] },
 ];
 
-function StatusSteg({ status, deadline, ansvarig, atgard }: { status: string; deadline?: string; ansvarig: string | null; atgard?: string }) {
+function StatusSteg({ status, paused, deadline, ansvarig, atgard }: { status: string; paused?: boolean; deadline?: string; ansvarig: string | null; atgard?: string }) {
   const idx = Math.max(0, STEG.findIndex((s) => s.keys.includes(status)));
   const avslutad = idx === 3;
-  const dl = deadlineText(deadline, avslutad);
+  const dl = paused ? PAUSAD : deadlineText(deadline, avslutad);
   const namn = useUserName(ansvarig);
   return (
     <div className="steg">
