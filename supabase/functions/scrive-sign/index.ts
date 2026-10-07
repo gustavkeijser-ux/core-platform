@@ -267,7 +267,8 @@ Deno.serve(async (req: Request) => {
     try {
       const filter = encodeURIComponent(JSON.stringify([{ filter_by: "is_template" }]));
       const l = await scriveJson(`/documents/list?max=50&filter=${filter}`);
-      const mallar = (l.documents ?? []).map((d: any) => ({ id: String(d.id), titel: d.title }));
+      const mallar = (l.documents ?? []).map((d: any) => ({ id: String(d.id), titel: d.title, andrad: d.mtime,
+        papperskorg: d.is_trashed === true || d.is_deleted === true }));
       const mall = mallFor();
       // Granska en eller flera mallar: hur många av mallens fält känner vi igen?
       const granska: string[] = Array.isArray(b.granska) ? b.granska.map(String) : mall ? [mall] : [];
@@ -275,7 +276,7 @@ Deno.serve(async (req: Request) => {
       for (const id of granska.slice(0, 6)) {
         try {
           const d = await scriveJson(`/documents/${encodeURIComponent(id)}/get`);
-          const falt = (d.parties ?? []).flatMap((p: any) => (p.fields ?? []).filter((f: any) => f.type === "text" || f.type === "checkbox"));
+          const falt = (d.parties ?? []).flatMap((p: any) => (p.fields ?? []).filter((f: any) => f.type === "text" || f.type === "multi_line_text" || f.type === "checkbox"));
           const namn = falt.map((f: any) => String(f.name ?? ""));
           const kanda = new Set([...Object.values(ALIAS), ...Object.values(KRYSS), "bindningstid", "kampanjperiod", "startdatum",
             "gatuadress", "lagenhetsnummer", "telefon", "epost", "namn", "personnummer", "ort", "datum", "sport_utan_netflix", "sport_namn", "ovrigt"]);
@@ -402,7 +403,8 @@ Deno.serve(async (req: Request) => {
       const hittade = new Set<string>();
       for (const p of doc.parties ?? []) {
         for (const f of p.fields ?? []) {
-          if (f.type !== "text" && f.type !== "checkbox") continue;
+          // Textfält (en rad eller flera, t.ex. "Övrigt") och kryssrutor.
+          if (f.type !== "text" && f.type !== "multi_line_text" && f.type !== "checkbox") continue;
           const k = faltnyckel(String(f.name ?? ""));
           if (f.type === "checkbox") {
             // Alla kryssrutor sätts: ikryssad om tjänsten valts, annars tom.
