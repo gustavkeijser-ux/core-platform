@@ -35,7 +35,15 @@ const json = (body: unknown, status = 200) =>
 // ── Prisberäkning (samma regler som src/lib/d2dPris.ts) ────────────────
 
 type Field = { key: string; label: string; field_type: string; options: any };
-type Rad = { falt: string; val: string; label: string; kampanj: number | null; ordinarie: number | null };
+type Rad = { falt: string; val: string; label: string; kampanj: number | null; ordinarie: number | null; antal?: number };
+
+/** Antal extraanvändare (samma regel som src/lib/d2dPris.ts och d2d_extra_antal i databasen). */
+function antalExtra(data: Record<string, any>): number {
+  const n = Number(data.mobil_extra_antal);
+  const angivet = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+  const rader = Array.isArray(data.mobil_nummer?.rows) ? data.mobil_nummer.rows.filter((r: any) => r?.typ === "extra").length : 0;
+  return Math.max(angivet, rader);
+}
 const tal = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 
@@ -74,7 +82,10 @@ function berakna(data: Record<string, any>, fields: Field[], lista: any) {
       if (f.key === "salt_tv" && !bb) k = o;
       if (f.key === "salt_trygghet" && !bb && tal(p.kampanjUtanBredband) != null) k = tal(p.kampanjUtanBredband);
       if (f.key === "salt_streaming_sport" && utanNetflix && tal(p.kampanjUtanNetflix) != null) k = tal(p.kampanjUtanNetflix);
-      manad.push({ falt: f.key, val, label, kampanj: k ?? o, ordinarie: o ?? k });
+      // Extraanvändare: priset gäller per användare.
+      const st = f.key === "salt_mobil" && val === "extra_anvandare" ? antalExtra(data) : 1;
+      const ggr = (x: number | null) => (x == null ? null : x * st);
+      manad.push({ falt: f.key, val, label: st > 1 ? `${label} × ${st}` : label, kampanj: ggr(k ?? o), ordinarie: ggr(o ?? k), antal: st });
     }
   }
   // TV-box ingår alltid i alla TV-paket: 0 kr för TV Start/TV Bas, annars prislistan.
@@ -118,7 +129,9 @@ const ALIAS: Record<string, string> = {
   kostnad_router: "router_kostnad", kostnad_tv_box: "tvbox_kostnad",
   kampanjpris_streaming: "film_kampanj", ordinariepris_streaming: "film_ordinarie",
   kampanjpris_sportpaket: "sport_kampanj", ordinariepris_sportpaket: "sport_ordinarie",
-  antal: "mobil_antal", kampanjpris_mobilabonnemang: "mobil_kampanj", ordinariepris_mobilabonnemang: "mobil_ordinarie",
+  antal: "mobil_antal",
+  antal_extraanvandare: "mobil_extra_antal", antal_extra_anvandare: "mobil_extra_antal", extraanvandare_antal: "mobil_extra_antal",
+  antal_extraanvandare_mobil: "mobil_extra_antal", extra_anvandare_antal: "mobil_extra_antal", kampanjpris_mobilabonnemang: "mobil_kampanj", ordinariepris_mobilabonnemang: "mobil_ordinarie",
   kampanjpris_trygghetspaket: "trygghet_kampanj", ordinariepris_trygghetspaket: "trygghet_ordinarie",
   total_manadskostnad_kampanjpris: "total_kampanj", total_manadskostnad_ord_pris: "total_ordinarie",
   tjansteleverantor: "leverantor",
@@ -150,8 +163,10 @@ function avtalsfalt(data: Record<string, any>, a: ReturnType<typeof berakna>, li
   }
   for (const [k, n] of Object.entries(summa)) v[k] = kr(n);
   if (v.mobil_plus_1_streaming || v.mobil_plus_3_streaming) v.mobil_plus_streaming = "X";
-  const mobil = a.manad.filter((r) => r.falt === "salt_mobil").length;
+  const mobil = a.manad.filter((r) => r.falt === "salt_mobil").reduce((n, r) => n + (r.antal ?? 1), 0);
   if (mobil) v.mobil_antal = String(mobil);
+  const extra = a.manad.find((r) => r.falt === "salt_mobil" && r.val === "extra_anvandare");
+  if (extra) v.mobil_extra_antal = String(extra.antal ?? 1);
   const router = a.engang.find((r) => r.falt === "salt_router");
   const tvbox = a.engang.find((r) => r.falt === "salt_tvbox");
   if (a.bb) { v[router ? "router_ja" : "router_nej"] = "X"; if (router) v.router_kostnad = kr(router.kampanj); }
