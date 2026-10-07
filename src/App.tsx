@@ -79,7 +79,8 @@ function viewFromSegs(segs: string[]): View {
 }
 
 const CASE_FILTERS: CaseFilter[] = ["open", "all", "new", "mine", "unassigned", "in_progress", "waiting_customer",
-  "waiting_internal", "waiting_contractor", "resolved", "closed", "overdue", "waiting"];
+  "waiting_internal", "waiting_contractor", "resolved", "closed", "overdue", "waiting",
+  "waiting_telia", "felanmalan", "felanmalan_alla"];
 
 const segsFromView = (v: View): string[] =>
   v.kind === "list" ? ["list", v.objectType]
