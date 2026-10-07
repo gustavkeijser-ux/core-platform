@@ -26,6 +26,7 @@ const VYER: Array<{ key: CaseFilter; label: string }> = [
   { key: "overdue", label: "Försenade" },
   { key: "waiting", label: "Väntar på svar" },
   { key: "unassigned", label: "Ej tilldelade" },
+  { key: "felanmalan", label: "Felanmälningar" },
   { key: "closed", label: "Avslutade" },
 ];
 
@@ -84,7 +85,7 @@ export function PriorityTag({ p }: { p: string }) {
 /** Hur ärendet kom in — liten ikon med text som verktygstips. */
 export function KanalIkon({ kanal }: { kanal: string | null | undefined }) {
   const t = kanal ?? "";
-  const titel = { email: "E-post", phone: "Telefon", app: "App", web: "Webb", sms: "SMS", internal: "Internt" }[t] ?? "Okänd kanal";
+  const titel = { email: "E-post", phone: "Telefon", app: "App", web: "Webb", sms: "SMS", internal: "Internt", d2d: "Door to door (felanmälan)" }[t] ?? "Okänd kanal";
   return (
     <span className="kanal" title={titel} aria-label={titel}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -92,11 +93,15 @@ export function KanalIkon({ kanal }: { kanal: string | null | undefined }) {
           : t === "phone" ? <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" />
           : t === "app" || t === "sms" ? <><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18h2" /></>
           : t === "web" ? <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>
+          : t === "d2d" ? <><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></>
           : <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>}
       </svg>
     </span>
   );
 }
+
+/** Under "Väntar på Telia" står SLA-klockan still — ingen deadline att visa. */
+export const PAUSAD = { text: "Pausad (Telia)", ton: "none" as const };
 
 /** Deadline som text: "Försenad 2 d", "Idag 16:00", "Imorgon", "Fre 10 okt". */
 export function deadlineText(iso: string | null | undefined, avslutad = false): { text: string; ton: "late" | "soon" | "ok" | "none" } {
@@ -380,7 +385,7 @@ export function CasesPage({ filter, statuses, onFilter, onOpenCase, onCreate }: 
               <tbody>
                 {items.map((c, i) => {
                   const avslutad = c.status === "resolved" || c.status === "closed";
-                  const dl = deadlineText(c.nextDue ?? c.deadline, avslutad);
+                  const dl = c.status === "waiting_telia" ? PAUSAD : deadlineText(c.nextDue ?? c.deadline, avslutad);
                   const plats = [c.fastighet, c.lagenhet].filter(Boolean).join(" · ");
                   return (
                     <tr
