@@ -6,6 +6,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## Öppna punkter
 
+- [D2D] Gustav: döp textfältet för övrigt i Scrive-mallen till exakt "Övrigt" (mall 9222115557591481195 har inget fält med det namnet ännu).
 - [D2D] Gustav: ta bort secret `SCRIVE_TEMPLATE_ID` i Supabase (mall-id ligger nu i databasen, migration 0057).
 - [D2D] Gustav: lägg till kryssrutorna "TV Start" och "TV Mini" i Scrive-mallen.
 - [D2D] Gustav: rotera Scrive-nycklarna (de har synts i en chatt).
@@ -18,6 +19,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## 2026-10-07
 
+- [D2D] Scrive: ny mall `9222115557591481195` (fältnamn i klartext — "Streaming Mer", "Sport – kampanjpris", "Mobil – antal" m.fl. — alla 50 fält känns igen) och fältet "Övrigt (står i avtalet)" (`scrive_ovrigt`) under Kunduppgifter vid Signera med Scrive; texten skrivs i mallens textfält "Övrigt". Mall-id läses nu i första hand från `scrive_installningar` (secret `SCRIVE_TEMPLATE_ID` är reserv). Åtgärden "test" visar alla mallens fält och vad de kopplas till. Filer: `D2DSellerApp.tsx` (`KUND_FALT`). Edge: `scrive-sign` v23. DB: `scrive_installningar.mall_id`, fältet `scrive_ovrigt` (`20261007_1120_d2d_scrive_ovrigt_ny_mall.sql`). Obs: en ensam UPDATE via Supabase-verktyget hängde — samma sats i ett `do`-block gick direkt. Väntar: mallen saknar ännu ett textfält som heter "Övrigt" (Gustav).
 - [D2D] Nya sportpaket i "Vad såldes?" och "Vad ska kunden signera?": TV4 Play Sport Hockey (`tv4_sport_hockey`), TV4 Play Sport Total (`tv4_sport_total`) och All Sport från Viaplay (`viaplay_all_sport`). "Utan Netflix" visas bara för Telias egna sportpaket (`SPORT_MED_NETFLIX`). Scrive: priset hamnar i Kampanjpris/Ordinariepris sportpaket; kryssrutor i mallen som heter "TV4 Play Sport Hockey", "TV4 Play Sport Total" och "All Sport från Viaplay" kryssas, och ett textfält "Sportpaket" får paketets namn. Filer: `D2DSellerApp.tsx`, `src/lib/d2dPris.ts`. Edge: `scrive-sign` v22. DB: valen i fältet `salt_streaming_sport` (`20261007_1010_d2d_sportpaket_tv4_viaplay.sql`). Väntar: priser (Inställningar → Priser) och kryssrutor i Scrive-mallen (Gustav).
 - [D2D] Antal extraanvändare: under Mobil i "Vad såldes?" och "Vad ska kunden signera?" visas en stegräknare "Antal extraanvändare" när "Extra användare" är vald (1–20, startar på 1, försvinner när valet tas bort). Fler extrarader bland mobilnumren höjer antalet automatiskt. Priset för extraanvändare gånger antalet i avtalsförslaget ("Extra användare × 3") och i Scrive-avtalet (mobilpriserna, totalen och "Antal" mobilabonnemang räknar med alla); fältet `mobil_extra_antal` fylls också i om mallen har ett textfält "Antal extraanvändare". Utfall, antal avtal per kund och pinnar/lön räknar antalet. Filer: `D2DSellerApp.tsx`, `MobilNummer.tsx`, `src/lib/d2dPris.ts` (`antalExtra`), `styles/d2d.css` (`.d2d-extra`). Edge: `scrive-sign` v21. DB: fältet `mobil_extra_antal`, `d2d_extra_antal(d)`; `d2d_utfall`, `d2d_utfall_kalla`, `d2d_antal_avtal`, `d2d_pinnar_rader` (`20261007_0930_d2d_antal_extraanvandare.sql`).
 
