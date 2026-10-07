@@ -86,6 +86,10 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch }: Props) 
     if (next.some((r) => r.typ === "extra") && !mobil.includes("extra_anvandare")) {
       patch.salt_mobil = [...mobil, "extra_anvandare"];
     }
+    // Fler extrarader än angivet antal extraanvändare → antalet följer med.
+    const extra = next.filter((r) => r.typ === "extra").length;
+    const angivet = Number(data.mobil_extra_antal) || 0;
+    if (extra > angivet) patch.mobil_extra_antal = extra;
     onPatch(patch, delay);
   };
   const setCell = (i: number, key: keyof Omit<NummerRad, "typ">, v: string) =>
