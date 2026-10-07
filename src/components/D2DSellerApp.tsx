@@ -13,7 +13,7 @@ import { MobilNummerPanel } from "./MobilNummer";
 import { AvtalsSammanfattning } from "./D2DAvtal";
 import { ScriveSignering } from "./D2DScrive";
 import { BindningPanel, EjMerPanel } from "./D2DBindning";
-import { UTAN_NETFLIX_FALT, EXTRA_ANTAL_FALT, EXTRA_VAL, antalExtra } from "@/lib/d2dPris";
+import { UTAN_NETFLIX_FALT, SPORT_MED_NETFLIX, EXTRA_ANTAL_FALT, EXTRA_VAL, antalExtra } from "@/lib/d2dPris";
 import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
 
@@ -1400,7 +1400,7 @@ function LagenhetForm({
                   </div>
                 );
               })()}
-              {f.key === "salt_streaming_sport" && !!data[f.key] && (
+              {f.key === "salt_streaming_sport" && SPORT_MED_NETFLIX.has(String(data[f.key] ?? "")) && (
                 <button
                   type="button"
                   aria-pressed={data[UTAN_NETFLIX_FALT] === true}
