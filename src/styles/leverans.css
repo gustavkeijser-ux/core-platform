@@ -1,0 +1,119 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Leverans — områdets egen CSS. Bara tokens från src/tokens.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Kortvy i leveranslistan (LeveransKort.tsx) ─────────────────────────── */
+
+.lev-kort-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-4);
+  transition: opacity var(--dur) var(--ease);
+}
+.lev-kort-grid.is-loading { opacity: .55; }
+
+.lev-kort {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.lev-kort:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+.lev-kort:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.lev-kort__topp { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 32px; }
+
+.lev-kort__ta-bort {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; margin: -4px -6px -4px 0;
+  border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--ink-ghost);
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.lev-kort__ta-bort:hover, .lev-kort__ta-bort:focus-visible { color: var(--danger-ink); background: var(--danger-soft); }
+
+.lev-kort__huvud { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lev-kort__titel {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.lev-kort__adress {
+  display: flex; align-items: flex-start; gap: 5px;
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.lev-kort__adress svg { flex-shrink: 0; margin-top: 2px; color: var(--ink-faint); }
+.lev-kort__agare { margin: 0; font-size: var(--text-xs); color: var(--ink-muted); overflow-wrap: anywhere; }
+
+.lev-kort__etikett { font-size: var(--text-xs); color: var(--ink-muted); font-weight: 500; }
+.lev-kort__tom { color: var(--ink-ghost) !important; font-weight: 500 !important; }
+
+.lev-kort__siffror { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, .8fr) minmax(0, 1.2fr) minmax(0, 1.2fr); gap: 6px; }
+.lev-kort__siffra {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+  padding: var(--sp-2) 10px;
+  background: var(--surface-sunk);
+  border-radius: var(--r-box);
+}
+.lev-kort__varde {
+  font-size: var(--text-sm); font-weight: 600; line-height: 1.25; color: var(--ink);
+  overflow-wrap: anywhere;
+  padding-top: 3px;
+}
+.lev-kort__varde--stor {
+  font-family: var(--font-display);
+  font-size: var(--text-xl); font-weight: 800; line-height: 1.15;
+  color: var(--brand-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-top: 0;
+}
+
+.lev-kort__personer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+.lev-kort__person { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.lev-kort__person-text { display: flex; flex-direction: column; min-width: 0; }
+.lev-kort__namn {
+  font-size: var(--text-sm); font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lev-kort__avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--brand-tint); color: var(--brand-ink);
+  font-family: var(--font-display); font-size: var(--text-xs); font-weight: 800;
+}
+.lev-kort__avatar--tom {
+  background: transparent; color: var(--ink-ghost);
+  border: 1.5px dashed var(--border-input);
+  font-size: var(--text-base); font-weight: 600;
+}
+
+.lev-kort__avi { display: flex; flex-direction: column; gap: 6px; margin-top: auto; padding-top: var(--sp-3); border-top: 1px solid var(--divider); }
+.lev-kort__avi-rubrik { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-sm); font-weight: 600; color: var(--ink); }
+.lev-kort__avi-steg { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.lev-kort__avi-steg li { display: flex; flex-direction: column; gap: 4px; }
+.lev-kort__avi-stapel { height: 5px; border-radius: var(--r-pill); background: var(--neutral-soft); }
+.lev-kort__avi-text { font-size: var(--text-xs); color: var(--ink-faint); }
+.lev-kort__avi-steg li.is-klar .lev-kort__avi-stapel { background: var(--brand); }
+.lev-kort__avi-steg li.is-klar .lev-kort__avi-text { color: var(--ink); font-weight: 600; }
+
+@media (max-width: 640px) {
+  .lev-kort-grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+  .lev-kort { padding: 14px; }
+  .lev-kort__siffra { padding: 7px 8px; }
+  .lev-kort__varde--stor { font-size: var(--text-lg); }
+}
