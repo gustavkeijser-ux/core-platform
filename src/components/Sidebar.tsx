@@ -107,8 +107,9 @@ const CASE_VIEWS: Array<{ key: string; label: string; count?: string; alert?: bo
   { key: "unassigned", label: "Ej tilldelade", count: "unassigned" },
   { key: "felanmalan", label: "Felanmälningar", count: "felanmalan" },
 ];
-/** Ärenden har egen inkorg under Kundservice (inte den generiska listan). */
-const OWN_VIEW = new Set(["case"]);
+/** Egna vyer i stället för den generiska listan: ärenden (inkorg under Kundservice)
+ *  och Leveransöversikt-posterna (redigeras från korten i Leveransöversikten). */
+const OWN_VIEW = new Set(["case", "leveransoversikt"]);
 
 /* ── Inline SVG-ikoner (16 × 16, currentColor) ───────────────────────── */
 
@@ -488,6 +489,16 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                       >
                         {o.labelPlural}
                       </button>
+                      {/* Leveransöversikt (kort per fastighetsägare) direkt under Projektplanen */}
+                      {o.key === "delivery" && (
+                        <button
+                          className="sidebar__item sidebar__item--child"
+                          aria-current={activeKey === "__leveransoversikt__"}
+                          onClick={() => selectAndClose("__leveransoversikt__")}
+                        >
+                          Leveransöversikt
+                        </button>
+                      )}
                       {/* FMO-check direkt under Affärer (administratörer) */}
                       {o.key === "deal" && isAdmin && (
                         <button

@@ -10,7 +10,7 @@ import { StatusPill } from "./StatusPill";
 import { RecordDrawer } from "./RecordDrawer";
 import { KanbanBoard } from "./KanbanBoard";
 import { LeveransKort } from "./LeveransKort";
-import { LeveransAgareKort, hamtaAgareOversikt, agareFilter, INGEN_AGARE, type AgareGrupp } from "./LeveransAgareKort";
+import { LeveransAgareKort, hamtaAgareOversikt, agareFilter, gruppNyckel, type AgareGrupp } from "./LeveransAgareKort";
 import { ColumnConfigPanel } from "./ColumnConfigPanel";
 import { FilterBar } from "./FilterBar";
 import { ColumnFilter, kolumnVal } from "./ColumnFilter";
@@ -38,6 +38,9 @@ type Props = {
   onDataChanged?: () => void;
   /** Bara dessa fält som kolumner, i den här ordningen (ingen titel/status-kolumn). */
   fastaKolumner?: string[];
+  /** Leveransöversikten: bara kortvyn (ett kort per fastighetsägare → ägarens
+   *  fastighetskort), ingen lista/kanban. Gäller objekttypen `delivery`. */
+  kortvy?: boolean;
   /** Väljarläge: bocka i poster (t.ex. leveranser som ska ingå i ett D2D-projekt).
    *  Raden växlar valet i stället för att öppna posten. */
   picker?: {
@@ -54,8 +57,11 @@ type ListMode = "list" | "kanban" | "kort";
 type SavedListState = {
   mode: ListMode; page: number; search: string; status: string;
   filters: RecordFilter[]; sort: { field: string; dir: "asc" | "desc" } | null; activeViewId: string;
-  /** Kortvyn för leveranser: vald fastighetsägare ("" = översikten). */
+  /** Leveransöversikten: valt kort (Kund-id, "post:<id>" eller "__ingen__"; "" = översikten). */
   agare?: string;
+  /** Valt korts namn och Leveransöversikt-post (för rubriken och "Öppna"). */
+  agareNamn?: string;
+  agarePost?: string | null;
 };
 
 const PAGE_SIZE = 25;
@@ -154,19 +160,21 @@ function columnLayout(def: ObjectDef, columns: FieldDef[]): Cell[] {
   return out;
 }
 
-export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, reloadKey, baseFilters, stateKeySuffix, countsOverride, banner, onDataChanged, fastaKolumner, picker }: Props) {
+export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, reloadKey, baseFilters, stateKeySuffix, countsOverride, banner, onDataChanged, fastaKolumner, picker, kortvy }: Props) {
   // Listans läge (sida, sök, filter, sortering, vy) sparas per objekttyp så
   // man kommer tillbaka till exakt samma läge efter menybyte/omladdning.
   const stateKey = `list:${objectDef.key}${stateKeySuffix ?? ""}`;
   const [saved] = useState(() => loadListState<SavedListState>(stateKey));
-  // Leveranser har en kortvy (LeveransKort) som är standard; övriga typer lista/kanban.
-  const harKort = objectDef.key === "delivery" && !picker;
-  const [modeState, setMode] = useState<ListMode>(saved.mode ?? (harKort ? "kort" : "list"));
-  const mode: ListMode = picker ? "list" : modeState === "kort" && !harKort ? "list" : modeState;
+  // Leveransöversikten visar bara kortvyn; Projektplanen (och övriga typer) lista/kanban.
+  const harKort = !!kortvy && objectDef.key === "delivery" && !picker;
+  const [modeState, setMode] = useState<ListMode>(saved.mode ?? "list");
+  const mode: ListMode = harKort ? "kort" : picker ? "list" : modeState === "kort" ? "list" : modeState;
   const [showColumns, setShowColumns] = useState(false);
   const [items, setItems] = useState<RecordRow[]>([]);
   // Kortvyn: först ett kort per fastighetsägare, sedan ägarens leveranser.
   const [agare, setAgare] = useState<string>(saved.agare ?? "");
+  const [agareNamn, setAgareNamn] = useState<string>(saved.agareNamn ?? "");
+  const [agarePost, setAgarePost] = useState<string | null>(saved.agarePost ?? null);
   const [grupper, setGrupper] = useState<AgareGrupp[]>([]);
   const visarAgare = mode === "kort" && !agare;
   const [total, setTotal] = useState(0);
@@ -368,8 +376,8 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
 
   // Spara läget varje gång det ändras.
   useEffect(() => {
-    saveListState<SavedListState>(stateKey, { mode, page, search, status, filters, sort, activeViewId, agare });
-  }, [stateKey, mode, page, search, status, filters, sort, activeViewId, agare]);
+    saveListState<SavedListState>(stateKey, { mode, page, search, status, filters, sort, activeViewId, agare, agareNamn, agarePost });
+  }, [stateKey, mode, page, search, status, filters, sort, activeViewId, agare, agareNamn, agarePost]);
 
   // Första renderingen återställer ett sparat läge — då ska sidnumret
   // INTE nollställas av filter/sök-effekterna nedan.
@@ -387,7 +395,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   }, [search]);
 
   // Tillbaka till raden man öppnade senast.
-  const returnKey = `list:${objectDef.key}`;
+  const returnKey = `list:${objectDef.key}${harKort ? ":oversikt" : ""}`;
   const returnRow = useReturnToRow(returnKey, !loading && (mode === "list" || mode === "kort"));
   const openRow = (id: string) => { rememberRow(returnKey, id); onOpenRecord(id); };
 
@@ -523,9 +531,8 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
               Live
             </span>
           )}
-          {hasStatuses && !picker && (
+          {hasStatuses && !picker && !harKort && (
             <div className="view-toggle">
-              {harKort && <button className="view-toggle__btn" aria-current={mode === "kort"} onClick={() => setMode("kort")}>Kort</button>}
               <button className="view-toggle__btn" aria-current={mode === "list"} onClick={() => setMode("list")}>Lista</button>
               <button className="view-toggle__btn" aria-current={mode === "kanban"} onClick={() => setMode("kanban")}>Kanban</button>
             </div>
@@ -853,15 +860,24 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
                 objectDef={objectDef}
                 grupper={grupper}
                 loading={loading}
-                onOpen={(a) => { setItems([]); setTotal(0); setPage(0); setAgare(a); window.scrollTo({ top: 0 }); }}
+                onOpen={(g) => {
+                  setItems([]); setTotal(0); setPage(0);
+                  setAgareNamn(g.kund ?? "Ingen kund kopplad"); setAgarePost(g.post_id); setAgare(gruppNyckel(g));
+                  window.scrollTo({ top: 0 });
+                }}
               />
       )}
 
       {!error && mode === "kort" && agare && (
         <div className="lev-agare-rubrik">
           <button className="btn btn--ghost btn--sm" onClick={() => { setPage(0); setAgare(""); }}>← Alla fastighetsägare</button>
-          <h2 className="lev-agare-rubrik__titel">{agare === INGEN_AGARE ? "Ingen fastighetsägare" : agare}</h2>
+          <h2 className="lev-agare-rubrik__titel">{agareNamn || "Leveranser"}</h2>
           {!loading && <span className="lev-agare-rubrik__antal">{total} {total === 1 ? "fastighet" : "fastigheter"}</span>}
+          {agarePost && (
+            <button className="btn btn--sm lev-agare-rubrik__oppna" onClick={() => onOpenRecord(agarePost)}>
+              Öppna leveransöversikt
+            </button>
+          )}
         </div>
       )}
 
