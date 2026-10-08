@@ -674,6 +674,71 @@ function RingIkon() {
   );
 }
 
+/** Ordning för segmenten i fastighetens progressbar — mest "klart" först
+ *  (Såld, Scrive) så den gröna delen växer från vänster när man säljer.
+ *  "Ej knackad" ritas inte som segment utan är den tomma delen av baren. */
+const PROGRESS_ORDNING: KnockStatus[] = [
+  "sald", "scrive", "intresserad", "aterkoppling", "befintlig_telia", "inte_hemma", "kall_kund", "inte_intresserad",
+];
+
+/** Progressbar för en fastighet: "knackade/antal lägenheter". Varje
+ *  lägenhet med en annan status än "Ej knackad" är en bit av baren i
+ *  statusens färg; Såld = grön. Under baren en förklaring med antal per
+ *  status (bara de som finns). */
+function FastighetProgress({ lagenheter }: { lagenheter: RecordRow[] }) {
+  const total = lagenheter.length;
+  if (total === 0) return null;
+  const antal: Partial<Record<KnockStatus, number>> = {};
+  for (const l of lagenheter) {
+    const st = (l.status ?? "ej_knackad") as KnockStatus;
+    const key: KnockStatus = STATUS_CONFIG[st] ? st : "ej_knackad";
+    antal[key] = (antal[key] ?? 0) + 1;
+  }
+  const knackade = total - (antal.ej_knackad ?? 0);
+  const salda = antal.sald ?? 0;
+  const delar = PROGRESS_ORDNING.filter((k) => (antal[k] ?? 0) > 0);
+  return (
+    <div className="d2d-fprog" role="group" aria-label="Framsteg i fastigheten">
+      <div className="d2d-fprog__rad">
+        <span className="d2d-fprog__tal"><strong>{knackade}</strong>/{total} lägenheter</span>
+        <span className="d2d-fprog__sald">{salda} sålda</span>
+      </div>
+      <div
+        className="d2d-fprog__bar"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={knackade}
+        aria-valuetext={`${knackade} av ${total} lägenheter knackade, ${salda} sålda`}
+      >
+        {delar.map((k) => (
+          <span
+            key={k}
+            className={`d2d-fprog__del d2d-fprog__del--${k}`}
+            style={{ width: `${((antal[k] ?? 0) / total) * 100}%`, background: STATUS_CONFIG[k].color }}
+            title={`${STATUS_CONFIG[k].label}: ${antal[k]}`}
+          />
+        ))}
+      </div>
+      {delar.length > 0 && (
+        <div className="d2d-fprog__legend">
+          {delar.map((k) => (
+            <span key={k} className="d2d-fprog__item">
+              <i style={{ background: STATUS_CONFIG[k].color }} />
+              {STATUS_CONFIG[k].label} {antal[k]}
+            </span>
+          ))}
+          {!!antal.ej_knackad && (
+            <span className="d2d-fprog__item d2d-fprog__item--tom">
+              <i />Ej knackad {antal.ej_knackad}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FastighetsDetalj({
   fastighetId,
   isAdmin = false,
@@ -800,6 +865,11 @@ function FastighetsDetalj({
           <h3>Lägenheter</h3>
           <span>{total} st</span>
         </div>
+
+        {/* Progressbar: knackade/antal lägenheter, en färgad bit per status
+            (Såld grön). Uppdateras när statusen ändras — listan laddas om
+            när säljaren kommer tillbaka från lägenheten. */}
+        <FastighetProgress lagenheter={lagenheter} />
 
         {lagenheter.length === 0 && (
           <div className="d2d-empty">Inga lägenheter registrerade.</div>
