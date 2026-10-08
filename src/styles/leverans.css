@@ -117,3 +117,35 @@
   .lev-kort__siffra { padding: 7px 8px; }
   .lev-kort__varde--stor { font-size: var(--text-lg); }
 }
+
+/* ── Fastighetsägarkort (LeveransAgareKort.tsx) ─────────────────────────── */
+
+.lev-agare__huvud { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
+.lev-agare__pil { flex-shrink: 0; margin-top: 3px; color: var(--ink-ghost); transition: transform var(--dur) var(--ease), color var(--dur) var(--ease); }
+.lev-agare:hover .lev-agare__pil { color: var(--brand); transform: translateX(2px); }
+
+.lev-agare__siffror { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.lev-agare__status { display: flex; flex-direction: column; gap: var(--sp-2); }
+.lev-agare__stapel { display: flex; gap: 2px; height: 6px; border-radius: var(--r-pill); overflow: hidden; background: var(--neutral-soft); }
+.lev-agare__stapel span { min-width: 4px; }
+.lev-agare__statuslista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.lev-agare__statuslista li { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); color: var(--ink-soft); min-width: 0; }
+.lev-agare__prick { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.lev-agare__statusnamn { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lev-agare__antal { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.lev-agare__roller {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: auto; padding-top: var(--sp-3); border-top: 1px solid var(--divider);
+}
+.lev-agare__roller .lev-kort__avatar { width: 28px; height: 28px; }
+.lev-agare__roller .lev-kort__person-text { flex-direction: row; align-items: baseline; gap: var(--sp-2); flex: 1 1 auto; }
+.lev-agare__roller .lev-kort__etikett { flex: 0 0 92px; }
+.lev-agare__roller .lev-kort__namn { flex: 1 1 auto; }
+
+/* Rubrikrad när man klickat in på en fastighetsägare */
+.lev-agare-rubrik { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.lev-agare-rubrik__titel { margin: 0; font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; color: var(--ink); }
+.lev-agare-rubrik__antal { font-size: var(--text-sm); color: var(--ink-muted); }
+
