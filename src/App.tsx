@@ -49,7 +49,8 @@ type View =
   | { kind: "newcase" }
   | { kind: "feedback" }
   | { kind: "settings"; tab: SettingsTab }
-  | { kind: "fmo" };
+  | { kind: "fmo" }
+  | { kind: "leveransoversikt" };
 
 /** URL → vy. Okänt/tomt → översikten. */
 function viewFromSegs(segs: string[]): View {
@@ -73,6 +74,7 @@ function viewFromSegs(segs: string[]): View {
     case "nytt-arende": return { kind: "newcase" };
     case "feedback": return { kind: "feedback" };
     case "fmo": return { kind: "fmo" };
+    case "leveransoversikt": return { kind: "leveransoversikt" };
     case "list": if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
   }
   return { kind: "dashboard" };
@@ -254,7 +256,8 @@ export default function App() {
   const tenantName = branding?.name || "ConnectEstate";
   const listDef = view?.kind === "list" ? objectDefFor(view.objectType) : undefined;
   const subtitle =
-    listDef ? `Alla ${listDef.labelPlural.toLowerCase()} i ${tenantName}`
+    listDef?.key === "delivery" ? "Synkas från Telias projektplan"
+    : listDef ? `Alla ${listDef.labelPlural.toLowerCase()} i ${tenantName}`
     : view?.kind === "dashboard" ? `${tenantName} · ${new Date().toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}`
     : view?.kind === "cases" ? "Följ upp kundernas ärenden"
     : view?.kind === "case" ? "Ärende från kundtjänst"
@@ -269,6 +272,7 @@ export default function App() {
     : view?.kind === "feedback" ? "Fel, idéer och önskemål från användarna"
     : view?.kind === "settings" ? (SETTINGS_TABS.find((t) => t.key === view.tab)?.sub ?? "")
     : view?.kind === "fmo" ? "Fastigheter som skickats på FMO-check"
+    : view?.kind === "leveransoversikt" ? "Projektplanen per fastighetsägare"
     : tenantName;
 
   // Feedbackknappen: menyns moduler, och den man står i (förval).
@@ -341,6 +345,7 @@ export default function App() {
           : view?.kind === "feedback" ? "__feedback__"
           : view?.kind === "settings" ? "__settings__"
           : view?.kind === "fmo" ? "__fmo__"
+          : view?.kind === "leveransoversikt" ? "__leveransoversikt__"
           : null
         }
         onSelect={(key) =>
@@ -359,6 +364,7 @@ export default function App() {
             : key.startsWith("__cases_") ? { kind: "cases", filter: key.slice(8, -2) as CaseFilter }
             : key === "__feedback__" ? { kind: "feedback" }
             : key === "__fmo__" ? { kind: "fmo" }
+            : key === "__leveransoversikt__" ? { kind: "leveransoversikt" }
             : { kind: "list", objectType: key }
           )
         }
@@ -396,6 +402,7 @@ export default function App() {
                 : view?.kind === "feedback" ? "Feedback"
                 : view?.kind === "settings" ? "Inställningar"
                 : view?.kind === "fmo" ? "FMO-check"
+                : view?.kind === "leveransoversikt" ? "Leveransöversikt"
                 : ""}
             </h1>
             <div className="topbar__sub">{subtitle}</div>
@@ -477,6 +484,19 @@ export default function App() {
           />
         )}
         {view?.kind === "fmo" && <FmoPage />}
+
+        {/* Leveransöversikt: samma leveranser som Projektplanen, som kort per fastighetsägare. */}
+        {view?.kind === "leveransoversikt" && objectDefFor("delivery") && (
+          <ObjectListPage
+            key="leveransoversikt"
+            reloadKey={listReloadKey}
+            objectDef={objectDefFor("delivery")!}
+            onOpenRecord={openRecord}
+            onMetadataChanged={reloadMetadata}
+            stateKeySuffix=":oversikt"
+            kortvy
+          />
+        )}
 
         {view?.kind === "list" && view.objectType === "d2d_lagenhet" && objectDefFor(view.objectType) && (
           <D2DLagenheterPage
