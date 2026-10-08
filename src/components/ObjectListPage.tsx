@@ -10,6 +10,7 @@ import { StatusPill } from "./StatusPill";
 import { RecordDrawer } from "./RecordDrawer";
 import { KanbanBoard } from "./KanbanBoard";
 import { LeveransKort } from "./LeveransKort";
+import { LeveransAgareKort, hamtaAgareOversikt, agareFilter, INGEN_AGARE, type AgareGrupp } from "./LeveransAgareKort";
 import { ColumnConfigPanel } from "./ColumnConfigPanel";
 import { FilterBar } from "./FilterBar";
 import { ColumnFilter, kolumnVal } from "./ColumnFilter";
@@ -53,6 +54,8 @@ type ListMode = "list" | "kanban" | "kort";
 type SavedListState = {
   mode: ListMode; page: number; search: string; status: string;
   filters: RecordFilter[]; sort: { field: string; dir: "asc" | "desc" } | null; activeViewId: string;
+  /** Kortvyn för leveranser: vald fastighetsägare ("" = översikten). */
+  agare?: string;
 };
 
 const PAGE_SIZE = 25;
@@ -162,6 +165,10 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   const mode: ListMode = picker ? "list" : modeState === "kort" && !harKort ? "list" : modeState;
   const [showColumns, setShowColumns] = useState(false);
   const [items, setItems] = useState<RecordRow[]>([]);
+  // Kortvyn: först ett kort per fastighetsägare, sedan ägarens leveranser.
+  const [agare, setAgare] = useState<string>(saved.agare ?? "");
+  const [grupper, setGrupper] = useState<AgareGrupp[]>([]);
+  const visarAgare = mode === "kort" && !agare;
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(saved.page ?? 0);
   const [search, setSearch] = useState(saved.search ?? "");
@@ -327,11 +334,20 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
     setLoading(true);
     setError(null);
     try {
+      if (mode === "kort" && !agare) {
+        const f: RecordFilter[] = [...allFilters];
+        if (status) f.push({ field: "__status", op: "eq", value: status });
+        const g = await hamtaAgareOversikt(search || undefined, f);
+        setGrupper(g);
+        setTotal(g.reduce((n, x) => n + x.antal, 0));
+        return;
+      }
+      const lasFilter = mode === "kort" && agare ? [...allFilters, agareFilter(agare)] : allFilters;
       const res = await listRecords({
         objectType: objectDef.key,
         search: search || undefined,
         status: status || undefined,
-        filters: allFilters.length ? allFilters : undefined,
+        filters: lasFilter.length ? lasFilter : undefined,
         sort: sort ?? undefined,
         limit: mode === "kanban" ? KANBAN_LIMIT : PAGE_SIZE,
         offset: mode === "kanban" ? 0 : page * PAGE_SIZE,
@@ -339,7 +355,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       setItems(res.items);
       setTotal(res.total);
     } catch (e) {
-      setError(e instanceof DataError ? e.message : "Kunde inte hämta listan.");
+      setError(e instanceof DataError || (e instanceof Error && visarAgare) ? (e as Error).message : "Kunde inte hämta listan.");
     } finally {
       setLoading(false);
     }
@@ -352,15 +368,15 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
 
   // Spara läget varje gång det ändras.
   useEffect(() => {
-    saveListState<SavedListState>(stateKey, { mode, page, search, status, filters, sort, activeViewId });
-  }, [stateKey, mode, page, search, status, filters, sort, activeViewId]);
+    saveListState<SavedListState>(stateKey, { mode, page, search, status, filters, sort, activeViewId, agare });
+  }, [stateKey, mode, page, search, status, filters, sort, activeViewId, agare]);
 
   // Första renderingen återställer ett sparat läge — då ska sidnumret
   // INTE nollställas av filter/sök-effekterna nedan.
   const firstRun = useRef(true);
   useEffect(() => { const t = setTimeout(() => { firstRun.current = false; }, 0); return () => clearTimeout(t); }, []);
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [objectDef.key, page, status, mode, reloadKey]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [objectDef.key, page, status, mode, reloadKey, agare]);
   useEffect(() => { if (firstRun.current) return; setPage(0); load(); /* eslint-disable-next-line */ }, [JSON.stringify(filters)]);
   useEffect(() => { if (firstRun.current) return; load(); /* eslint-disable-next-line */ }, [sort?.field, sort?.dir]);
   useEffect(() => {
@@ -827,7 +843,29 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         </div>
       )}
 
-      {!error && mode === "kort" && (
+      {!error && visarAgare && (
+        loading && grupper.length === 0
+          ? <div className="card"><SkeletonRows /></div>
+          : grupper.length === 0
+            ? <div className="card"><EmptyState kind={filtered ? "filtered" : undefined} title={filtered ? "Inga träffar" : `Inga ${plural} än`}
+                text={filtered ? "Inget matchar sökningen eller filtren. Rensa dem för att se alla." : "Lägg till den första för att komma igång."} /></div>
+            : <LeveransAgareKort
+                objectDef={objectDef}
+                grupper={grupper}
+                loading={loading}
+                onOpen={(a) => { setItems([]); setTotal(0); setPage(0); setAgare(a); window.scrollTo({ top: 0 }); }}
+              />
+      )}
+
+      {!error && mode === "kort" && agare && (
+        <div className="lev-agare-rubrik">
+          <button className="btn btn--ghost btn--sm" onClick={() => { setPage(0); setAgare(""); }}>← Alla fastighetsägare</button>
+          <h2 className="lev-agare-rubrik__titel">{agare === INGEN_AGARE ? "Ingen fastighetsägare" : agare}</h2>
+          {!loading && <span className="lev-agare-rubrik__antal">{total} {total === 1 ? "fastighet" : "fastigheter"}</span>}
+        </div>
+      )}
+
+      {!error && mode === "kort" && agare && (
         loading && items.length === 0
           ? <div className="card"><SkeletonRows /></div>
           : items.length === 0
@@ -843,7 +881,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
               />
       )}
 
-      {(mode === "list" || mode === "kort") && !error && total > 0 && (
+      {(mode === "list" || (mode === "kort" && !!agare)) && !error && total > 0 && (
         <Pager page={page} pageSize={PAGE_SIZE} total={total} unit={plural} onPage={setPage} />
       )}
 
