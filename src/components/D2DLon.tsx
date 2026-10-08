@@ -369,10 +369,59 @@ export async function d2dLonBehorig(): Promise<boolean> {
   return data === true;
 }
 
+/** Urval på sidan Löner: Alla (Såld med Scrive inom parentes), bara Sålda eller bara Scrive. */
+type Urval = "alla" | "salda" | "scrive";
+const URVAL: Array<{ key: Urval; label: string }> = [
+  { key: "alla", label: "Alla" }, { key: "salda", label: "Sålda" }, { key: "scrive", label: "Scrive" },
+];
+
+/** Trappans nivå för ett antal pinnar (samma regel som d2d_bonus_niva i databasen). */
+function nivaFor(pinnar: number, trappa: Trappsteg[]): Niva {
+  const t = [...trappa].sort((a, b) => a.pinnar - b.pinnar);
+  const nadd = [...t].reverse().find((x) => x.pinnar <= pinnar);
+  const nasta = t.find((x) => x.pinnar > pinnar);
+  return {
+    niva: nadd?.pinnar ?? null, bonus: nadd?.bonus ?? 0,
+    nastaNiva: nasta?.pinnar ?? null, nastaBonus: nasta?.bonus ?? null,
+    kvar: nasta ? Math.round((nasta.pinnar - pinnar) * 10) / 10 : null,
+  };
+}
+
+type VyRad = Niva & {
+  affarer: number; affarerP: number; pinnar: number; pinnarP: number;
+  provision: number; justeringar: number; lon: number; lonP: number | null;
+  produkter: Array<{ nyckel: string; antal: number; antalP: number; pinnar: number; pinnarP: number }>;
+};
+
+/** En säljares siffror i valt urval. Scrive räknas som om bara de signerade avtalen fanns (utan justeringar). */
+function vy(s: SaljareRad, urval: Urval, trappa: Trappsteg[], krPinne: number): VyRad {
+  const prod = s.produkter ?? [];
+  if (urval === "scrive") {
+    const n = nivaFor(s.vantar, trappa);
+    const provision = Math.round(s.vantar * krPinne);
+    return {
+      ...n, affarer: s.affarerVantar, affarerP: 0, pinnar: s.vantar, pinnarP: 0,
+      provision, justeringar: 0, lon: provision + n.bonus, lonP: null,
+      produkter: prod.filter((p) => (p.antalScrive ?? 0) > 0)
+        .map((p) => ({ nyckel: p.nyckel, antal: p.antalScrive ?? 0, antalP: 0, pinnar: p.pinnarScrive ?? 0, pinnarP: 0 })),
+    };
+  }
+  const medP = urval === "alla";
+  return {
+    niva: s.niva, bonus: s.bonus, nastaNiva: s.nastaNiva, nastaBonus: s.nastaBonus, kvar: s.kvar,
+    affarer: s.affarer, affarerP: medP ? s.affarerVantar : 0, pinnar: s.pinnar, pinnarP: medP ? s.vantar : 0,
+    provision: s.provision ?? 0, justeringar: s.justeringar ?? 0, lon: s.lon ?? 0,
+    lonP: medP && (s.lonInklVantar ?? 0) > (s.lon ?? 0) ? s.lonInklVantar ?? null : null,
+    produkter: prod.filter((p) => medP || p.antal > 0)
+      .map((p) => ({ nyckel: p.nyckel, antal: p.antal, antalP: medP ? p.antalScrive ?? 0 : 0, pinnar: p.pinnar, pinnarP: medP ? p.pinnarScrive ?? 0 : 0 })),
+  };
+}
+
 export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
   const [data, setData] = useState<{ modell: Lonemodell; manader: Manad[] } | null>(null);
   const [fel, setFel] = useState<string | null>(null);
   const [antal, setAntal] = useState(3);
+  const [urval, setUrval] = useState<Urval>("alla");
   const [oppen, setOppen] = useState<string | null>(null);     // "manad|saljare"
   const [jBelopp, setJBelopp] = useState("");
   const [jKommentar, setJKommentar] = useState("");
@@ -421,7 +470,9 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
 
   const nu = data.manader[0];
   const krPinne = data.modell.krPerPinne ?? 0;
-  const sum = (m: Manad, f: (s: SaljareRad) => number | undefined) => m.saljare.reduce((a, s) => a + (f(s) ?? 0), 0);
+  const trappa = data.modell.trappa ?? [];
+  const rader = (m: Manad) => m.saljare.map((s) => ({ s, v: vy(s, urval, trappa, krPinne) }));
+  const sum = (m: Manad, f: (v: VyRad) => number | null | undefined) => rader(m).reduce((a, r) => a + (f(r.v) ?? 0), 0);
 
   return (
     <div className="page d2d-loner">
@@ -429,9 +480,17 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
         <p>
           Lön = <strong>{kr(krPinne)} per pinne</strong> + bonus när ett trappsteg nås + justeringar. Den riktiga lönen räknas bara på adresser
           med status <strong>Såld</strong>, den löneperiod de blev sålda; lönen betalas ut {data.modell.utbetalningManaderEfter ?? 1} månad{(data.modell.utbetalningManaderEfter ?? 1) === 1 ? "" : "er"} efter.
-          Scrive-signerade som ännu inte är Sålda står inom parentes och ingår bara i den potentiella lönen. Klicka på en säljare för underlag och justeringar.
+          Scrive-signerade som ännu inte är Sålda står inom parentes och ingår bara i den potentiella lönen. Välj <strong>Sålda</strong> för bara den
+          riktiga lönen eller <strong>Scrive</strong> för vad de signerade avtalen ger när de blir Sålda. Klicka på en säljare för underlag och justeringar.
           Modellen ändras under Inställningar → Priser.
         </p>
+        <div className="d2dd__chips d2d-loner__urval" role="group" aria-label="Vilka affärer som räknas">
+          {URVAL.map((u) => (
+            <button key={u.key} type="button" className="d2dd__period" aria-pressed={urval === u.key} onClick={() => setUrval(u.key)}>
+              {u.label}
+            </button>
+          ))}
+        </div>
         <label className="d2d-loner__antal">Visa
           <select className="input input--sm" value={antal} onChange={(e) => setAntal(Number(e.target.value))}>
             <option value={1}>bara denna månad</option>
@@ -443,8 +502,8 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
       </section>
 
       {data.manader.map((m) => {
-        const lon = sum(m, (s) => s.lon);
-        const lonInkl = sum(m, (s) => s.lonInklVantar);
+        const lon = sum(m, (v) => v.lon);
+        const lonInkl = sum(m, (v) => v.lonP ?? v.lon);
         const arNu = m === nu;
         return (
           <section key={m.manad} className="card d2d-loner__manad">
@@ -456,8 +515,8 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
               <div className="d2d-loner__summa">
                 <span className="d2d-loner__summa-tal">{kr(lon)}</span>
                 <span className="d2d-loner__summa-text">
-                  att betala ut · provision {kr(sum(m, (s) => s.provision))} · bonus {kr(sum(m, (s) => s.bonus))}
-                  {sum(m, (s) => s.justeringar) !== 0 ? ` · justeringar ${kr(sum(m, (s) => s.justeringar))}` : ""}
+                  {urval === "scrive" ? "om Scrive-signerade blir Sålda" : "att betala ut"} · provision {kr(sum(m, (v) => v.provision))} · bonus {kr(sum(m, (v) => v.bonus))}
+                  {sum(m, (v) => v.justeringar) !== 0 ? ` · justeringar ${kr(sum(m, (v) => v.justeringar))}` : ""}
                   {lonInkl > lon ? ` · potentiellt ${kr(lonInkl)} inkl. Scrive` : ""}
                 </span>
               </div>
@@ -467,46 +526,48 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
               <div className="d2d-loner__tr d2d-loner__tr--head" role="row">
                 <span>Säljare</span><span>Affärer</span><span>Pinnar</span><span>Provision</span><span>Bonus</span><span>Justeringar</span><span>Lön</span>
               </div>
-              {m.saljare.map((s) => {
+              {rader(m).map(({ s, v }) => {
                 const key = `${m.manad}|${s.id}`;
                 const open = oppen === key;
                 return (
                   <div key={s.id} className={`d2d-loner__rad${open ? " d2d-loner__rad--open" : ""}`}>
                     <button type="button" className="d2d-loner__tr" role="row" aria-expanded={open} onClick={() => oppna(key)}>
                       <span className="d2d-loner__namn">{s.namn}</span>
-                      <span>{s.affarer}<Paren n={s.affarerVantar} /></span>
-                      <span className="d2d-loner__pinnar">{pn(s.pinnar)}<Paren n={s.vantar} f={pn} /></span>
-                      <span>{kr(s.provision)}</span>
-                      <span className={s.bonus > 0 ? "d2d-loner__bonus--ja" : undefined}>
-                        {s.bonus > 0 ? kr(s.bonus) : "—"}
-                        {s.nastaNiva != null && <small> {pn(s.kvar)} kvar till {s.nastaNiva}</small>}
+                      <span>{v.affarer}<Paren n={v.affarerP} /></span>
+                      <span className="d2d-loner__pinnar">{pn(v.pinnar)}<Paren n={v.pinnarP} f={pn} /></span>
+                      <span>{kr(v.provision)}</span>
+                      <span className={v.bonus > 0 ? "d2d-loner__bonus--ja" : undefined}>
+                        {v.bonus > 0 ? kr(v.bonus) : "—"}
+                        {v.nastaNiva != null && <small> {pn(v.kvar)} kvar till {v.nastaNiva}</small>}
                       </span>
-                      <span className={s.justeringar ? (s.justeringar < 0 ? "d2d-loner__neg" : "d2d-loner__pos") : undefined}>{s.justeringar ? kr(s.justeringar) : "—"}</span>
+                      <span className={v.justeringar ? (v.justeringar < 0 ? "d2d-loner__neg" : "d2d-loner__pos") : undefined}>{v.justeringar ? kr(v.justeringar) : "—"}</span>
                       <span className="d2d-loner__lon">
-                        {kr(s.lon)}{(s.lonInklVantar ?? 0) > (s.lon ?? 0) ? <small className="d2d-lon__scrive" title="Potentiell lön inkl. Scrive-signerade"> ({kr(s.lonInklVantar)})</small> : null}
+                        {kr(v.lon)}{v.lonP != null ? <small className="d2d-lon__scrive" title="Potentiell lön inkl. Scrive-signerade"> ({kr(v.lonP)})</small> : null}
                       </span>
                     </button>
                     {open && (
                       <div className="d2d-loner__detalj">
                         <div className="d2d-loner__detalj-kol">
                           <h4>Underlag</h4>
-                          {(s.produkter ?? []).length === 0 ? (
-                            <span className="d2d-loner__sub">Inga sålda eller Scrive-signerade tjänster den här löneperioden.</span>
+                          {v.produkter.length === 0 ? (
+                            <span className="d2d-loner__sub">
+                              {urval === "salda" ? "Inga sålda tjänster" : urval === "scrive" ? "Inga Scrive-signerade tjänster" : "Inga sålda eller Scrive-signerade tjänster"} den här löneperioden.
+                            </span>
                           ) : (
                             <div className="d2d-loner__produkter">
-                              {(s.produkter ?? []).map((p) => (
+                              {v.produkter.map((p) => (
                                 <div key={p.nyckel} className="d2d-loner__produkt">
                                   <span>{produktEtikett(p.nyckel, fields)}</span>
-                                  <span>{p.antal}<Paren n={p.antalScrive} /> st</span>
-                                  <span>{pn(p.pinnar)}<Paren n={p.pinnarScrive} f={pn} /> p</span>
+                                  <span>{p.antal}<Paren n={p.antalP} /> st</span>
+                                  <span>{pn(p.pinnar)}<Paren n={p.pinnarP} f={pn} /> p</span>
                                 </div>
                               ))}
                               <div className="d2d-loner__produkt d2d-loner__produkt--summa">
-                                <span>{pn(s.pinnar)} pinnar × {kr(krPinne)}</span><span /><span>{kr(s.provision)}</span>
+                                <span>{pn(v.pinnar)} pinnar × {kr(krPinne)}</span><span /><span>{kr(v.provision)}</span>
                               </div>
-                              {s.bonus > 0 && (
+                              {v.bonus > 0 && (
                                 <div className="d2d-loner__produkt d2d-loner__produkt--summa">
-                                  <span>Bonus, nivå {s.niva}</span><span /><span>{kr(s.bonus)}</span>
+                                  <span>Bonus, nivå {v.niva}</span><span /><span>{kr(v.bonus)}</span>
                                 </div>
                               )}
                             </div>
