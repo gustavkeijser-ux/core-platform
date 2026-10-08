@@ -17,6 +17,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
+## 2026-10-08
+
+- [Leverans] Kortvy för leveranser: ny vy "Kort" (standard för leveranser, bredvid Lista och Kanban) med ett kort per leverans — status, adress, fastighetsägare/orgnr, Lgh, Portar, leveransmånad, kundklar, Telia LPL och projektledare ("Ej tilldelad" om tomt) samt avisering som tre steg från `ce_skickad_avi` (0–3). Ta bort ligger som ikon på kortet. Samma sök, filter, sortering och sidbrytning som listan; kontrollerad i 390 och 1280 px. Filer: `LeveransKort.tsx` (ny), `styles/leverans.css` (ny), `ObjectListPage.tsx` (läget `kort`, bara för `delivery`).
+
 ## 2026-10-07
 
 - [D2D] Löner: nytt urval **Alla / Sålda / Scrive** överst på sidan. Alla = Såld med Scrive-signerade inom parentes (som förut), Sålda = bara den riktiga lönen, Scrive = bara Scrive-signerade som ännu inte är Sålda (provision + trappbonus som om de blev Sålda, utan justeringar). Gäller tabell, summa och produktunderlag. Räknas i klienten från `d2d_lon_prognos` (ingen DB-ändring). Filer: `D2DLon.tsx`, `styles/d2d.css`.
