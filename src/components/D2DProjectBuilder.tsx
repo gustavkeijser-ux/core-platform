@@ -493,7 +493,7 @@ function AddressEditor({
       const nonEmpty = rows.filter((r) => Object.values(r).some((v) => v.trim() !== ""));
       if (nonEmpty.length === 0) { setError("Lägg till minst en rad."); return; }
       const res = await d2dImportAddresses(fastighetId, nonEmpty);
-      setOk(`${res.imported} adress(er) sparade.`);
+      setOk(importText(res));
       setRows([{ ...EMPTY_ADDR_ROW }]);
       onImported();
       loadAdresser();
@@ -592,7 +592,17 @@ function AddressEditor({
 // (samma fält som visas som bubbla i adresslistan och i säljarens app).
 // =============================================================================
 
-type ExcelImportSummary = { matchade: number; skapade: number; adresser: number; utanFastbet: number };
+type ExcelImportSummary = {
+  matchade: number; skapade: number; adresser: number; uppdaterade: number; telia: number; utanFastbet: number;
+};
+
+/** Sammanfattning av ett importsvar: nya, uppdaterade och matchade mot Telias lista. */
+function importText(r: { imported: number; uppdaterade: number; telia_matchade: number }): string {
+  const delar = [`${r.imported} ny(a) adress(er) sparade`];
+  if (r.uppdaterade > 0) delar.push(`${r.uppdaterade} fanns redan och uppdaterades`);
+  delar.push(`${r.telia_matchade} matchade mot Telias adresslista`);
+  return delar.join(", ") + ".";
+}
 
 function ExcelImportPanel({
   projektId, fastigheter, onDone,
@@ -637,7 +647,7 @@ function ExcelImportPanel({
         return;
       }
 
-      let matchade = 0, skapade = 0, adresser = 0;
+      let matchade = 0, skapade = 0, adresser = 0, uppdaterade = 0, telia = 0;
       for (const [nyckel, gruppRader] of grupper) {
         const beteckning = gruppRader[0].fastighetsbeteckning;
         const befintlig = fastigheter.find((f) =>
@@ -661,9 +671,11 @@ function ExcelImportPanel({
         setBusy(`Importerar adresser för ${beteckning}…`);
         const res = await d2dImportAddresses(fastId, gruppRader as unknown as Record<string, string>[]);
         adresser += res.imported;
+        uppdaterade += res.uppdaterade;
+        telia += res.telia_matchade;
       }
 
-      setSummary({ matchade, skapade, adresser, utanFastbet });
+      setSummary({ matchade, skapade, adresser, uppdaterade, telia, utanFastbet });
       onDone();
     } catch (err) {
       setError(
@@ -685,11 +697,16 @@ function ExcelImportPanel({
         Kolumner som <code>Fastighetsbeteckning</code>, <code>Gatunamn</code>, <code>Lägenhetsnummer</code> och
         {" "}<code>Kommentar</code> läses in automatiskt. Raderna grupperas per fastighetsbeteckning — matchar det
         en fastighet som redan finns i projektet läggs adresserna dit, annars skapas en ny fastighet åt gruppen.
+        Varje adress matchas mot Telias adresslista (PunktID eller gata + nummer + lägenhetsnummer) och får Telias
+        objektnummer och status. Adresser som redan finns uppdateras i stället för att dubbleras — importera gärna
+        samma fil igen när den fått fler rader, bara de nya läggs till.
       </p>
       {error && <div className="d2d-error">{error}</div>}
       {summary && (
         <div className="d2d-save-ok">
-          ✓ {summary.adresser} adress(er) importerade — {summary.matchade} fastighet(er) matchade,{" "}
+          ✓ {summary.adresser} ny(a) adress(er) importerade
+          {summary.uppdaterade > 0 ? `, ${summary.uppdaterade} fanns redan och uppdaterades` : ""}
+          {" "}— {summary.telia} matchade mot Telias adresslista; {summary.matchade} fastighet(er) matchade,{" "}
           {summary.skapade} ny(a) fastighet(er) skapade
           {summary.utanFastbet > 0
             ? `, ${summary.utanFastbet} rad(er) saknade fastighetsbeteckning och hoppades över`
