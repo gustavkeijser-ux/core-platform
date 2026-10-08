@@ -19,6 +19,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## 2026-10-08
 
+- [Leverans] Kortvyn grupperas per fastighetsägare: först ett kort per ägare (antal fastigheter, lägenheter totalt, statusfördelning, Telia LPL, CE-ansvarig, entreprenör; olika värden visas alla), klick visar ägarens fastighetskort med "← Alla fastighetsägare". Sök, status och filter gäller båda nivåerna. Nytt fält `ce_ansvarig` (CE-ansvarig, användarfält, sektion Resurser) — tomt på alla leveranser än. Filer: `LeveransAgareKort.tsx` (ny), `ObjectListPage.tsx`, `styles/leverans.css`. DB: `20261008_1000_leverans_ce_ansvarig.sql`, `20261008_1010_leverans_agare_oversikt.sql` (RPC `leverans_agare_oversikt`, security invoker, återanvänder `list_records_filtered`). Väntar: Gustav fyller i CE-ansvarig; LPL "2184"/"437" på Lindström Property ser ut som felimporterade siffror.
 - [Leverans] Kortvy för leveranser: ny vy "Kort" (standard för leveranser, bredvid Lista och Kanban) med ett kort per leverans — status, adress, fastighetsägare/orgnr, Lgh, Portar, leveransmånad, kundklar, Telia LPL och projektledare ("Ej tilldelad" om tomt) samt avisering som tre steg från `ce_skickad_avi` (0–3). Ta bort ligger som ikon på kortet. Samma sök, filter, sortering och sidbrytning som listan; kontrollerad i 390 och 1280 px. Filer: `LeveransKort.tsx` (ny), `styles/leverans.css` (ny), `ObjectListPage.tsx` (läget `kort`, bara för `delivery`).
 
 ## 2026-10-07
