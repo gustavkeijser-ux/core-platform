@@ -357,6 +357,8 @@ type AddrRow = {
   installationsdatum: string; befintlig_fiber: string; befintlig_koax: string;
   koax_avslutsdatum: string; befintligt_kanalpaket: string; nytt_kanalpaket: string;
   kommentar: string;
+  /** Bara från Excel-import (valfria kolumner): status, säljare (namn/e-post) och säljdatum. */
+  status: string; saljare: string; saljdatum: string;
 };
 
 const EMPTY_ADDR_ROW: AddrRow = {
@@ -364,7 +366,7 @@ const EMPTY_ADDR_ROW: AddrRow = {
   portkod: "", gatunamn: "", gatnr: "", ingang: "", alias: "", punktid: "",
   klass: "", cpe_model: "", installationsdatum: "", befintlig_fiber: "",
   befintlig_koax: "", koax_avslutsdatum: "", befintligt_kanalpaket: "", nytt_kanalpaket: "",
-  kommentar: "",
+  kommentar: "", status: "", saljare: "", saljdatum: "",
 };
 
 const ADDR_COLUMNS: Array<{ key: keyof AddrRow; label: string }> = [
@@ -412,6 +414,11 @@ const EXCEL_RUBRIK_TILL_FALT: Record<string, keyof AddrRow> = {
   "avslutsdatum befintlig koax": "koax_avslutsdatum",
   "befintligt kanalpaket": "befintligt_kanalpaket",
   "nytt kanalpaket": "nytt_kanalpaket",
+  "status": "status",
+  "säljare": "saljare",
+  "saljare": "saljare",
+  "säljdatum": "saljdatum",
+  "saljdatum": "saljdatum",
 };
 
 function AddressEditor({
@@ -594,13 +601,20 @@ function AddressEditor({
 
 type ExcelImportSummary = {
   matchade: number; skapade: number; adresser: number; uppdaterade: number; telia: number; utanFastbet: number;
+  statusar: number; okandaStatus: number; saljareSaknas: number;
 };
 
 /** Sammanfattning av ett importsvar: nya, uppdaterade och matchade mot Telias lista. */
-function importText(r: { imported: number; uppdaterade: number; telia_matchade: number }): string {
+function importText(r: {
+  imported: number; uppdaterade: number; telia_matchade: number;
+  statusar_satta: number; okanda_status: number; saljare_saknas: number;
+}): string {
   const delar = [`${r.imported} ny(a) adress(er) sparade`];
   if (r.uppdaterade > 0) delar.push(`${r.uppdaterade} fanns redan och uppdaterades`);
   delar.push(`${r.telia_matchade} matchade mot Telias adresslista`);
+  if (r.statusar_satta > 0) delar.push(`${r.statusar_satta} fick status`);
+  if (r.okanda_status > 0) delar.push(`${r.okanda_status} okänd status ignorerad`);
+  if (r.saljare_saknas > 0) delar.push(`${r.saljare_saknas} säljare hittades inte`);
   return delar.join(", ") + ".";
 }
 
@@ -648,6 +662,7 @@ function ExcelImportPanel({
       }
 
       let matchade = 0, skapade = 0, adresser = 0, uppdaterade = 0, telia = 0;
+      let statusar = 0, okandaStatus = 0, saljareSaknas = 0;
       for (const [nyckel, gruppRader] of grupper) {
         const beteckning = gruppRader[0].fastighetsbeteckning;
         const befintlig = fastigheter.find((f) =>
@@ -673,9 +688,12 @@ function ExcelImportPanel({
         adresser += res.imported;
         uppdaterade += res.uppdaterade;
         telia += res.telia_matchade;
+        statusar += res.statusar_satta;
+        okandaStatus += res.okanda_status;
+        saljareSaknas += res.saljare_saknas;
       }
 
-      setSummary({ matchade, skapade, adresser, uppdaterade, telia, utanFastbet });
+      setSummary({ matchade, skapade, adresser, uppdaterade, telia, utanFastbet, statusar, okandaStatus, saljareSaknas });
       onDone();
     } catch (err) {
       setError(
@@ -699,13 +717,19 @@ function ExcelImportPanel({
         en fastighet som redan finns i projektet läggs adresserna dit, annars skapas en ny fastighet åt gruppen.
         Varje adress matchas mot Telias adresslista (PunktID eller gata + nummer + lägenhetsnummer) och får Telias
         objektnummer och status. Adresser som redan finns uppdateras i stället för att dubbleras — importera gärna
-        samma fil igen när den fått fler rader, bara de nya läggs till.
+        samma fil igen när den fått fler rader, bara de nya läggs till. Kolumnerna <code>Status</code> (Ej knackad, Inte hemma,
+        Återkoppling, Kall kund, Inte intresserad, Befintlig Telia, Såld, Scrive) och <code>Säljare</code> (namn eller e-post)
+        sätter status och säljare. Såld i filen räknas som såld sedan tidigare och hamnar utanför löneperioden — lägg till
+        kolumnen <code>Säljdatum</code> för att ange datum. "Ej knackad" i filen nollställer aldrig en status som redan är satt.
       </p>
       {error && <div className="d2d-error">{error}</div>}
       {summary && (
         <div className="d2d-save-ok">
           ✓ {summary.adresser} ny(a) adress(er) importerade
           {summary.uppdaterade > 0 ? `, ${summary.uppdaterade} fanns redan och uppdaterades` : ""}
+          {summary.statusar > 0 ? `, ${summary.statusar} fick status` : ""}
+          {summary.okandaStatus > 0 ? `, ${summary.okandaStatus} okänd status ignorerad` : ""}
+          {summary.saljareSaknas > 0 ? `, ${summary.saljareSaknas} säljare hittades inte` : ""}
           {" "}— {summary.telia} matchade mot Telias adresslista; {summary.matchade} fastighet(er) matchade,{" "}
           {summary.skapade} ny(a) fastighet(er) skapade
           {summary.utanFastbet > 0
