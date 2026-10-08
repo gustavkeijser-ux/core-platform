@@ -543,3 +543,6 @@
 /* Löner: Scrive-signerade (ännu inte Sålda) inom parentes — samma ton som Scrive i översikten. */
 .d2d-lon__scrive { font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .d2d-pinnar__fyll--vantar { background: color-mix(in srgb, var(--hue-violet) 45%, transparent); }
+/* Löner: urval Alla / Sålda / Scrive */
+.d2d-loner__urval { flex-wrap: nowrap; }
+.d2d-loner__urval .d2dd__period { padding: var(--sp-1) var(--sp-3); font-size: var(--text-sm); }
