@@ -29,8 +29,10 @@ type Lonemodell = {
   trappa: Trappsteg[];
   krPerPinne?: number;
   utbetalningManaderEfter?: number;
-  /** Första dagen som räknas (ÅÅÅÅ-MM-DD). Första löneperioden 26–31 oktober 2026. */
+  /** Första dagen som räknas (ÅÅÅÅ-MM-DD). */
   startdatum?: string | null;
+  /** Sista dagen i första löneperioden. Första perioden 26 september–31 oktober 2026, sedan kalendermånader. */
+  forstaPeriodTill?: string | null;
   updatedAt?: string | null;
 };
 
@@ -61,11 +63,12 @@ const manadNamn = (ym: string) => {
   const [y, m] = ym.split("-").map(Number);
   return m >= 1 && m <= 12 ? `${MANADER[m - 1]} ${y}` : ym;
 };
-/** Löneperiodens namn: "oktober 2026", eller "26–31 oktober 2026" när den börjar mitt i månaden. */
+/** Löneperiodens namn: "oktober 2026", eller t.ex. "26 september–31 oktober 2026" när den inte är en hel månad. */
 const periodNamn = (m: Pick<Manad, "manad" | "periodFran" | "periodTill">) => {
   const f = m.periodFran?.split("-").map(Number), t = m.periodTill?.split("-").map(Number);
-  if (!f || !t || f[2] === 1) return manadNamn(m.manad);
-  return `${f[2]}–${t[2]} ${MANADER[t[1] - 1]} ${t[0]}`;
+  if (!f || !t || (f[2] === 1 && f[1] === t[1])) return manadNamn(m.manad);
+  if (f[1] === t[1]) return `${f[2]}–${t[2]} ${MANADER[t[1] - 1]} ${t[0]}`;
+  return `${f[2]} ${MANADER[f[1] - 1]}${f[0] !== t[0] ? ` ${f[0]}` : ""}–${t[2]} ${MANADER[t[1] - 1]} ${t[0]}`;
 };
 /** Scrive-signerade inom parentes efter siffran, bara när det finns några. */
 const Paren = ({ n, f }: { n: number | null | undefined; f?: (n: number) => string }) =>
@@ -176,7 +179,7 @@ export function LonemodellEditor({ fields }: { fields: FieldDef[] }) {
       <h2 className="d2d-lon-editor__h2">Lönemodell</h2>
       <p className="field-config__hint">
         Varje såld tjänst ger pinnar. Lön = pinnar × kr per pinne (provision) + trappans bonus när ett steg nås, räknat per löneperiod
-        (kalendermånad, från startdatumet). Den riktiga lönen räknas bara på adresser med status Såld; Scrive-signerade visas inom parentes
+        (första perioden från startdatumet till "Första perioden slutar", därefter kalendermånader). Den riktiga lönen räknas bara på adresser med status Såld; Scrive-signerade visas inom parentes
         och ingår bara i den potentiella lönen. Säljarna ser sina pinnar och nästa nivå i Blitz → Översikt; sidan Löner visar lönen per
         säljare med justeringar. TV Start och TV Bas ger inga pinnar.
       </p>
@@ -189,6 +192,10 @@ export function LonemodellEditor({ fields }: { fields: FieldDef[] }) {
         <label>Räknas från
           <input className="input input--sm" type="date" value={utkast.startdatum ?? ""}
             onChange={(e) => { setSparat(false); setUtkast((u) => u && ({ ...u, startdatum: e.target.value || null })); }} />
+        </label>
+        <label>Första perioden slutar
+          <input className="input input--sm" type="date" value={utkast.forstaPeriodTill ?? ""}
+            onChange={(e) => { setSparat(false); setUtkast((u) => u && ({ ...u, forstaPeriodTill: e.target.value || null })); }} />
         </label>
         <label>Utbetalas månader efter
           <input className="input input--sm" inputMode="numeric" value={utkast.utbetalningManaderEfter ?? ""}
