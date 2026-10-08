@@ -546,3 +546,53 @@
 /* Löner: urval Alla / Sålda / Scrive */
 .d2d-loner__urval { flex-wrap: nowrap; }
 .d2d-loner__urval .d2dd__period { padding: var(--sp-1) var(--sp-3); font-size: var(--text-sm); }
+
+/* ── Fastighetens progressbar (Blitz → fastighet → Lägenheter) ──────────── */
+/* "knackade/antal lägenheter": en bit per status i statusens färg, Såld
+   grön. Tomma delen = Ej knackad. */
+.d2d-fprog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: calc(var(--sp-2) * -1) 0 var(--sp-4);
+}
+.d2d-fprog__rad {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.d2d-fprog__tal strong { font-size: var(--text-base); color: var(--ink); font-weight: 700; }
+.d2d-fprog__sald { font-weight: 600; color: var(--hue-green); }
+.d2d-fprog__bar {
+  display: flex;
+  height: 12px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--hue-slate) 18%, transparent);
+  overflow: hidden;
+}
+.d2d-fprog__del {
+  display: block;
+  flex: none;
+  min-width: 3px;
+  transition: width .35s ease;
+}
+.d2d-fprog__del + .d2d-fprog__del { border-left: 1px solid var(--surface); }
+.d2d-fprog__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+.d2d-fprog__item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.d2d-fprog__item i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--hue-slate) 18%, transparent);
+  flex: none;
+}
+@media (prefers-reduced-motion: reduce) { .d2d-fprog__del { transition: none; } }
