@@ -814,14 +814,22 @@ export async function listSellers(): Promise<SellerOption[]> {
 }
 
 /** Lägger in adressrader (lägenheter) på en D2D-fastighet. */
+/**
+ * Importerar egna adresser till en D2D-fastighet. Varje rad matchas mot Telias
+ * adresslista (PunktID eller gata + nummer + lägenhetsnummer) och får Telias
+ * objektnummer/status; finns lägenheten redan uppdateras den i stället för att
+ * dubbleras. imported = nya, uppdaterade = befintliga, telia_matchade = rader
+ * som hittades i Telias lista.
+ */
 export async function d2dImportAddresses(
   fastighetId: string, rows: Record<string, string>[]
-): Promise<{ imported: number }> {
+): Promise<{ imported: number; uppdaterade: number; telia_matchade: number; total: number }> {
   const { data, error } = await supabase.rpc("d2d_import_addresses", {
     p_fastighet_id: fastighetId, p_rows: rows,
   });
   if (error) asError(error);
-  return data as { imported: number };
+  const r = (data ?? {}) as Partial<{ imported: number; uppdaterade: number; telia_matchade: number; total: number }>;
+  return { imported: r.imported ?? 0, uppdaterade: r.uppdaterade ?? 0, telia_matchade: r.telia_matchade ?? 0, total: r.total ?? 0 };
 }
 
 /**
