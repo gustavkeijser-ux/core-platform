@@ -539,3 +539,7 @@
 .d2d-fel__status--vantar { color: var(--hue-amber); }
 .d2d-fel__status--klar { color: var(--hue-green); }
 .d2d-fel__plus { grid-column: 1 / -1; justify-self: start; font-size: var(--text-xs); }
+
+/* Löner: Scrive-signerade (ännu inte Sålda) inom parentes — samma ton som Scrive i översikten. */
+.d2d-lon__scrive { font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.d2d-pinnar__fyll--vantar { background: color-mix(in srgb, var(--hue-violet) 45%, transparent); }
