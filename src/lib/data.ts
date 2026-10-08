@@ -823,13 +823,22 @@ export async function listSellers(): Promise<SellerOption[]> {
  */
 export async function d2dImportAddresses(
   fastighetId: string, rows: Record<string, string>[]
-): Promise<{ imported: number; uppdaterade: number; telia_matchade: number; total: number }> {
+): Promise<{
+  imported: number; uppdaterade: number; telia_matchade: number; total: number;
+  statusar_satta: number; okanda_status: number; saljare_saknas: number;
+}> {
   const { data, error } = await supabase.rpc("d2d_import_addresses", {
     p_fastighet_id: fastighetId, p_rows: rows,
   });
   if (error) asError(error);
-  const r = (data ?? {}) as Partial<{ imported: number; uppdaterade: number; telia_matchade: number; total: number }>;
-  return { imported: r.imported ?? 0, uppdaterade: r.uppdaterade ?? 0, telia_matchade: r.telia_matchade ?? 0, total: r.total ?? 0 };
+  const r = (data ?? {}) as Partial<{
+    imported: number; uppdaterade: number; telia_matchade: number; total: number;
+    statusar_satta: number; okanda_status: number; saljare_saknas: number;
+  }>;
+  return {
+    imported: r.imported ?? 0, uppdaterade: r.uppdaterade ?? 0, telia_matchade: r.telia_matchade ?? 0, total: r.total ?? 0,
+    statusar_satta: r.statusar_satta ?? 0, okanda_status: r.okanda_status ?? 0, saljare_saknas: r.saljare_saknas ?? 0,
+  };
 }
 
 /**
