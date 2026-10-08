@@ -29,6 +29,8 @@ type Lonemodell = {
   trappa: Trappsteg[];
   krPerPinne?: number;
   utbetalningManaderEfter?: number;
+  /** Första dagen som räknas (ÅÅÅÅ-MM-DD). Första löneperioden 26–31 oktober 2026. */
+  startdatum?: string | null;
   updatedAt?: string | null;
 };
 
@@ -36,6 +38,8 @@ type Niva = {
   niva: number | null; bonus: number; nastaNiva: number | null; nastaBonus: number | null; kvar: number | null;
 };
 type Justering = { id: string; belopp: number; kommentar: string; skapadAt: string; skapadAv: string | null };
+/** Riktig lön räknas bara på Såld. "vantar" = Scrive-signerade som ännu inte är Sålda:
+ *  visas inom parentes och ingår bara i den potentiella lönen (…InklVantar). */
 type SaljareRad = Niva & {
   id: string; namn: string; pinnar: number; vantar: number; affarer: number; affarerVantar: number;
   bonusInklVantar: number;
@@ -43,9 +47,13 @@ type SaljareRad = Niva & {
    *  lon = provision + bonus + justeringar. */
   provision?: number; provisionInklVantar?: number; justeringar?: number; lon?: number; lonInklVantar?: number;
   justeringarRader?: Justering[];
-  produkter?: Array<{ nyckel: string; antal: number; pinnar: number }>;
+  produkter?: Array<{ nyckel: string; antal: number; pinnar: number; antalScrive?: number; pinnarScrive?: number }>;
 };
-type Manad = { manad: string; utbetalning: string; krPerPinne?: number; saljare: SaljareRad[] };
+type Manad = {
+  manad: string; utbetalning: string; krPerPinne?: number; saljare: SaljareRad[];
+  /** Löneperioden: kalendermånaden, men tidigast från modellens startdatum. */
+  periodFran?: string; periodTill?: string;
+};
 
 const MANADER = ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"];
 /** "2026-10" → "oktober 2026" */
@@ -53,6 +61,15 @@ const manadNamn = (ym: string) => {
   const [y, m] = ym.split("-").map(Number);
   return m >= 1 && m <= 12 ? `${MANADER[m - 1]} ${y}` : ym;
 };
+/** Löneperiodens namn: "oktober 2026", eller "26–31 oktober 2026" när den börjar mitt i månaden. */
+const periodNamn = (m: Pick<Manad, "manad" | "periodFran" | "periodTill">) => {
+  const f = m.periodFran?.split("-").map(Number), t = m.periodTill?.split("-").map(Number);
+  if (!f || !t || f[2] === 1) return manadNamn(m.manad);
+  return `${f[2]}–${t[2]} ${MANADER[t[1] - 1]} ${t[0]}`;
+};
+/** Scrive-signerade inom parentes efter siffran, bara när det finns några. */
+const Paren = ({ n, f }: { n: number | null | undefined; f?: (n: number) => string }) =>
+  n ? <small className="d2d-lon__scrive"> ({f ? f(n) : n})</small> : null;
 const kr = (n: number | null | undefined) =>
   n == null ? "—" : `${Math.round(n).toLocaleString("sv-SE")} kr`;
 const pn = (n: number | null | undefined) =>
@@ -158,15 +175,20 @@ export function LonemodellEditor({ fields }: { fields: FieldDef[] }) {
     <div className="d2d-lon-editor">
       <h2 className="d2d-lon-editor__h2">Lönemodell</h2>
       <p className="field-config__hint">
-        Varje såld tjänst ger pinnar. Lön = pinnar × kr per pinne (provision) + trappans bonus när ett steg nås, räknat per månad på
-        sålda adresser och signerade Scrive-avtal. Säljarna ser sina pinnar och nästa nivå i Blitz → Översikt; sidan Löner visar lönen
-        per säljare med justeringar. TV Start och TV Bas ger inga pinnar.
+        Varje såld tjänst ger pinnar. Lön = pinnar × kr per pinne (provision) + trappans bonus när ett steg nås, räknat per löneperiod
+        (kalendermånad, från startdatumet). Den riktiga lönen räknas bara på adresser med status Såld; Scrive-signerade visas inom parentes
+        och ingår bara i den potentiella lönen. Säljarna ser sina pinnar och nästa nivå i Blitz → Översikt; sidan Löner visar lönen per
+        säljare med justeringar. TV Start och TV Bas ger inga pinnar.
       </p>
 
       <div className="d2d-lon-editor__villkor">
         <label>Provision, kr per pinne
           <input className="input input--sm" inputMode="decimal" value={utkast.krPerPinne ?? ""}
             onChange={(e) => { setSparat(false); setUtkast((u) => u && ({ ...u, krPerPinne: tal(e.target.value) ?? undefined })); }} />
+        </label>
+        <label>Räknas från
+          <input className="input input--sm" type="date" value={utkast.startdatum ?? ""}
+            onChange={(e) => { setSparat(false); setUtkast((u) => u && ({ ...u, startdatum: e.target.value || null })); }} />
         </label>
         <label>Utbetalas månader efter
           <input className="input input--sm" inputMode="numeric" value={utkast.utbetalningManaderEfter ?? ""}
@@ -262,10 +284,10 @@ export function PinnKort({ s, trappa, jag, lon, onOpen }: {
       className={`d2d-pinnar__kort${jag ? " d2d-pinnar__kort--jag" : ""}${klar ? " d2d-pinnar__kort--klar" : ""}${onOpen ? " d2d-pinnar__kort--klick" : ""}`}>
       <div className="d2d-pinnar__kort-head">
         <span className="d2d-pinnar__namn">{s.namn}{jag ? " (du)" : ""}</span>
-        <span className="d2d-pinnar__tal">{pn(s.pinnar)} <small>pinnar</small></span>
+        <span className="d2d-pinnar__tal">{pn(s.pinnar)}<Paren n={s.vantar} f={pn} /> <small>pinnar</small></span>
       </div>
       <div className="d2d-pinnar__stapel" role="progressbar" aria-valuemin={fran} aria-valuemax={till} aria-valuenow={s.pinnar}
-        title={`${pn(s.pinnar)} av ${till} pinnar${s.vantar ? `, ${pn(s.vantar)} väntar på signering` : ""}`}>
+        title={`${pn(s.pinnar)} av ${till} pinnar${s.vantar ? ` (+${pn(s.vantar)} Scrive-signerade, räknas när de blir Sålda)` : ""}`}>
         <div className="d2d-pinnar__fyll" style={{ width: `${andel * 100}%` }} />
         {vantarAndel > 0 && (
           <div className="d2d-pinnar__fyll d2d-pinnar__fyll--vantar" style={{ left: `${andel * 100}%`, width: `${vantarAndel * 100}%` }} />
@@ -279,7 +301,6 @@ export function PinnKort({ s, trappa, jag, lon, onOpen }: {
           {s.nastaNiva != null
             ? <><strong>{pn(s.kvar)}</strong> kvar till {s.nastaNiva} ({kr(s.nastaBonus)})</>
             : <>Högsta nivån nådd</>}
-          {s.vantar > 0 && <span className="d2d-pinnar__vantar"> · {pn(s.vantar)} väntar</span>}
         </span>
       </div>
       {lon && (
@@ -289,7 +310,7 @@ export function PinnKort({ s, trappa, jag, lon, onOpen }: {
           <small>
             {pn(s.pinnar)} × {kr(lon.krPerPinne)}{lon.bonus > 0 ? ` + bonus ${kr(lon.bonus)}` : ""}
             {lon.justeringar ? ` ${lon.justeringar > 0 ? "+" : "−"} ${kr(Math.abs(lon.justeringar))}` : ""}
-            {lon.lonInklVantar > lon.lon ? ` · ${kr(lon.lonInklVantar)} om väntande signeras` : ""}
+            {lon.lonInklVantar > lon.lon ? ` · potentiellt ${kr(lon.lonInklVantar)} inkl. Scrive` : ""}
           </small>
         </div>
       )}
@@ -311,10 +332,10 @@ export function BlitzPinnar({ minId, data, onOpenProfil }: {
     <section className="d2dd__section d2d-pinnar">
       <h2 className="d2dd__rubrik">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M4 20V10M10 20V4M16 20v-8M22 20H2" /></svg>
-        Pinnar — {manadNamn(data.manad)}
+        Pinnar — {periodNamn(data)}
       </h2>
       {rader.length === 0 ? (
-        <div className="d2dd__tom">Inga pinnar ännu den här månaden</div>
+        <div className="d2dd__tom">Inga pinnar ännu den här löneperioden</div>
       ) : (
         <div className="d2d-pinnar__kort-lista">
           {rader.map((s) => (
@@ -327,6 +348,7 @@ export function BlitzPinnar({ minId, data, onOpenProfil }: {
       {trappa.length > 0 && (
         <p className="d2d-pinnar__trappa">
           Trappa: {trappa.map((t) => `${t.pinnar} → ${kr(t.bonus)}`).join(" · ")}
+          <br />Pinnar räknas på Såld. Inom parentes = Scrive-signerade, som räknas när adressen blir Såld.
         </p>
       )}
     </section>
@@ -386,6 +408,9 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
 
   if (fel) return <div className="page"><div className="formfield__error">{fel}</div></div>;
   if (!data) return <div className="page"><p className="formfield__help">Räknar löner…</p></div>;
+  if (data.manader.length === 0) {
+    return <div className="page"><p className="formfield__help">Ingen löneperiod har startat ännu (räknas från {data.modell.startdatum ?? "startdatumet"}).</p></div>;
+  }
 
   const nu = data.manader[0];
   const krPinne = data.modell.krPerPinne ?? 0;
@@ -395,9 +420,9 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
     <div className="page d2d-loner">
       <section className="card d2d-loner__intro">
         <p>
-          Lön = <strong>{kr(krPinne)} per pinne</strong> + bonus när ett trappsteg nås + justeringar. En adress räknas den månad den blev
-          såld eller signerad i Scrive; lönen betalas ut {data.modell.utbetalningManaderEfter ?? 1} månad{(data.modell.utbetalningManaderEfter ?? 1) === 1 ? "" : "er"} efter.
-          Skickade men inte signerade avtal visas som "väntar" och räknas inte förrän de signerats. Klicka på en säljare för underlag och justeringar.
+          Lön = <strong>{kr(krPinne)} per pinne</strong> + bonus när ett trappsteg nås + justeringar. Den riktiga lönen räknas bara på adresser
+          med status <strong>Såld</strong>, den löneperiod de blev sålda; lönen betalas ut {data.modell.utbetalningManaderEfter ?? 1} månad{(data.modell.utbetalningManaderEfter ?? 1) === 1 ? "" : "er"} efter.
+          Scrive-signerade som ännu inte är Sålda står inom parentes och ingår bara i den potentiella lönen. Klicka på en säljare för underlag och justeringar.
           Modellen ändras under Inställningar → Priser.
         </p>
         <label className="d2d-loner__antal">Visa
@@ -418,7 +443,7 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
           <section key={m.manad} className="card d2d-loner__manad">
             <header className="d2d-loner__head">
               <div>
-                <h2>{manadNamn(m.manad)}{arNu ? <span className="d2d-loner__pagar">pågår</span> : null}</h2>
+                <h2>{periodNamn(m)}{arNu ? <span className="d2d-loner__pagar">pågår</span> : null}</h2>
                 <span className="d2d-loner__sub">Utbetalas med lönen i {manadNamn(m.utbetalning)}</span>
               </div>
               <div className="d2d-loner__summa">
@@ -426,7 +451,7 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
                 <span className="d2d-loner__summa-text">
                   att betala ut · provision {kr(sum(m, (s) => s.provision))} · bonus {kr(sum(m, (s) => s.bonus))}
                   {sum(m, (s) => s.justeringar) !== 0 ? ` · justeringar ${kr(sum(m, (s) => s.justeringar))}` : ""}
-                  {lonInkl > lon ? ` · ${kr(lonInkl)} om väntande signeras` : ""}
+                  {lonInkl > lon ? ` · potentiellt ${kr(lonInkl)} inkl. Scrive` : ""}
                 </span>
               </div>
             </header>
@@ -442,8 +467,8 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
                   <div key={s.id} className={`d2d-loner__rad${open ? " d2d-loner__rad--open" : ""}`}>
                     <button type="button" className="d2d-loner__tr" role="row" aria-expanded={open} onClick={() => oppna(key)}>
                       <span className="d2d-loner__namn">{s.namn}</span>
-                      <span>{s.affarer}{s.affarerVantar ? <small> (+{s.affarerVantar})</small> : null}</span>
-                      <span className="d2d-loner__pinnar">{pn(s.pinnar)}{s.vantar > 0 ? <small className="d2d-loner__vantar"> +{pn(s.vantar)}</small> : null}</span>
+                      <span>{s.affarer}<Paren n={s.affarerVantar} /></span>
+                      <span className="d2d-loner__pinnar">{pn(s.pinnar)}<Paren n={s.vantar} f={pn} /></span>
                       <span>{kr(s.provision)}</span>
                       <span className={s.bonus > 0 ? "d2d-loner__bonus--ja" : undefined}>
                         {s.bonus > 0 ? kr(s.bonus) : "—"}
@@ -451,7 +476,7 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
                       </span>
                       <span className={s.justeringar ? (s.justeringar < 0 ? "d2d-loner__neg" : "d2d-loner__pos") : undefined}>{s.justeringar ? kr(s.justeringar) : "—"}</span>
                       <span className="d2d-loner__lon">
-                        {kr(s.lon)}{(s.lonInklVantar ?? 0) > (s.lon ?? 0) ? <small> → {kr(s.lonInklVantar)}</small> : null}
+                        {kr(s.lon)}{(s.lonInklVantar ?? 0) > (s.lon ?? 0) ? <small className="d2d-lon__scrive" title="Potentiell lön inkl. Scrive-signerade"> ({kr(s.lonInklVantar)})</small> : null}
                       </span>
                     </button>
                     {open && (
@@ -459,14 +484,14 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
                         <div className="d2d-loner__detalj-kol">
                           <h4>Underlag</h4>
                           {(s.produkter ?? []).length === 0 ? (
-                            <span className="d2d-loner__sub">Inga sålda eller signerade tjänster den här månaden.</span>
+                            <span className="d2d-loner__sub">Inga sålda eller Scrive-signerade tjänster den här löneperioden.</span>
                           ) : (
                             <div className="d2d-loner__produkter">
                               {(s.produkter ?? []).map((p) => (
                                 <div key={p.nyckel} className="d2d-loner__produkt">
                                   <span>{produktEtikett(p.nyckel, fields)}</span>
-                                  <span>{p.antal} st</span>
-                                  <span>{pn(p.pinnar)} p</span>
+                                  <span>{p.antal}<Paren n={p.antalScrive} /> st</span>
+                                  <span>{pn(p.pinnar)}<Paren n={p.pinnarScrive} f={pn} /> p</span>
                                 </div>
                               ))}
                               <div className="d2d-loner__produkt d2d-loner__produkt--summa">
