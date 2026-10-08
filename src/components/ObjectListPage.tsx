@@ -9,6 +9,7 @@ import { recordsToCsv, downloadCsv } from "@/lib/csv";
 import { StatusPill } from "./StatusPill";
 import { RecordDrawer } from "./RecordDrawer";
 import { KanbanBoard } from "./KanbanBoard";
+import { LeveransKort } from "./LeveransKort";
 import { ColumnConfigPanel } from "./ColumnConfigPanel";
 import { FilterBar } from "./FilterBar";
 import { ColumnFilter, kolumnVal } from "./ColumnFilter";
@@ -47,8 +48,10 @@ type Props = {
   };
 };
 
+type ListMode = "list" | "kanban" | "kort";
+
 type SavedListState = {
-  mode: "list" | "kanban"; page: number; search: string; status: string;
+  mode: ListMode; page: number; search: string; status: string;
   filters: RecordFilter[]; sort: { field: string; dir: "asc" | "desc" } | null; activeViewId: string;
 };
 
@@ -153,8 +156,10 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   // man kommer tillbaka till exakt samma läge efter menybyte/omladdning.
   const stateKey = `list:${objectDef.key}${stateKeySuffix ?? ""}`;
   const [saved] = useState(() => loadListState<SavedListState>(stateKey));
-  const [modeState, setMode] = useState<"list" | "kanban">(saved.mode ?? "list");
-  const mode = picker ? "list" : modeState;
+  // Leveranser har en kortvy (LeveransKort) som är standard; övriga typer lista/kanban.
+  const harKort = objectDef.key === "delivery" && !picker;
+  const [modeState, setMode] = useState<ListMode>(saved.mode ?? (harKort ? "kort" : "list"));
+  const mode: ListMode = picker ? "list" : modeState === "kort" && !harKort ? "list" : modeState;
   const [showColumns, setShowColumns] = useState(false);
   const [items, setItems] = useState<RecordRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -367,7 +372,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
 
   // Tillbaka till raden man öppnade senast.
   const returnKey = `list:${objectDef.key}`;
-  const returnRow = useReturnToRow(returnKey, !loading && mode === "list");
+  const returnRow = useReturnToRow(returnKey, !loading && (mode === "list" || mode === "kort"));
   const openRow = (id: string) => { rememberRow(returnKey, id); onOpenRecord(id); };
 
   /**
@@ -504,6 +509,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
           )}
           {hasStatuses && !picker && (
             <div className="view-toggle">
+              {harKort && <button className="view-toggle__btn" aria-current={mode === "kort"} onClick={() => setMode("kort")}>Kort</button>}
               <button className="view-toggle__btn" aria-current={mode === "list"} onClick={() => setMode("list")}>Lista</button>
               <button className="view-toggle__btn" aria-current={mode === "kanban"} onClick={() => setMode("kanban")}>Kanban</button>
             </div>
@@ -821,7 +827,23 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         </div>
       )}
 
-      {mode === "list" && !error && total > 0 && (
+      {!error && mode === "kort" && (
+        loading && items.length === 0
+          ? <div className="card"><SkeletonRows /></div>
+          : items.length === 0
+            ? <div className="card"><EmptyState kind={filtered ? "filtered" : undefined} title={filtered ? "Inga träffar" : `Inga ${plural} än`}
+                text={filtered ? "Inget matchar sökningen eller filtren. Rensa dem för att se alla." : "Lägg till den första för att komma igång."} /></div>
+            : <LeveransKort
+                objectDef={objectDef}
+                items={items}
+                loading={loading}
+                onOpen={openRow}
+                onDelete={objectDef.can.delete ? onDelete : undefined}
+                returnRow={returnRow}
+              />
+      )}
+
+      {(mode === "list" || mode === "kort") && !error && total > 0 && (
         <Pager page={page} pageSize={PAGE_SIZE} total={total} unit={plural} onPage={setPage} />
       )}
 
