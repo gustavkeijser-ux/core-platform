@@ -768,3 +768,15 @@
 @media (max-width: 640px) {
   .d2d-okop__knappar .btn { flex: 1 1 100%; }
 }
+
+/* Säljarvyn: Vad är bundet? — per tjänst (månad + operatör) */
+.d2d-bindning__tjanst {
+  display: grid; gap: var(--sp-2);
+  padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--surface);
+}
+.d2d-bindning__etikett { font-size: var(--text-sm); color: var(--ink-muted); }
+/* Återkopplingsdatum (bara vid status Återkoppling) */
+.d2d-aterkoppling .formfield { margin: 0; }
+/* Utfall: Inte säljbar i utfallsstapeln */
+.utf__seg--inte_saljbar { background: color-mix(in srgb, var(--hue-zinc) 35%, transparent); color: var(--ink); }
