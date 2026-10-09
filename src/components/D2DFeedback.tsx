@@ -89,7 +89,7 @@ export function D2DFeedbackFlik() {
 
       <div className="d2d-fb__form">
         <p className="d2d-fb__hint">
-          Något som strular, saknas eller kan bli bättre i Blitz? Skriv här — Lukas läser och skickar vidare.
+          Något som strular, saknas eller kan bli bättre i D2D-sälj? Skriv här — Lukas läser och skickar vidare.
         </p>
         <textarea
           className="input d2d-fb__text"
@@ -181,7 +181,7 @@ export function D2DFeedbackGranskning({ onAntalAndrat }: { onAntalAndrat?: () =>
   return (
     <div className="d2d-fbg">
       <p className="d2d-fbg__intro">
-        Säljarnas feedback från Blitz. Godkänd feedback hamnar i menyn Feedback och skickas till Teams —
+        Säljarnas feedback från D2D-sälj. Godkänd feedback hamnar i menyn Feedback och skickas till Teams —
         du kan ändra texten innan du skickar vidare.
       </p>
       {fel && !oppen && <div className="d2d-fb__error" role="alert">{fel}</div>}
