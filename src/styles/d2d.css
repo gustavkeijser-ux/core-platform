@@ -172,18 +172,18 @@
 
 /* ── Adresslistan: kort per lägenhet med snabbpanel ──────────────────────
    Ikon | (Säljare) | Adress | Ingång | Lgh | Namn | Kommentar | Status |
-   Ring | Pil. Varje rad är ett kort (.d2d-lag-kort): huvudraden öppnar
-   lägenheten, pilen längst till höger fäller ut en panel med namn, telefon
+   Ring. Varje rad är ett öppet kort (.d2d-lag-kort): huvudraden öppnar
+   lägenheten, och under den ligger alltid en panel med namn, telefon
    (kund_namn/kund_telefon, sparas när fältet lämnas), knappen Inte hemma
    och −/+ för antal knackningar. Ringknappen är en tel:-länk. Kortets ram
    och skugga ligger på kortet, inte på raden (app.css lägger dem på raden
    — nollas här). */
 
 .d2d-detail .d2d-lag-table {
-  --lag-cols: 2.5rem minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.1fr) minmax(0, 1.6fr) 8.5rem 2.25rem 2rem;
+  --lag-cols: 2.5rem minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.1fr) minmax(0, 1.6fr) 8.5rem 2.25rem;
 }
 .d2d-detail .d2d-lag-table--admin {
-  --lag-cols: 2.5rem minmax(0, 1fr) minmax(0, 1.3fr) 4rem 4rem minmax(0, 1fr) minmax(0, 1.5fr) 8.5rem 2.25rem 2rem;
+  --lag-cols: 2.5rem minmax(0, 1fr) minmax(0, 1.3fr) 4rem 4rem minmax(0, 1fr) minmax(0, 1.5fr) 8.5rem 2.25rem;
 }
 
 .d2d-lag-kort {
@@ -194,7 +194,6 @@
   transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 .d2d-lag-kort:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
-.d2d-lag-kort--oppet { border-color: var(--border-strong); }
 .d2d-detail .d2d-lag-kort .d2d-lag-row {
   background: transparent;
   border: 0;
@@ -216,26 +215,6 @@
   color: var(--hue-blue);
   white-space: nowrap;
 }
-
-/* Utfällningspil längst till höger. */
-.d2d-lag-fall {
-  justify-self: end;
-  width: 2rem;
-  height: 2.25rem;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-md);
-  background: transparent;
-  color: var(--ink-muted);
-  cursor: pointer;
-  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
-}
-.d2d-lag-fall:hover { background: var(--overlay-soft); color: var(--ink); }
-.d2d-lag-fall:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-.d2d-lag-fall svg { transition: transform var(--dur) var(--ease); }
-.d2d-lag-kort--oppet .d2d-lag-fall svg { transform: rotate(180deg); }
 
 /* Snabbpanelen under raden. */
 .d2d-lag-panel {
@@ -348,15 +327,14 @@
 
 @media (max-width: 480px) {
   .d2d-detail .d2d-lag-table {
-    --lag-cols: 2rem minmax(0, 1fr) 2.75rem 2.75rem 2rem 1.75rem;
+    --lag-cols: 2rem minmax(0, 1fr) 2.75rem 2.75rem 2rem;
   }
   .d2d-detail .d2d-lag-table--admin {
-    --lag-cols: 2rem minmax(0, .9fr) minmax(0, 1fr) 2.25rem 2.75rem 2rem 1.75rem;
+    --lag-cols: 2rem minmax(0, .9fr) minmax(0, 1fr) 2.25rem 2.75rem 2rem;
   }
   .d2d-detail .d2d-lag-kort .d2d-lag-row { border-radius: var(--r-md); }
   .d2d-lag-kort { border-radius: var(--r-md); }
   .d2d-lag-ring { width: 2rem; height: 2rem; }
-  .d2d-lag-fall { width: 1.75rem; height: 2rem; }
   /* Namnet (+ antal knackningar) på en egen rad under kolumnerna i
      stället för en smal kolumn där det bryts mitt i ordet. */
   .d2d-lag-table__head .d2d-lag-table__namn-col { display: none; }
