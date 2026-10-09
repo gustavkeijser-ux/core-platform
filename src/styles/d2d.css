@@ -815,7 +815,12 @@
 .d2d-lag-kort.d2d-status--zinc   { --lag-st: var(--hue-zinc); }
 
 .d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--slate) {
-  background: color-mix(in srgb, var(--lag-st) 22%, var(--surface));
+  /* Övertoning: statusfärgen till vänster som tonar ut till kortets bakgrund
+     vid mitten, så högra halvan är ren yta. */
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--lag-st) 38%, var(--surface)) 0%,
+    color-mix(in srgb, var(--lag-st) 14%, var(--surface)) 35%,
+    var(--surface) 60%);
   border-color: color-mix(in srgb, var(--lag-st) 45%, var(--border));
   border-left: 6px solid var(--lag-st);
 }
@@ -823,7 +828,6 @@
   border-color: color-mix(in srgb, var(--lag-st) 65%, var(--border));
   border-left-color: var(--lag-st);
 }
-.d2d-lag-kort.d2d-status--green-solid { background: color-mix(in srgb, var(--hue-green) 32%, var(--surface)); }
 /* Ej knackad: tunn grå vänsterkant så korten ser likadana ut i raden. */
 .d2d-lag-kort.d2d-status--slate { border-left: 6px solid color-mix(in srgb, var(--hue-slate) 45%, var(--surface)); }
 
@@ -836,3 +840,9 @@
 .d2d-lag-kort.d2d-status--zinc[class*="d2d-status--"] .d2d-lag-card__badge { color: #14213D; } /* mörk text på gul/grå */
 /* Tomma celler ("—") får inte försvinna mot den tonade bakgrunden. */
 .d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--slate) .d2d-lag-row__cell--empty { color: color-mix(in srgb, var(--ink) 55%, transparent); }
+
+/* Fyrverkerier när säljaren lämnar en såld lägenhet (D2DFyrverkeri.tsx). */
+.d2d-fyrverkeri {
+  position: fixed; inset: 0; width: 100vw; height: 100vh;
+  pointer-events: none; z-index: 9999;
+}
