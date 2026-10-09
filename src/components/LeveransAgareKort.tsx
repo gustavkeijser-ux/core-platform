@@ -75,6 +75,37 @@ export function agareFilter(nyckel: string): RecordFilter {
   return { field: "__related", op: "eq", value: id };
 }
 
+/** Stegnumret i statusens etikett ("2. Beställt uppstartsmöte" → 2). */
+function stegFor(label?: string | null): number | null {
+  const m = label?.match(/^\s*(\d+)\./);
+  return m ? Number(m[1]) : null;
+}
+
+const VILANDE = 8;
+const KLAR = 9; // 9 och 99 räknas som helt klart
+
+/**
+ * Hur långt kortet har kommit: det lägsta steget bland fastigheter som är i gång
+ * (vilande och avslutade räknas inte). Bara avslutade → klart. Bara vilande → vilande.
+ */
+function kortSteg(g: AgareGrupp, label: (key: string | null) => string | undefined): number | "vilande" | null {
+  if (g.antal === 0) return null;
+  const steg = g.status.map((s) => stegFor(label(s.key))).filter((n): n is number => n !== null);
+  const aktiva = steg.filter((n) => n !== VILANDE && n < KLAR);
+  if (aktiva.length) return Math.min(...aktiva);
+  if (steg.some((n) => n >= KLAR)) return KLAR;
+  if (steg.some((n) => n === VILANDE)) return "vilande";
+  return null;
+}
+
+/** Röd (steg 0) → orange → gul → grön (steg 9/99). */
+function stegFarg(steg: number | "vilande"): string {
+  if (steg === "vilande") return "var(--ink-ghost)";
+  if (steg >= KLAR) return "var(--ok, #2E9E5B)";
+  const hue = Math.round((Math.max(0, steg) / KLAR) * 125);
+  return `hsl(${hue} 72% 46%)`;
+}
+
 const talFmt = new Intl.NumberFormat("sv-SE");
 const datumFmt = new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "short", year: "numeric" });
 
@@ -139,6 +170,9 @@ export function LeveransAgareKort({ objectDef, grupper, loading, onOpen }: Props
         const p = g.post ?? {};
         const titel = g.kund ?? "Ingen kund kopplad";
         const avslutad = g.post_status === "avslutad";
+        const steg = kortSteg(g, (k) => statusDef(k)?.label);
+        const ram = steg === null ? undefined : stegFarg(steg);
+        const stegText = steg === null ? null : steg === "vilande" ? "Vilande" : steg >= KLAR ? "Klar" : `Steg ${steg} av 9`;
         const statusar = [...g.status].sort((a, b) => ordning(a.key) - ordning(b.key));
         const klara = CHECKLISTA.filter((c) => p[c.key] === true);
         const saknas = CHECKLISTA.filter((c) => p[c.key] !== true);
@@ -147,7 +181,8 @@ export function LeveransAgareKort({ objectDef, grupper, loading, onOpen }: Props
         return (
           <article
             key={nyckel}
-            className={`lev-kort lev-agare${avslutad ? " lev-agare--avslutad" : ""}`}
+            className={`lev-kort lev-agare${avslutad ? " lev-agare--avslutad" : ""}${ram ? " lev-agare--ram" : ""}`}
+            style={ram ? ({ "--lev-ram": ram } as React.CSSProperties) : undefined}
             role="button"
             tabIndex={0}
             data-return-row={nyckel}
@@ -162,9 +197,12 @@ export function LeveransAgareKort({ objectDef, grupper, loading, onOpen }: Props
                   <p className="lev-kort__agare" title={avtalsparter.join(", ")}>Avtalsparter: {avtalsparter.join(", ")}</p>
                 )}
               </div>
-              {g.post_status && (
-                <span className={`lev-agare__poststatus${avslutad ? " is-avslutad" : ""}`}>{avslutad ? "Avslutad" : "Pågående"}</span>
-              )}
+              <div className="lev-agare__etiketter">
+                {stegText && <span className="lev-agare__steg" title="Fastigheten som kommit kortast (vilande och avslutade räknas inte)">{stegText}</span>}
+                {g.post_status && (
+                  <span className={`lev-agare__poststatus${avslutad ? " is-avslutad" : ""}`}>{avslutad ? "Avslutad" : "Pågående"}</span>
+                )}
+              </div>
             </div>
             {meta.length > 0 && <p className="lev-agare__meta">{meta.join(" · ")}</p>}
 
