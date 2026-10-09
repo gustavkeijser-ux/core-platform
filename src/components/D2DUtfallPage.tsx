@@ -70,14 +70,16 @@ const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0);
 const snitt = (summa: number | undefined, antal: number) =>
   antal > 0 && summa != null ? (summa / antal).toLocaleString("sv-SE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "–";
 
-type Period = "7" | "30" | "ar" | "allt";
+type Period = "7" | "30" | "ar" | "allt" | "datum";
+/** Lokalt datum som ÅÅÅÅ-MM-DD (inte UTC, så att dagen inte slår över fel vid midnatt). */
+const dagStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function periodFran(p: Period): string | null {
   const d = new Date();
   if (p === "7") d.setDate(d.getDate() - 7);
   else if (p === "30") d.setDate(d.getDate() - 30);
   else if (p === "ar") return `${d.getFullYear()}-01-01`;
   else return null;
-  return d.toISOString().slice(0, 10);
+  return dagStr(d);
 }
 
 function Staplar({ rader, ton = "accent", tom = "Inget att visa ännu." }: {
@@ -139,6 +141,9 @@ const sortera = (o: Record<string, number>, etiketter: Record<string, string>, s
 
 export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => void }) {
   const [period, setPeriod] = useState<Period>("30");
+  // Egen period (Datum): från och till, båda inklusive. Tomt fält = ingen gräns.
+  const [fran, setFran] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return dagStr(d); });
+  const [till, setTill] = useState(() => dagStr(new Date()));
   const [projekt, setProjekt] = useState("");
   const [saljare, setSaljare] = useState("");
   const [kalla, setKalla] = useState<Kalla>("sald");
@@ -151,7 +156,13 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
   useEffect(() => {
     let on = true;
     setAlla(null); setFel(null);
-    const arg = { p_projekt: projekt || null, p_saljare: saljare || null, p_fran: periodFran(period), p_till: null };
+    const egen = period === "datum";
+    if (egen && fran && till && fran > till) { setFel("Från-datumet ligger efter till-datumet."); return; }
+    const arg = {
+      p_projekt: projekt || null, p_saljare: saljare || null,
+      p_fran: egen ? fran || null : periodFran(period),
+      p_till: egen ? till || null : null,
+    };
     Promise.all(FLIKAR.map(([k]) => supabase.rpc("d2d_utfall_kalla", { p_kalla: k, ...arg })))
       .then((res) => {
         if (!on) return;
@@ -160,7 +171,7 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         setAlla(Object.fromEntries(FLIKAR.map(([k], i) => [k, res[i].data as Utfall])));
       });
     return () => { on = false; };
-  }, [period, projekt, saljare]);
+  }, [period, fran, till, projekt, saljare]);
   const ord = ORD[kalla];
 
   // Bindningar per kvartal (år utan månad och okända för sig).
@@ -218,8 +229,14 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         <FilterPills
           active={period}
           onSelect={(k) => setPeriod(k as Period)}
-          items={[{ key: "7", label: "7 dagar" }, { key: "30", label: "30 dagar" }, { key: "ar", label: "I år" }, { key: "allt", label: "Allt" }]}
+          items={[{ key: "7", label: "7 dagar" }, { key: "30", label: "30 dagar" }, { key: "ar", label: "I år" }, { key: "allt", label: "Allt" }, { key: "datum", label: "Datum" }]}
         />
+        {period === "datum" && (
+          <div className="utf__datum">
+            <label>Från<input type="date" className="input input--sm" value={fran} max={till || undefined} onChange={(e) => setFran(e.target.value)} /></label>
+            <label>Till<input type="date" className="input input--sm" value={till} min={fran || undefined} onChange={(e) => setTill(e.target.value)} /></label>
+          </div>
+        )}
         <select className="input input--sm" aria-label="Projekt" value={projekt} onChange={(e) => setProjekt(e.target.value)}>
           <option value="">Alla projekt</option>
           {u?.projekt.map((p) => <option key={p.id} value={p.id}>{p.title ?? "Namnlöst projekt"}</option>)}
