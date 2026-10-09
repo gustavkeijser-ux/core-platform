@@ -718,7 +718,7 @@ function ExcelImportPanel({
         Varje adress matchas mot Telias adresslista (PunktID eller gata + nummer + lägenhetsnummer) och får Telias
         objektnummer och status. Adresser som redan finns uppdateras i stället för att dubbleras — importera gärna
         samma fil igen när den fått fler rader, bara de nya läggs till. Kolumnerna <code>Status</code> (Ej knackad, Inte hemma,
-        Återkoppling, Kall kund, Inte intresserad, Befintlig Telia, Såld, Scrive) och <code>Säljare</code> (namn eller e-post)
+        Återkoppling, Kall kund, Inte intresserad, Inte säljbar, Befintlig Telia, Såld, Scrive) och <code>Säljare</code> (namn eller e-post)
         sätter status och säljare. Såld i filen räknas som såld sedan tidigare och hamnar utanför löneperioden — lägg till
         kolumnen <code>Säljdatum</code> för att ange datum. "Ej knackad" i filen nollställer aldrig en status som redan är satt.
       </p>
