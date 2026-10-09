@@ -956,10 +956,99 @@ function AssignmentEditor({
 
 type FastRow = RecordRow & { _addrCount: number };
 
+// =============================================================================
+// Säljstatus per projekt och fastighet (d2d_planering_status). Statusarna och
+// deras färger kommer från status_definitions för d2d_lagenhet.
+// =============================================================================
+
+type SaljStatus = { key: string; label: string; color: string };
+type Antal = Record<string, number>;
+type StatusSumma = { lagenheter: number; saljare: number; antal: Antal };
+type PlanProjekt = StatusSumma & { id: string; title: string | null; status: string | null; updatedAt: string; fastigheter: number };
+
+const PROJ_STATUS: Record<string, { label: string; color: string }> = {
+  planering: { label: "Planering", color: "slate" },
+  adresser_inlasta: { label: "Adresser inlästa", color: "sky" },
+  tilldelat: { label: "Tilldelat", color: "amber" },
+  godkant: { label: "Godkänt", color: "green" },
+  pagaende: { label: "Pågående", color: "blue" },
+  avslutat: { label: "Avslutat", color: "zinc" },
+};
+const projDef = (s: string | null) => s && PROJ_STATUS[s] ? { key: s, ...PROJ_STATUS[s] } as never : undefined;
+/** Scrive får egen färg i stapeln så den skiljs från Såld. */
+const statusFarg = (st: SaljStatus) => `var(--hue-${st.key === "scrive" ? "violet" : st.color}, var(--hue-slate))`;
+
+function nyckeltal(s: StatusSumma) {
+  const total = s.lagenheter;
+  const knackade = total - (s.antal.ej_knackad ?? 0);
+  const salda = (s.antal.sald ?? 0) + (s.antal.scrive ?? 0);
+  return {
+    knackade, salda,
+    knackPct: total ? Math.round((knackade * 100) / total) : 0,
+    traffPct: knackade ? Math.round((salda * 100) / knackade) : 0,
+  };
+}
+
+/** Fastighetens läge räknat från lägenheterna (fastighetens egen status används inte). */
+function fastLage(s?: StatusSumma): { text: string; ton: string } {
+  if (!s || s.lagenheter === 0) return { text: "Inga adresser", ton: "tom" };
+  const { knackade } = nyckeltal(s);
+  if (knackade === 0) return { text: "Ej påbörjad", ton: "ej" };
+  const kvar = (s.antal.ej_knackad ?? 0) + (s.antal.inte_hemma ?? 0) + (s.antal.aterkoppling ?? 0);
+  return kvar === 0 ? { text: "Färdigbearbetad", ton: "klar" } : { text: "Pågår", ton: "pagar" };
+}
+
+function StatusStapel({ statusar, summa }: { statusar: SaljStatus[]; summa: StatusSumma }) {
+  if (!summa.lagenheter) return <div className="d2dpb-stapel d2dpb-stapel--tom" title="Inga lägenheter" />;
+  return (
+    <div className="d2dpb-stapel" role="img"
+      aria-label={statusar.filter((st) => summa.antal[st.key]).map((st) => `${st.label} ${summa.antal[st.key]}`).join(", ")}>
+      {statusar.map((st) => {
+        const n = summa.antal[st.key] ?? 0;
+        return n ? <span key={st.key} style={{ flexGrow: n, background: statusFarg(st) }} title={`${st.label}: ${n}`} /> : null;
+      })}
+    </div>
+  );
+}
+
+function StatusLegend({ statusar, summa, visaNollor = false }: { statusar: SaljStatus[]; summa: StatusSumma; visaNollor?: boolean }) {
+  return (
+    <div className="d2dpb-legend">
+      {statusar.filter((st) => visaNollor || summa.antal[st.key]).map((st) => (
+        <span key={st.key} className={`d2dpb-legend__item${summa.antal[st.key] ? "" : " d2dpb-legend__item--noll"}`}>
+          <i style={{ background: statusFarg(st) }} />{st.label}<b>{summa.antal[st.key] ?? 0}</b>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Nyckeltal för ett projekt: lägenheter, knackat, sålt, säljare. */
+function Nyckeltal({ summa, fastigheter }: { summa: StatusSumma; fastigheter?: number }) {
+  const k = nyckeltal(summa);
+  return (
+    <div className="d2dpb-kpis">
+      {fastigheter != null && <div><b>{fastigheter}</b><span>fastigheter</span></div>}
+      <div><b>{summa.lagenheter.toLocaleString("sv-SE")}</b><span>lägenheter</span></div>
+      <div><b>{k.knackPct} %</b><span>knackade ({k.knackade.toLocaleString("sv-SE")})</span></div>
+      <div><b>{k.salda.toLocaleString("sv-SE")}</b><span>sålda inkl. Scrive</span></div>
+      <div><b>{k.traffPct} %</b><span>sålt av knackade</span></div>
+      <div><b>{summa.saljare}</b><span>säljare</span></div>
+    </div>
+  );
+}
+
+async function hamtaPlanering(projektId: string | null) {
+  const { data, error } = await supabase.rpc("d2d_planering_status", { p_projekt: projektId });
+  if (error) throw error;
+  return data as { statusar: SaljStatus[]; projekt: PlanProjekt[] | StatusSumma; fastigheter?: Record<string, StatusSumma> };
+}
+
 function FastighetRow({
-  fastighet, sellers, onChanged, onRemove,
+  fastighet, sellers, statusar, summa, onChanged, onRemove,
 }: {
-  fastighet: FastRow; sellers: SellerOption[]; onChanged: () => void; onRemove: () => void;
+  fastighet: FastRow; sellers: SellerOption[]; statusar: SaljStatus[]; summa?: StatusSumma;
+  onChanged: () => void; onRemove: () => void;
 }) {
   const [open, setOpen] = useState<"none" | "addresses" | "assign">("none");
   const [turordning, setTurordning] = useState(String((fastighet.data as Record<string, unknown>).turordning ?? ""));
@@ -972,10 +1061,14 @@ function FastighetRow({
 
   const data = fastighet.data as Record<string, unknown>;
   const assignment = (data.saljartilldelning as Assignment[] | undefined) ?? [];
+  const sum: StatusSumma = summa ?? { lagenheter: 0, saljare: 0, antal: {} };
+  const k = nyckeltal(sum);
+  const lage = fastLage(summa);
+  const namn = (id: string) => sellers.find((x) => x.id === id)?.name?.split(" ")[0] ?? "?";
 
   return (
-    <div className="d2dpb-fast">
-      <div className="d2dpb-fast__main">
+    <div className={`d2dpb-rad${open !== "none" ? " d2dpb-rad--oppen" : ""}`}>
+      <div className="d2dpb-rad__main">
         <input
           className="input d2dpb-fast__turordning"
           type="number"
@@ -983,24 +1076,30 @@ function FastighetRow({
           onChange={(e) => setTurordning(e.target.value)}
           onBlur={saveTurordning}
           title="Turordning"
+          aria-label="Turordning"
         />
-        <div className="d2dpb-fast__title">
+        <div className="d2dpb-rad__namn">
           <strong>{fastighet.title ?? "Namnlös"}</strong>
-          {!!data.fastighetsbeteckning && <span className="d2d-card__sub"> · {String(data.fastighetsbeteckning)}</span>}
+          <span>{[data.fastighetsbeteckning, `${fastighet._addrCount} adresser`].filter(Boolean).map(String).join(" · ")}</span>
         </div>
-        <span className="d2d-card__badge">{fastighet._addrCount} adress(er)</span>
-        {assignment.length > 0 && (
-          <span className="d2d-card__badge">{assignment.length} säljare</span>
-        )}
-        <StatusPill status={fastighet.status} />
-        <button className="btn btn--ghost btn--sm" onClick={() => setOpen(open === "addresses" ? "none" : "addresses")}>
-          Adresser
-        </button>
-        <button className="btn btn--ghost btn--sm" onClick={() => setOpen(open === "assign" ? "none" : "assign")}>
-          Tilldela säljare
-        </button>
-        <button className="btn btn--ghost btn--sm" onClick={onRemove} title="Ta bort fastighet ur projektet">Ta bort</button>
+        <span className={`d2dpb-lage d2dpb-lage--${lage.ton}`}>{lage.text}</span>
+        <div className="d2dpb-rad__saljare" title={assignment.map((x) => `${namn(x.user_id)} ${x.procent} %`).join(", ")}>
+          {assignment.length ? assignment.map((x) => namn(x.user_id)).join(", ") : <span className="ink-faint">Ingen tilldelad</span>}
+        </div>
+        <div className="d2dpb-rad__stapel">
+          <StatusStapel statusar={statusar} summa={sum} />
+          <span className="d2dpb-rad__nyckel">{k.knackPct} % knackat · {k.salda} sålda</span>
+        </div>
+        {statusar.map((st) => (
+          <span key={st.key} className="d2dpb-rad__antal" data-label={st.label}>{sum.antal[st.key] || "–"}</span>
+        ))}
+        <div className="d2dpb-rad__knappar">
+          <button className="btn btn--ghost btn--sm" aria-pressed={open === "addresses"} onClick={() => setOpen(open === "addresses" ? "none" : "addresses")}>Adresser</button>
+          <button className="btn btn--ghost btn--sm" aria-pressed={open === "assign"} onClick={() => setOpen(open === "assign" ? "none" : "assign")}>Tilldela</button>
+          <button className="btn btn--ghost btn--sm d2dpb-rad__bort" onClick={onRemove} title="Ta bort fastigheten ur projektet" aria-label="Ta bort fastigheten ur projektet">✕</button>
+        </div>
       </div>
+      <div className="d2dpb-rad__mobil-legend"><StatusLegend statusar={statusar} summa={sum} /></div>
 
       {open === "addresses" && (
         <AddressEditor
@@ -1116,9 +1215,13 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
   const [valArbetar, setValArbetar] = useState<string | null>(null);
   const [valFel, setValFel] = useState<string | null>(null);
   const [kartaKey, setKartaKey] = useState(0);
+  const [plan, setPlan] = useState<{ statusar: SaljStatus[]; projekt: StatusSumma; fastigheter: Record<string, StatusSumma> } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    hamtaPlanering(projektId)
+      .then((p) => setPlan({ statusar: p.statusar, projekt: p.projekt as StatusSumma, fastigheter: p.fastigheter ?? {} }))
+      .catch(() => {});
     try {
       const [proj, sellerList] = await Promise.all([getRecord(projektId), listSellers()]);
       setProject(proj.record);
@@ -1282,7 +1385,7 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
       <div className="d2dpb-detail__header">
         <button className="btn btn--ghost btn--sm" onClick={onBack}>← Alla projekt</button>
         <h2>{project.title ?? "Projekt"}</h2>
-        <StatusPill status={project.status} />
+        <StatusPill status={project.status} def={projDef(project.status)} />
         <button
           className="btn btn--ghost btn--sm d2dpb-detail__delete"
           onClick={deleteProject}
@@ -1294,6 +1397,14 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
       {deleteErr && <div className="d2d-error">{deleteErr}</div>}
       {!!data.description && <p className="ink-faint">{String(data.description)}</p>}
 
+      {plan && (
+        <div className="d2dpb-summa">
+          <Nyckeltal summa={plan.projekt} fastigheter={fastigheter.length} />
+          <StatusStapel statusar={plan.statusar} summa={plan.projekt} />
+          <StatusLegend statusar={plan.statusar} summa={plan.projekt} visaNollor />
+        </div>
+      )}
+
       <div className="d2dpb-detail__section">
         <div className="d2dpb-detail__section-header">
           <h3>Fastigheter ({fastigheter.length})</h3>
@@ -1301,15 +1412,30 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
         {fastigheter.length === 0 && (
           <div className="d2d-empty">Inga fastigheter tillagda ännu. Bocka i leveranser i listan nedan.</div>
         )}
-        {fastigheter.map((f) => (
-          <FastighetRow
-            key={f.id}
-            fastighet={f}
-            sellers={sellers}
-            onChanged={load}
-            onRemove={() => removeFastighet(f.id)}
-          />
-        ))}
+        {fastigheter.length > 0 && (
+          <div className="d2dpb-tabell" style={{ "--d2dpb-antal": plan?.statusar.length ?? 0 } as React.CSSProperties}>
+            <div className="d2dpb-rad__main d2dpb-tabell__head" aria-hidden="true">
+              <span>#</span><span>Fastighet</span><span>Läge</span><span>Säljare</span><span>Säljstatus</span>
+              {(plan?.statusar ?? []).map((st) => (
+                <span key={st.key} className="d2dpb-tabell__status" title={st.label}>
+                  <i style={{ background: statusFarg(st) }} />{st.label}
+                </span>
+              ))}
+              <span />
+            </div>
+            {fastigheter.map((f) => (
+              <FastighetRow
+                key={f.id}
+                fastighet={f}
+                sellers={sellers}
+                statusar={plan?.statusar ?? []}
+                summa={plan?.fastigheter[f.id]}
+                onChanged={load}
+                onRemove={() => removeFastighet(f.id)}
+              />
+            ))}
+          </div>
+        )}
         {!deliveryDef && (
           <AddFastighetPicker
             projektId={projektId}
@@ -1366,17 +1492,20 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
 // =============================================================================
 
 function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
-  const [items, setItems] = useState<RecordRow[]>([]);
+  const [items, setItems] = useState<PlanProjekt[]>([]);
+  const [statusar, setStatusar] = useState<SaljStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [visaAvslutade, setVisaAvslutade] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listRecords({ objectType: "d2d_projekt", limit: 200, sort: { field: "updated_at", dir: "desc" } });
-      setItems(res.items);
+      const p = await hamtaPlanering(null);
+      setItems(p.projekt as PlanProjekt[]);
+      setStatusar(p.statusar);
     } catch {
       // tyst
     } finally {
@@ -1403,13 +1532,29 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
 
   if (loading) return <div className="d2d-loading">Laddar projekt…</div>;
 
+  const synliga = items.filter((p) => visaAvslutade || p.status !== "avslutat");
+  const antalAvslutade = items.length - items.filter((p) => p.status !== "avslutat").length;
+  const totalt: StatusSumma = synliga.reduce<StatusSumma>((acc, p) => {
+    const antal = { ...acc.antal };
+    for (const [k, n] of Object.entries(p.antal)) antal[k] = (antal[k] ?? 0) + n;
+    return { lagenheter: acc.lagenheter + p.lagenheter, saljare: Math.max(acc.saljare, p.saljare), antal };
+  }, { lagenheter: 0, saljare: 0, antal: {} });
+
   return (
     <div className="d2dpb-list">
       <div className="d2dpb-list__header">
         <h2>D2D-projekt</h2>
-        <button className="btn btn--brand btn--sm" onClick={() => setCreating((c) => !c)}>
-          {creating ? "Avbryt" : "+ Nytt projekt"}
-        </button>
+        <div className="d2dpb-list__actions">
+          {antalAvslutade > 0 && (
+            <label className="d2dpb-list__toggle">
+              <input type="checkbox" checked={visaAvslutade} onChange={(e) => setVisaAvslutade(e.target.checked)} />
+              Visa avslutade ({antalAvslutade})
+            </label>
+          )}
+          <button className="btn btn--brand btn--sm" onClick={() => setCreating((c) => !c)}>
+            {creating ? "Avbryt" : "+ Nytt projekt"}
+          </button>
+        </div>
       </div>
 
       {creating && (
@@ -1419,6 +1564,7 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
             placeholder="Projektnamn"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && create()}
             autoFocus
           />
           <button className="btn btn--brand btn--sm" onClick={create}>Skapa</button>
@@ -1426,19 +1572,50 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
       )}
 
-      {items.length === 0 && <div className="d2d-empty">Inga D2D-projekt ännu.</div>}
+      {synliga.length > 0 && (
+        <div className="d2dpb-summa">
+          <Nyckeltal summa={totalt} fastigheter={synliga.reduce((n, p) => n + p.fastigheter, 0)} />
+          <StatusLegend statusar={statusar} summa={totalt} visaNollor />
+        </div>
+      )}
 
-      {items.map((item) => (
-        <button key={item.id} className="d2d-card" {...returnRow(item.id)} onClick={() => { rememberRow("d2dbuilder:projekt", item.id); onOpen(item.id); }}>
-          <div className="d2d-card__main">
-            <span className="d2d-card__title">{item.title ?? "Namnlöst projekt"}</span>
+      {synliga.length === 0 && <div className="d2d-empty">Inga D2D-projekt ännu.</div>}
+
+      {synliga.length > 0 && (
+        <div className="d2dpb-ptabell" style={{ "--d2dpb-antal": statusar.length } as React.CSSProperties}>
+          <div className="d2dpb-prad d2dpb-tabell__head" aria-hidden="true">
+            <span>Projekt</span><span>Status</span><span>Fastigheter</span><span>Lägenheter</span><span>Säljstatus</span>
+            {statusar.map((st) => (
+              <span key={st.key} className="d2dpb-tabell__status" title={st.label}>
+                <i style={{ background: statusFarg(st) }} />{st.label}
+              </span>
+            ))}
+            <span />
           </div>
-          <div className="d2d-card__meta">
-            <StatusPill status={item.status} />
-          </div>
-          <svg className="d2d-card__chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 4l4 4-4 4"/></svg>
-        </button>
-      ))}
+          {synliga.map((p) => {
+            const k = nyckeltal(p);
+            return (
+              <button key={p.id} className="d2dpb-prad" {...returnRow(p.id)}
+                onClick={() => { rememberRow("d2dbuilder:projekt", p.id); onOpen(p.id); }}>
+                <span className="d2dpb-prad__namn"><strong>{p.title ?? "Namnlöst projekt"}</strong>
+                  <span>{p.saljare} säljare</span></span>
+                <span><StatusPill status={p.status} def={projDef(p.status)} /></span>
+                <span className="d2dpb-prad__tal" data-label="Fastigheter">{p.fastigheter}</span>
+                <span className="d2dpb-prad__tal" data-label="Lägenheter">{p.lagenheter.toLocaleString("sv-SE")}</span>
+                <span className="d2dpb-rad__stapel">
+                  <StatusStapel statusar={statusar} summa={p} />
+                  <span className="d2dpb-rad__nyckel">{k.knackPct} % knackat · {k.salda} sålda · {k.traffPct} % träff</span>
+                </span>
+                {statusar.map((st) => (
+                  <span key={st.key} className="d2dpb-rad__antal" data-label={st.label}>{p.antal[st.key] || "–"}</span>
+                ))}
+                <svg className="d2d-card__chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 4l4 4-4 4"/></svg>
+                <span className="d2dpb-rad__mobil-legend"><StatusLegend statusar={statusar} summa={p} /></span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1598,7 +1775,7 @@ export function D2DProjectBuilder({ objectDefFor, onOpenRecord }: {
   }, [view.kind]);
 
   return (
-    <div className={`d2dpb${view.kind === "project" ? " d2dpb--bred" : ""}`}>
+    <div className="d2dpb d2dpb--bred">
       {view.kind !== "project" && (
         <div className="d2dpb-toplevel-tabs">
           <button
