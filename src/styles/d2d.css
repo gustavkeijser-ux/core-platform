@@ -800,10 +800,10 @@
   color: var(--ink-muted);
 }
 
-/* ── Fastighetsvyn / Alla adresser: hela lägenhetskortet färgas efter status ──
-   Statusfärgen (--lag-st) sätts per statusklass på kortet; bakgrunden är en
-   tydlig ton av färgen, vänsterkanten är helfärgad och statuspillret blir
-   helfärgat så statusen syns direkt i listan. Ej knackad är neutral. */
+/* ── Fastighetsvyn / Alla adresser: färgad ram runt varje lägenhetskort ──
+   Statusfärgen (--lag-st) sätts per statusklass på kortet och blir en
+   tydlig 2 px ram runt hela kortet; statuspillret är helfärgat. Bakgrunden
+   är kortets vanliga yta. Ej knackad har den vanliga grå ramen. */
 .d2d-lag-kort.d2d-status--slate  { --lag-st: var(--hue-slate); }
 .d2d-lag-kort.d2d-status--blue   { --lag-st: var(--hue-blue); }
 .d2d-lag-kort.d2d-status--amber  { --lag-st: var(--hue-amber); }
@@ -815,31 +815,22 @@
 .d2d-lag-kort.d2d-status--zinc   { --lag-st: var(--hue-zinc); }
 
 .d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--slate) {
-  /* Övertoning: statusfärgen till vänster som tonar ut till kortets bakgrund
-     vid mitten, så högra halvan är ren yta. */
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--lag-st) 38%, var(--surface)) 0%,
-    color-mix(in srgb, var(--lag-st) 14%, var(--surface)) 35%,
-    var(--surface) 60%);
-  border-color: color-mix(in srgb, var(--lag-st) 45%, var(--border));
-  border-left: 6px solid var(--lag-st);
+  border: 2px solid var(--lag-st);
 }
 .d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--slate):hover {
-  border-color: color-mix(in srgb, var(--lag-st) 65%, var(--border));
-  border-left-color: var(--lag-st);
+  border-color: var(--lag-st);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lag-st) 25%, transparent), var(--shadow-md);
 }
-/* Ej knackad: tunn grå vänsterkant så korten ser likadana ut i raden. */
-.d2d-lag-kort.d2d-status--slate { border-left: 6px solid color-mix(in srgb, var(--hue-slate) 45%, var(--surface)); }
+/* Ej knackad: 2 px också, så korten är lika höga, men i vanlig ramfärg. */
+.d2d-lag-kort.d2d-status--slate { border-width: 2px; }
 
-/* Statuspillret helfärgat på färgade kort. */
+/* Statuspillret helfärgat på statusfärgade kort. */
 .d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--slate) .d2d-lag-card__badge {
   background: var(--lag-st);
   color: #fff;
 }
 .d2d-lag-kort.d2d-status--amber[class*="d2d-status--"] .d2d-lag-card__badge,
 .d2d-lag-kort.d2d-status--zinc[class*="d2d-status--"] .d2d-lag-card__badge { color: #14213D; } /* mörk text på gul/grå */
-/* Tomma celler ("—") får inte försvinna mot den tonade bakgrunden. */
-.d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--slate) .d2d-lag-row__cell--empty { color: color-mix(in srgb, var(--ink) 55%, transparent); }
 
 /* Fyrverkerier när säljaren lämnar en såld lägenhet (D2DFyrverkeri.tsx). */
 .d2d-fyrverkeri {
