@@ -846,3 +846,104 @@
   position: fixed; inset: 0; width: 100vw; height: 100vh;
   pointer-events: none; z-index: 9999;
 }
+
+/* ── Planeringsverktyget (D2DProjectBuilder): säljstatus per projekt och fastighet ── */
+.d2dpb.d2dpb--bred { max-width: 1680px; }
+.d2dpb-list__actions { display: flex; align-items: center; gap: var(--sp-3); }
+.d2dpb-list__toggle { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--ink-muted); cursor: pointer; }
+
+.d2dpb-summa {
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  padding: var(--sp-4); margin: var(--sp-3) 0 var(--sp-4);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.d2dpb-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--sp-3); }
+.d2dpb-kpis > div { display: flex; flex-direction: column; }
+.d2dpb-kpis b { font-family: var(--font-display); font-size: 22px; font-weight: 800; color: var(--ink); line-height: 1.2; }
+.d2dpb-kpis span { font-size: var(--text-xs); color: var(--ink-muted); }
+
+.d2dpb-stapel { display: flex; height: 10px; border-radius: var(--r-pill); overflow: hidden; background: var(--surface-sunk); gap: 1px; min-width: 60px; }
+.d2dpb-stapel span { display: block; min-width: 3px; }
+.d2dpb-stapel--tom { opacity: .6; }
+
+.d2dpb-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: var(--text-xs); color: var(--ink-soft); }
+.d2dpb-legend__item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.d2dpb-legend__item i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.d2dpb-legend__item b { color: var(--ink); font-weight: 700; }
+.d2dpb-legend__item--noll { opacity: .45; }
+
+/* Tabellerna: rader som grid. Statuskolumnerna visas på breda skärmar; annars en förklaring under stapeln. */
+.d2dpb-tabell, .d2dpb-ptabell {
+  border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); overflow: hidden;
+}
+.d2dpb-rad__main, .d2dpb-prad {
+  display: grid; align-items: center; gap: var(--sp-3);
+  padding: 10px var(--sp-4);
+}
+.d2dpb-rad, .d2dpb-prad, .d2dpb-tabell__head { border-bottom: 1px solid var(--border); }
+.d2dpb-rad:last-child { border-bottom: 0; }
+.d2dpb-rad__main { grid-template-columns: 56px minmax(170px, 1.6fr) 120px minmax(110px, 1fr) minmax(170px, 1.5fr) 220px; }
+.d2dpb-prad { grid-template-columns: minmax(170px, 1.6fr) 130px 84px 90px minmax(200px, 2fr) 18px; }
+.d2dpb-prad {
+  width: 100%; background: none; border: 0; border-bottom: 1px solid var(--border);
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+}
+.d2dpb-prad:hover, .d2dpb-rad:hover > .d2dpb-rad__main { background: var(--overlay-hover, var(--surface-alt)); }
+.d2dpb-prad:last-child { border-bottom: 0; }
+.d2dpb-tabell__head {
+  background: var(--surface-alt); font-size: var(--text-xs); font-weight: 600; color: var(--ink-muted);
+  cursor: default; padding-top: 8px; padding-bottom: 8px;
+}
+.d2dpb-tabell__head:hover { background: var(--surface-alt) !important; }
+.d2dpb-tabell__status { display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; line-height: 1.15; font-size: 10.5px; }
+.d2dpb-tabell__status i { width: 9px; height: 9px; border-radius: 3px; }
+.d2dpb-rad__antal { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+.d2dpb-tabell__status, .d2dpb-rad__antal { display: none; }
+
+.d2dpb-rad__namn, .d2dpb-prad__namn { display: flex; flex-direction: column; min-width: 0; }
+.d2dpb-rad__namn strong, .d2dpb-prad__namn strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d2dpb-rad__namn span, .d2dpb-prad__namn span { font-size: var(--text-xs); color: var(--ink-muted); }
+.d2dpb-prad__tal { font-variant-numeric: tabular-nums; font-weight: 600; }
+.d2dpb-rad__saljare { font-size: var(--text-sm); color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d2dpb-rad__stapel { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.d2dpb-rad__nyckel { font-size: var(--text-xs); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d2dpb-rad__knappar { display: flex; gap: 4px; justify-content: flex-end; }
+.d2dpb-rad__knappar .btn[aria-pressed="true"] { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+.d2dpb-rad__bort { color: var(--ink-muted); }
+.d2dpb-rad__bort:hover { color: var(--hue-red); }
+.d2dpb-rad--oppen > .d2dpb-rad__main { background: var(--surface-alt); }
+.d2dpb-rad > .d2dpb-addr, .d2dpb-rad > .d2dpb-assign { margin: 0; padding: var(--sp-3) var(--sp-4); background: var(--surface); border-top: 1px solid var(--border); }
+.d2dpb-rad__mobil-legend { display: block; padding: 0 var(--sp-4) 10px calc(56px + var(--sp-3) + var(--sp-4)); }
+.d2dpb-prad .d2dpb-rad__mobil-legend { grid-column: 1 / -1; padding: 0; }
+.d2dpb-rad__mobil-legend:empty { display: none; }
+
+.d2dpb-lage { justify-self: start; font-size: var(--text-xs); font-weight: 600; padding: 2px 10px; border-radius: var(--r-pill); background: var(--surface-sunk); color: var(--ink-muted); white-space: nowrap; }
+.d2dpb-lage--pagar { background: var(--brand-soft); color: var(--brand); }
+.d2dpb-lage--klar { color: var(--hue-green); }
+.d2dpb-lage--ej { color: var(--ink-soft); }
+
+/* Bred skärm: en kolumn per säljstatus. */
+@media (min-width: 1800px) {
+  .d2dpb-rad__main { grid-template-columns: 56px minmax(150px, 1.6fr) 110px minmax(90px, 1fr) minmax(140px, 1.4fr) repeat(var(--d2dpb-antal), 54px) 220px; gap: var(--sp-3) 12px; }
+  .d2dpb-prad { grid-template-columns: minmax(160px, 1.6fr) 120px 76px 84px minmax(180px, 2fr) repeat(var(--d2dpb-antal), 54px) 18px; gap: var(--sp-3) 12px; }
+  .d2dpb-tabell__status { display: flex; }
+  .d2dpb-rad__antal { display: block; }
+  .d2dpb-rad__mobil-legend { display: none; }
+}
+
+/* Mobil: varje rad blir ett kort. */
+@media (max-width: 760px) {
+  .d2dpb-tabell__head { display: none; }
+  .d2dpb-rad__main { grid-template-columns: 52px 1fr auto; row-gap: 8px; }
+  .d2dpb-rad__main .d2dpb-lage { grid-column: 3; grid-row: 1; }
+  .d2dpb-rad__saljare, .d2dpb-rad__stapel { grid-column: 1 / -1; }
+  .d2dpb-rad__knappar { grid-column: 1 / -1; justify-content: flex-start; }
+  .d2dpb-rad__mobil-legend { padding-left: var(--sp-4); }
+  .d2dpb-prad { grid-template-columns: 1fr auto; row-gap: 8px; }
+  .d2dpb-prad > .d2dpb-prad__tal { display: none; }
+  .d2dpb-prad .d2dpb-rad__stapel { grid-column: 1 / -1; }
+  .d2dpb-prad .d2d-card__chevron { display: none; }
+  .d2dpb-list__header { flex-wrap: wrap; gap: var(--sp-2); }
+  .d2dpb-detail__header { flex-wrap: wrap; }
+  .d2dpb-detail__header h2 { flex-basis: 100%; order: -1; }
+}
