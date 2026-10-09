@@ -19,6 +19,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## 2026-10-09
 
+- [D2D] Blitz → fastighet: pilen borttagen — varje adressrad är nu ett öppet kort där panelen (Namn, Telefon, Inte hemma, −/+ knackningar, Öppna lägenheten) alltid syns. Kontrollerad i 390 och 1280 px. Filer: `D2DSellerApp.tsx`, `styles/d2d.css`.
 - [D2D] Blitz → fastighet: varje adressrad är nu ett kort med en pil längst till höger som fäller ut en snabbpanel — Namn och Telefon (kund_namn/kund_telefon, sparas när fältet lämnas), knappen **Inte hemma** (sätter statusen Inte hemma, räknar upp antal knackningar och sätter Senast kontakt = nu, som inne på lägenheten) och −/+ för antal knackningar (antal_knackningar, 0–99). Antalet syns som "3×" efter namnet i raden, progressbaren följer med direkt. Klick på raden öppnar lägenheten som förut; panelen har också "Öppna lägenheten →". Telefonfältet som låg i raden flyttade in i panelen; på mobil ligger namnet på en egen rad under adressen. Kontrollerad i 390 och 1280 px (statisk harness). Filer: `D2DSellerApp.tsx` (`FastighetsDetalj`), `styles/d2d.css` (`.d2d-lag-kort*`, `.d2d-lag-panel*`, `.d2d-lag-fall`). Ingen DB-ändring.
 
 ## 2026-10-08
