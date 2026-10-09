@@ -162,6 +162,11 @@ const ALIAS: Record<string, string> = {
   mobil_kampanjpris: "mobil_kampanj", mobil_ordinarie_pris: "mobil_ordinarie",
   trygghet_kampanjpris: "trygghet_kampanj", trygghet_ordinarie_pris: "trygghet_ordinarie",
   ovrigt: "ovrigt", ovrigt_text: "ovrigt", ovriga_kommentarer: "ovrigt", ovrig_information: "ovrigt", ovrigt_avtal: "ovrigt",
+  // Förhandsbeställningsmallen ("avtalsförslag om fibertjänster förhandsbeställning 300/300"):
+  // adressen står i ett fält som heter som exempeltexten, lägenheten i "lgh nummer".
+  tex_verkstadsvagen_4_749_42_enkoping: "gatuadress", adress: "gatuadress", gatuadress_och_ort: "gatuadress",
+  lgh_nummer: "lagenhetsnummer", lagenhetsnr: "lagenhetsnummer", lgh: "lagenhetsnummer",
+  ditt_namn: "namn", ditt_telefonnummer: "telefon", din_e_post: "epost", namnfortydligande: "namnfortydligande",
   // Kryssrutorna i mallen heter "checkbox 1" … "checkbox 24" (i den ordning de lades ut).
   checkbox_1: "bb150", checkbox_2: "bb300", checkbox_3: "bb600", checkbox_4: "bb1000",
   checkbox_5: "tv_bas", checkbox_6: "tv_mellan", checkbox_7: "tv_mycket",
@@ -261,18 +266,29 @@ function tolkaDokument(doc: any, fields: Field[]): Tolkat {
   // (24 numrerade rutor). I ett annat dokument (t.ex. förhandsbeställningen)
   // kan de inte tolkas — då hoppar vi över dem och märker tjänsterna som osäkra.
   const alla: any[] = (doc.parties ?? []).flatMap((p: any) => p.fields ?? []);
+  const namnRaa = new Set(alla.map((f) => norm(String(f.name ?? ""))));
   const numrerade = alla.filter((f) => f.type === "checkbox" && /^checkbox_\d+$/.test(norm(String(f.name ?? "")))).length;
-  const litaPaNumrerade = numrerade >= 20;
+  // Vår egen mall: minst 8 numrerade rutor (checkbox 1–11 + namngivna) eller fälten Gatuadress/Lägenhetsnummer.
+  const egenMall = numrerade >= 8 || namnRaa.has("gatuadress") || namnRaa.has("lagenhetsnummer");
+  // Förhandsbeställningen: de numrerade rutorna betyder något annat där (checkbox 4 var
+  // ikryssad på 300/300-avtal), så bredbandet läses ur textfältet "Internet, mb/s" i stället.
+  const forhand = namnRaa.has("lgh_nummer") || namnRaa.has("tex_verkstadsvagen_4_749_42_enkoping");
   let osaker = false;
   for (const f of alla) {
     const n = norm(String(f.name ?? ""));
     if (f.type === "checkbox") {
       if (!f.is_checked) continue;
-      if (/^checkbox_\d+$/.test(n) && !litaPaNumrerade) { osaker = true; continue; }
+      const m = n.match(/^checkbox_(\d+)$/);
+      if (m && (!egenMall || forhand)) { if (!forhand) osaker = true; continue; }
       v[faltnyckel(String(f.name ?? ""))] = "X";
     } else if ((f.type === "text" || f.type === "multi_line_text") && String(f.value ?? "").trim()) {
       v[faltnyckel(String(f.name ?? ""))] = String(f.value).trim();
     }
+  }
+  if (forhand) {
+    const mb = Number((String(v.internet_mb_s ?? "").match(/\d+/) ?? [""])[0]);
+    const bb = mb >= 1000 ? "bb1000" : mb >= 600 ? "bb600" : mb >= 300 ? "bb300" : mb >= 100 ? "bb150" : null;
+    if (bb) v[bb] = "X"; else osaker = true;
   }
   const parter: any[] = doc.parties ?? [];
   const kund = parter.find((p) => p.is_signatory && !p.is_author) ?? parter.find((p) => p.is_signatory) ?? null;
@@ -470,9 +486,16 @@ Deno.serve(async (req: Request) => {
     }
     try {
       const sold = await soldFalt(tenantId);
-      const { data: lagRader } = await db.from("records").select("id, status, owner_user_id, data")
-        .eq("tenant_id", tenantId).eq("object_type", "d2d_lagenhet").is("deleted_at", null);
-      const lagenheter = ((lagRader ?? []) as LagRad[]).filter((l) => !arAdmin ? l.id === lagId : true);
+      // Alla lägenheter — i sidor om 1000 (PostgREST kapar annars tyst vid 1000 rader).
+      const lagRader: LagRad[] = [];
+      for (let fran = 0; ; fran += 1000) {
+        const { data: sida, error: sidaErr } = await db.from("records").select("id, status, owner_user_id, data")
+          .eq("tenant_id", tenantId).eq("object_type", "d2d_lagenhet").is("deleted_at", null).order("id").range(fran, fran + 999);
+        if (sidaErr) throw new Error(sidaErr.message);
+        lagRader.push(...((sida ?? []) as LagRad[]));
+        if (!sida || sida.length < 1000) break;
+      }
+      const lagenheter = lagRader.filter((l) => !arAdmin ? l.id === lagId : true);
       const { data: kopplade } = await db.from("d2d_avtal").select("scrive_document_id").eq("tenant_id", tenantId).not("scrive_document_id", "is", null);
       const redan = new Set((kopplade ?? []).map((r: any) => String(r.scrive_document_id)));
       const { data: anv } = await db.from("users").select("id, full_name, email").eq("tenant_id", tenantId);
