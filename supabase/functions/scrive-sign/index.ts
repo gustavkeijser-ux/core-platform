@@ -11,12 +11,20 @@
 //  action "pdf"    → tillfällig länk till det signerade avtalet.
 //  action "avbryt" → avbryt ett avtal som inte är signerat.
 //  action "utkast" → förhandsgranskning (PDF med ifyllda fält, märkt UTKAST).
+//  action "okopplade" → avtal som gjorts för hand i Scrive (utanför CRM:et)
+//                    och inte finns i d2d_avtal, med tolkade uppgifter och
+//                    förslag på lägenhet. Admin: alla; säljare: bara de som
+//                    matchar den lägenhet som skickas med (lagenhetId).
+//  action "koppla" → koppla ett sådant dokument till en lägenhet: kund-
+//                    uppgifter, tjänster och säljare skrivs in på lägenheten,
+//                    statusen blir "Signera med Scrive", avtalet hämtas
+//                    (status, signerad PDF) som om det skapats härifrån.
 //
 //  Behörighet: användarens JWT. d2d_avtal_for() släpper bara igenom den som
 //  får se lägenheten. Priserna räknas här på servern, aldrig i klienten.
 // =====================================================================
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { scrive, scriveJson, scriveMissing, syncAvtal, SCRIVE_URL, ScriveError } from "../_shared/scrive.ts";
+import { scrive, scriveJson, scriveMissing, syncAvtal, SCRIVE_URL, ScriveError, STATUS_FROM_SCRIVE } from "../_shared/scrive.ts";
 import { skapaUtkast } from "../_shared/utkast.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -226,6 +234,149 @@ const mobilnr = (s: string) => {
   return d ? "+46" + d : "";
 };
 
+// ── Manuella Scrive-avtal: tolka ett dokument och hitta lägenheten ──────
+
+/** Mallnyckel (t.ex. "bb300", "tv_mini") → CRM-fält och värde. Första i KRYSS vinner
+ *  (tv_mini → salt_tv:tv_bas, som är "TV Mini" i CRM:et). */
+const KRYSS_BAK: Record<string, { falt: string; val: string }> = {};
+for (const [k, v] of Object.entries(KRYSS)) {
+  if (KRYSS_BAK[v]) continue;
+  const [falt, val = ""] = k.split(":");
+  KRYSS_BAK[v] = { falt, val };
+}
+
+type Tolkat = {
+  id: string; titel: string; status: string; skapad: string | null; andrad: string | null; signerad: string | null;
+  kundNamn: string | null; epost: string | null; telefon: string | null; personnummer: string | null;
+  adress: string | null; lgh: string | null; ort: string | null; avsandare: string | null;
+  tjanster: Record<string, unknown>; tjansterText: string[]; falt: Record<string, string>; ovrigt: string | null; startdatum: string | null;
+  /** Tjänsterna kunde inte läsas säkert ur dokumentet (annan mall) — fyll i för hand. */
+  osaker: boolean;
+};
+
+/** Läser ut kund, adress och ikryssade tjänster ur ett Scrive-dokument (samma fältnamn som vid ifyllnad). */
+function tolkaDokument(doc: any, fields: Field[]): Tolkat {
+  const v: Record<string, string> = {};
+  // Kryssrutor som bara heter "checkbox N" betyder något bara i vår egen mall
+  // (24 numrerade rutor). I ett annat dokument (t.ex. förhandsbeställningen)
+  // kan de inte tolkas — då hoppar vi över dem och märker tjänsterna som osäkra.
+  const alla: any[] = (doc.parties ?? []).flatMap((p: any) => p.fields ?? []);
+  const numrerade = alla.filter((f) => f.type === "checkbox" && /^checkbox_\d+$/.test(norm(String(f.name ?? "")))).length;
+  const litaPaNumrerade = numrerade >= 20;
+  let osaker = false;
+  for (const f of alla) {
+    const n = norm(String(f.name ?? ""));
+    if (f.type === "checkbox") {
+      if (!f.is_checked) continue;
+      if (/^checkbox_\d+$/.test(n) && !litaPaNumrerade) { osaker = true; continue; }
+      v[faltnyckel(String(f.name ?? ""))] = "X";
+    } else if ((f.type === "text" || f.type === "multi_line_text") && String(f.value ?? "").trim()) {
+      v[faltnyckel(String(f.name ?? ""))] = String(f.value).trim();
+    }
+  }
+  const parter: any[] = doc.parties ?? [];
+  const kund = parter.find((p) => p.is_signatory && !p.is_author) ?? parter.find((p) => p.is_signatory) ?? null;
+  const avs = parter.find((p) => p.is_author) ?? null;
+  const fv = (p: any, typ: string, order?: number) => {
+    const f = (p?.fields ?? []).find((x: any) => x.type === typ && (order == null || x.order === order));
+    return f && String(f.value ?? "").trim() ? String(f.value).trim() : null;
+  };
+  const namn = [fv(kund, "name", 1), fv(kund, "name", 2)].filter(Boolean).join(" ") || fv(kund, "name") || v.namn || null;
+
+  // Tjänster: kryssrutor → CRM-fält (select/multi_select/boolean).
+  const tj: Record<string, unknown> = {};
+  const text: string[] = [];
+  const by = new Map(fields.map((f) => [f.key, f]));
+  const label = (falt: string, val: string) => {
+    const f = by.get(falt);
+    return val ? (f?.options?.choices?.find((c: any) => c.key === val)?.label ?? val) : (f?.label ?? falt);
+  };
+  for (const [nyckel, m] of Object.entries(KRYSS_BAK)) {
+    if (v[nyckel] !== "X") continue;
+    const f = by.get(m.falt);
+    if (!f) continue;
+    if (f.field_type === "boolean") tj[m.falt] = true;
+    else if (f.field_type === "multi_select") tj[m.falt] = [...((tj[m.falt] as string[] | undefined) ?? []), m.val];
+    else if (!tj[m.falt]) tj[m.falt] = m.val;
+    text.push(label(m.falt, m.val));
+  }
+  // "Obegränsad Plus + streaming" utan antal → 1 streaming (kan ändras i CRM:et).
+  if (v.mobil_plus_streaming === "X" && !v.mobil_plus_1_streaming && !v.mobil_plus_3_streaming && by.has("salt_mobil")) {
+    tj.salt_mobil = [...((tj.salt_mobil as string[] | undefined) ?? []), "obegransad_plus_1_streaming"];
+    text.push(label("salt_mobil", "obegransad_plus_1_streaming"));
+  }
+  if (v.router_ja === "X" && by.has("salt_router")) { tj.salt_router = "1_router"; text.push("Router"); }
+  if (v.tvbox_ja === "X" && by.has("salt_tvbox")) tj.salt_tvbox = true;
+  if (v.sport_utan_netflix === "X") tj.salt_sport_utan_netflix = true;
+  const extra = Number(v.mobil_extra_antal);
+  if (Array.isArray(tj.salt_mobil) && (tj.salt_mobil as string[]).includes("extra_anvandare") && Number.isFinite(extra) && extra >= 1) tj.mobil_extra_antal = Math.floor(extra);
+
+  const datum = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null);
+  const signerad = parter.map((p) => p.sign_time).filter(Boolean).sort().pop() ?? null;
+  return {
+    id: String(doc.id), titel: String(doc.title ?? ""), status: String(doc.status ?? ""), skapad: doc.ctime ?? null, andrad: doc.mtime ?? null, signerad,
+    kundNamn: namn, epost: fv(kund, "email") ?? v.epost ?? null, telefon: fv(kund, "mobile") ?? v.telefon ?? null,
+    personnummer: fv(kund, "personal_number") ?? v.personnummer ?? null,
+    adress: v.gatuadress ?? null, lgh: v.lagenhetsnummer ?? null, ort: v.ort ?? null, avsandare: fv(avs, "email"),
+    tjanster: tj, tjansterText: text, falt: v, ovrigt: v.ovrigt ?? null, startdatum: datum(v.startdatum),
+    osaker: osaker || (Object.keys(tj).length === 0),
+  };
+}
+
+const siffror = (s: unknown) => String(s ?? "").replace(/\D/g, "");
+const pnr10 = (s: unknown) => { const d = siffror(s); return d.length === 12 ? d.slice(2) : d.length === 10 ? d : ""; };
+const tel = (s: unknown) => { const d = mobilnr(String(s ?? "")); return d.length >= 9 ? d.slice(-9) : ""; };
+const normNamn = (s: unknown) => norm(String(s ?? ""));
+const normAdress = (gata: unknown, nr: unknown) => norm(`${gata ?? ""} ${nr ?? ""}`);
+/** "Storgatan 12 B, Umeå" → gata "storgatan", nummer "12", ingång "B". */
+const delaAdress = (s: string) => {
+  const m = s.trim().match(/^(.*?)[\s,]+(\d+)\s*([A-Za-z]?)\b.*$/);
+  return m ? { gata: m[1], nr: m[2], ing: (m[3] ?? "").toUpperCase() } : { gata: s, nr: "", ing: "" };
+};
+
+type LagRad = { id: string; status: string; owner_user_id: string | null; data: Record<string, any> };
+type Forslag = { lagenhetId: string; poang: number; skal: string[]; adress: string; lgh: string | null; ort: string | null;
+  kundNamn: string | null; status: string; saljare: string | null };
+
+/** Poängsätter hur väl ett dokument stämmer med en lägenhet. */
+function matcha(t: Tolkat, l: LagRad): { poang: number; skal: string[] } {
+  const d = l.data ?? {};
+  let p = 0; const skal: string[] = [];
+  if (t.personnummer && pnr10(t.personnummer) && pnr10(t.personnummer) === pnr10(d.personnummer)) { p += 100; skal.push("personnummer"); }
+  if (t.telefon && tel(t.telefon) && tel(t.telefon) === tel(d.kund_telefon)) { p += 60; skal.push("telefon"); }
+  if (t.epost && String(d.kund_epost ?? "").trim().toLowerCase() === t.epost.trim().toLowerCase()) { p += 60; skal.push("e-post"); }
+  if (t.adress) {
+    const a = delaAdress(t.adress);
+    if (a.nr && normAdress(a.gata, a.nr) === normAdress(d.gatunamn, d.gatunummer)) {
+      // Ingången (53 A / 53 B) skiljer lägenheter med samma lgh-nummer åt.
+      const ing = String(d.ingang ?? "").trim().toUpperCase();
+      const ingOk = !a.ing || !ing || a.ing === ing;
+      if (ingOk) {
+        if (t.lgh && siffror(t.lgh) && siffror(t.lgh) === siffror(d.name)) { p += a.ing && ing ? 60 : 50; skal.push(a.ing && ing ? "adress + ingång + lgh" : "adress + lgh"); }
+        else { p += 15; skal.push("adress"); }
+      } else if (t.lgh && siffror(t.lgh) && siffror(t.lgh) === siffror(d.name)) { p += 5; skal.push("adress (annan ingång)"); }
+    }
+  }
+  if (t.kundNamn && normNamn(d.kund_namn)) {
+    const a = normNamn(t.kundNamn), b = normNamn(d.kund_namn);
+    if (a === b) { p += 30; skal.push("namn"); }
+    else {
+      const ta = a.split("_").filter((x) => x.length > 1), tb = b.split("_");
+      if (ta.length && ta.every((x) => tb.includes(x))) { p += 15; skal.push("namn (delvis)"); }
+    }
+  }
+  return { poang: p, skal };
+}
+
+/** Kategorierna i "Vad såldes?" (fält med sold_panel) för en tenant. */
+async function soldFalt(tenantId: string): Promise<Field[]> {
+  const { data: od } = await db.from("object_definitions").select("id").eq("tenant_id", tenantId).eq("key", "d2d_lagenhet").maybeSingle();
+  if (!od) throw new Error("Lägenheter saknas i systemet");
+  const { data: fdefs } = await db.from("field_definitions").select("key, label, field_type, options, sort_order, visibility")
+    .eq("object_id", od.id).order("sort_order");
+  return (fdefs ?? []).filter((f: any) => f.options?.sold_panel && f.visibility !== "hidden") as Field[];
+}
+
 /** Utkast (förhandsgranskning) av ett Scrive-dokument → tillfällig länk till PDF:en. */
 async function utkastLank(doc: any, tenantId: string, lagenhetId: string): Promise<string | null> {
   const res = await scrive(`/documents/${encodeURIComponent(doc.id)}/files/main/avtal.pdf`);
@@ -256,11 +407,14 @@ Deno.serve(async (req: Request) => {
 
   if (action === "check") return json({ configured: missing.length === 0, missing });
 
+  // Cron-token (Vault-hemligheten mail_sync_cron_token) = kontroll från databasen
+  // med administratörsrätt: "test", och för "okopplade"/"koppla" utan inloggad användare.
+  const tok = req.headers.get("x-cron-token");
+  const { data: okTok } = tok ? await db.rpc("mail_check_cron_token", { p_token: tok }) : { data: false };
+
   // Testa nycklarna mot Scrive (bara läsning): listar kontots mallar (id + namn).
   // Kräver cron-token (pg_cron/Vault) — inga nyckelvärden returneras.
   if (action === "test") {
-    const tok = req.headers.get("x-cron-token");
-    const { data: okTok } = tok ? await db.rpc("mail_check_cron_token", { p_token: tok }) : { data: false };
     if (!okTok) return json({ error: "Ej behörig" }, 403);
     const nycklar = missing.filter((k) => k !== "SCRIVE_TEMPLATE_ID");
     if (nycklar.length) return json({ ok: false, missing });
@@ -297,6 +451,66 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // ── Avtal gjorda för hand i Scrive som inte finns i CRM:et ──
+  if (action === "okopplade") {
+    if (missing.length) return json({ error: "Scrive är inte kopplat ännu.", configured: false, missing }, 503);
+    // Admin ser alla; en säljare bara dokument som matchar lägenheten hen skickar med.
+    const { data: arAdmin } = okTok ? { data: true } : await userDb.rpc("is_admin");
+    let tenantId: string | null = okTok ? ((inst ?? [])[0]?.tenant_id ?? null) : null;
+    const lagId = String(b.lagenhetId ?? "");
+    if (!tenantId) {
+      const { data: t } = await userDb.rpc("my_tenant_id");
+      tenantId = t ? String(t) : null;
+    }
+    if (!tenantId) return json({ error: "Ej inloggad" }, 401);
+    if (!arAdmin) {
+      if (!/^[0-9a-f-]{36}$/.test(lagId)) return json({ error: "Ogiltig lägenhet" }, 400);
+      const { error: e } = await userDb.rpc("d2d_avtal_for", { p_lagenhet: lagId });
+      if (e) return json({ error: "Du har inte behörighet till den här lägenheten" }, 403);
+    }
+    try {
+      const sold = await soldFalt(tenantId);
+      const { data: lagRader } = await db.from("records").select("id, status, owner_user_id, data")
+        .eq("tenant_id", tenantId).eq("object_type", "d2d_lagenhet").is("deleted_at", null);
+      const lagenheter = ((lagRader ?? []) as LagRad[]).filter((l) => !arAdmin ? l.id === lagId : true);
+      const { data: kopplade } = await db.from("d2d_avtal").select("scrive_document_id").eq("tenant_id", tenantId).not("scrive_document_id", "is", null);
+      const redan = new Set((kopplade ?? []).map((r: any) => String(r.scrive_document_id)));
+      const { data: anv } = await db.from("users").select("id, full_name, email").eq("tenant_id", tenantId);
+      const anvNamn = (id: unknown) => { const u = (anv ?? []).find((x: any) => String(x.id) === String(id)); return u ? (u.full_name || String(u.email)) : null; };
+
+      // Nyaste först. Standard: skickade och signerade (utkast och avbrutna med alla=true).
+      const statusar = b.alla ? ["preparation", "pending", "closed", "rejected", "canceled", "timedout"] : ["pending", "closed"];
+      const filter = [{ filter_by: "is_not_template" }, { filter_by: "is_not_in_trash" }, { filter_by: "status", statuses: statusar }];
+      const sortering = [{ sort_by: "mtime", order: "descending" }];
+      const max = Math.min(Math.max(Number(b.max) || 60, 1), 100);
+      const offset = Math.max(Number(b.offset) || 0, 0);
+      const l = await scriveJson(`/documents/list?max=${max}&offset=${offset}&filter=${encodeURIComponent(JSON.stringify(filter))}&sorting=${encodeURIComponent(JSON.stringify(sortering))}`);
+      const docs: any[] = (l.documents ?? []).filter((d: any) => !redan.has(String(d.id)));
+      const ut: any[] = [];
+      for (const d0 of docs) {
+        // Listan saknar ibland fält — hämta hela dokumentet då.
+        const d = Array.isArray(d0.parties) && d0.parties.some((p: any) => Array.isArray(p.fields) && p.fields.length) ? d0
+          : await scriveJson(`/documents/${encodeURIComponent(String(d0.id))}/get`);
+        const t = tolkaDokument(d, sold);
+        const forslag: Forslag[] = lagenheter.map((lg) => {
+          const m = matcha(t, lg);
+          const x = lg.data ?? {};
+          return { lagenhetId: lg.id, poang: m.poang, skal: m.skal, status: lg.status,
+            adress: [x.gatunamn, x.gatunummer, x.ingang].filter(Boolean).join(" "), lgh: x.name ? String(x.name) : null,
+            ort: x.postort ? String(x.postort) : null, kundNamn: x.kund_namn ? String(x.kund_namn) : null, saljare: anvNamn(x.saljare) };
+        }).filter((f) => f.poang > 0).sort((a, b2) => b2.poang - a.poang).slice(0, 5);
+        if (!arAdmin && forslag.length === 0) continue;
+        const { falt: _f, ...rest } = t;
+        ut.push({ ...rest, crmStatus: STATUS_FROM_SCRIVE[t.status] ?? t.status, forslag,
+          avsandareNamn: t.avsandare ? ((anv ?? []).find((u: any) => String(u.email).toLowerCase() === t.avsandare!.toLowerCase())?.full_name ?? null) : null });
+      }
+      return json({ ok: true, dokument: ut, antalIScrive: (l.documents ?? []).length, offset, max, fler: (l.documents ?? []).length === max });
+    } catch (e) {
+      console.error("scrive-sign okopplade", String(e));
+      return json({ error: e instanceof ScriveError ? e.message : "Kunde inte hämta dokumenten från Scrive." }, 502);
+    }
+  }
+
   // Avtal-id → lägenhet (och behörighetskontroll via d2d_avtal_for).
   let lagenhetId = String(b.lagenhetId ?? "");
   let avtal: Record<string, any> | null = null;
@@ -306,8 +520,10 @@ Deno.serve(async (req: Request) => {
     avtal = data; lagenhetId = data.lagenhet_id;
   }
   if (!/^[0-9a-f-]{36}$/.test(lagenhetId)) return json({ error: "Ogiltig lägenhet" }, 400);
-  const { error: accessErr } = await userDb.rpc("d2d_avtal_for", { p_lagenhet: lagenhetId });
-  if (accessErr) return json({ error: "Du har inte behörighet till den här lägenheten" }, 403);
+  if (!okTok) {
+    const { error: accessErr } = await userDb.rpc("d2d_avtal_for", { p_lagenhet: lagenhetId });
+    if (accessErr) return json({ error: "Du har inte behörighet till den här lägenheten" }, 403);
+  }
 
   if (action === "pdf") {
     if (!avtal?.pdf_path) return json({ error: "Det finns ingen signerad PDF ännu" }, 404);
@@ -346,6 +562,68 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, url: kund?.api_delivery_url ? SCRIVE_URL + kund.api_delivery_url : null });
     }
 
+    if (action === "koppla") {
+      // ── Koppla ett dokument som gjorts för hand i Scrive till lägenheten ──
+      const docId = String(b.dokumentId ?? "");
+      if (!/^\d+$/.test(docId)) return json({ error: "Ogiltigt dokument" }, 400);
+      const { data: finns } = await db.from("d2d_avtal").select("id, lagenhet_id").eq("scrive_document_id", docId).maybeSingle();
+      if (finns) return json({ error: "Det här avtalet är redan kopplat till en lägenhet i CRM:et." }, 409);
+      const { data: lag } = await db.from("records").select("id, tenant_id, data, status").eq("id", lagenhetId).maybeSingle();
+      if (!lag) return json({ error: "Lägenheten finns inte" }, 404);
+      const doc = await scriveJson(`/documents/${encodeURIComponent(docId)}/get`);
+      if (doc.is_template) return json({ error: "Det är en mall, inte ett avtal." }, 400);
+      if (doc.is_trashed || doc.is_deleted) return json({ error: "Dokumentet ligger i papperskorgen i Scrive." }, 400);
+      const sold = await soldFalt(lag.tenant_id);
+      const t = tolkaDokument(doc, sold);
+      const data = (lag.data ?? {}) as Record<string, any>;
+      const { data: me } = await userDb.auth.getUser();
+
+      // Kunduppgifter: fyll tomma fält (skrivOver=true ersätter det som står).
+      const patch: Record<string, unknown> = {};
+      const tom = (k: string) => !String(data[k] ?? "").trim();
+      const satt = (k: string, v: string | null) => { if (v && (b.skrivOver || tom(k))) patch[k] = v; };
+      satt("kund_namn", t.kundNamn); satt("personnummer", t.personnummer); satt("kund_epost", t.epost); satt("kund_telefon", t.telefon);
+      satt("scrive_ovrigt", t.ovrigt); satt("startdatum_tjanst", t.startdatum);
+      // Tjänster: det som är ikryssat i avtalet gäller för de kategorierna.
+      const svar = { ...((data.salt_svar && typeof data.salt_svar === "object") ? data.salt_svar : {}) } as Record<string, boolean>;
+      for (const [k, v] of Object.entries(t.tjanster)) {
+        patch[k] = v;
+        if (sold.some((f) => f.key === k)) svar[k] = true;
+      }
+      if (Object.keys(t.tjanster).length) patch.salt_svar = svar;
+      // Säljare: den som skickade avtalet från Scrive, om lägenheten saknar säljare.
+      let saljareSatt: string | null = null;
+      if (tom("saljare") && t.avsandare) {
+        const { data: u } = await db.from("users").select("id, full_name").eq("tenant_id", lag.tenant_id).ilike("email", t.avsandare).maybeSingle();
+        if (u) { patch.saljare = u.id; saljareSatt = u.full_name ?? null; }
+      }
+      if (lag.status !== "scrive" && lag.status !== "sald") patch.senast_kontakt = new Date().toISOString();
+      const nyStatus = lag.status === "scrive" || lag.status === "sald" ? null : "scrive";
+      const upd: Record<string, unknown> = { data: { ...data, ...patch } };
+      if (nyStatus) upd.status = nyStatus;
+      const { error: updErr } = await db.from("records").update(upd).eq("id", lagenhetId);
+      if (updErr) throw new Error(updErr.message);
+      if (nyStatus) {
+        await db.from("activities").insert({ tenant_id: lag.tenant_id, record_id: lagenhetId, activity_type: "status_change",
+          body: "Status satt när ett avtal från Scrive kopplades", metadata: { to: nyStatus, from: lag.status },
+          actor_user_id: me?.user?.id ?? null, actor_kind: "user", occurred_at: new Date().toISOString() });
+      }
+
+      // Underlaget räknas som i CRM:et (prislistan) på det som nu står på lägenheten.
+      const { data: lista } = await db.from("d2d_prislista").select("data").eq("tenant_id", lag.tenant_id).maybeSingle();
+      const a = berakna({ ...data, ...patch }, sold, lista?.data ?? {});
+      const { data: row, error: insErr } = await db.from("d2d_avtal").insert({
+        tenant_id: lag.tenant_id, lagenhet_id: lagenhetId, leverans: "manuell", kund_namn: t.kundNamn ?? data.kund_namn ?? null,
+        scrive_document_id: docId, status: STATUS_FROM_SCRIVE[t.status] ?? "vantar",
+        underlag: { falt: t.falt, manad: a.manad, engang: a.engang, manuell: true, titel: t.titel },
+        skapad_av: me?.user?.id ?? null, skapad: t.skapad ?? new Date().toISOString(),
+      }).select("*").single();
+      if (insErr) throw new Error(insErr.message);
+      const avtalNu = await syncAvtal(db, row.id);   // status, signerad PDF, scrive_signerad på lägenheten
+      return json({ ok: true, avtalId: row.id, status: avtalNu.status, tjanster: t.tjansterText, falt: Object.keys(patch),
+        saljare: saljareSatt, nyStatus, osaker: t.osaker });
+    }
+
     if (action !== "start") return json({ error: "Okänd åtgärd" }, 400);
 
     // ── Starta ny signering ──
@@ -373,11 +651,7 @@ Deno.serve(async (req: Request) => {
       await db.from("d2d_avtal").update({ status: "avbrutet", uppdaterad: new Date().toISOString() }).eq("id", pagaende.id);
     }
 
-    const { data: od } = await db.from("object_definitions").select("id").eq("tenant_id", lag.tenant_id).eq("key", "d2d_lagenhet").maybeSingle();
-    if (!od) return json({ error: "Lägenheter saknas i systemet" }, 500);
-    const { data: fdefs } = await db.from("field_definitions").select("key, label, field_type, options, sort_order, visibility")
-      .eq("object_id", od.id).order("sort_order");
-    const sold = (fdefs ?? []).filter((f: any) => f.options?.sold_panel && f.visibility !== "hidden") as Field[];
+    const sold = await soldFalt(lag.tenant_id);
     const { data: lista } = await db.from("d2d_prislista").select("data").eq("tenant_id", lag.tenant_id).maybeSingle();
     const a = berakna(data, sold, lista?.data ?? {});
     if (a.manad.length === 0) return json({ error: "Välj vad kunden köper under \"Vad ska kunden signera?\" först." }, 400);
