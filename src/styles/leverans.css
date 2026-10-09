@@ -178,3 +178,14 @@
 }
 .lev-agare-rubrik__oppna { margin-left: auto; }
 .lev-kort__siffra .lev-kort__etikett { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Ram efter hur långt Kunden kommit (lägsta aktiva steg, rött → grönt) */
+.lev-agare--ram { border: 2px solid var(--lev-ram); }
+.lev-agare--ram:hover { border-color: var(--lev-ram); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lev-ram) 18%, transparent), var(--shadow-md); }
+.lev-agare__etiketter { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.lev-agare__steg {
+  padding: 3px 9px; border-radius: var(--r-pill);
+  font-size: var(--text-xs); font-weight: 700; white-space: nowrap;
+  color: color-mix(in srgb, var(--lev-ram) 65%, var(--ink));
+  background: color-mix(in srgb, var(--lev-ram) 14%, transparent);
+}
