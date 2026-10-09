@@ -700,3 +700,35 @@
   flex: none;
 }
 @media (prefers-reduced-motion: reduce) { .d2d-fprog__del { transition: none; } }
+
+/* ── Mina adresser / ringlistan (säljarvyn) ───────────────────────────────
+   Statusfilter, sortering och ett kort per adress. Tryck på raden fäller ut
+   hela adressformuläret (LagenhetForm, inbäddat utan topbar) i kortet. */
+.d2d-mina__filter { padding: 0; }
+.d2d-mina__sort {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--text-xs); font-weight: 700; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.d2d-mina__sort select.input { width: auto; min-height: 36px; font-size: var(--text-sm); font-weight: 500; letter-spacing: normal; text-transform: none; }
+.d2d-mina__kort { border-radius: var(--r-md); }
+.d2d-mina__kort--oppen { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+.d2d-mina__rad { border: 0; box-shadow: none; background: transparent; border-radius: var(--r-md); }
+.d2d-mina__rad:hover { box-shadow: none; }
+.d2d-mina__rad:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.d2d-mina__kort .d2d-lag-row__icon { flex-shrink: 0; }
+.d2d-mina__meta {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;
+}
+.d2d-mina__form { border-top: 1px solid var(--border); }
+.d2d-mina__form .d2d-detail--inbaddad { padding-bottom: 0; }
+.d2d-topbar--inbaddad { position: static; border-bottom: 0; background: transparent; justify-content: flex-end; min-height: 0; padding-top: var(--sp-2); padding-bottom: 0; }
+.d2d-mina__stang { margin: var(--sp-2) var(--sp-4) var(--sp-4); align-self: flex-end; }
+.d2d-mina__form { display: flex; flex-direction: column; }
+.d2d-status--sky.d2d-status-btn--active  { border-color: var(--hue-sky);  color: color-mix(in srgb, var(--hue-sky) 75%, var(--ink)); background: color-mix(in srgb, var(--hue-sky) 12%, transparent); }
+.d2d-status--zinc.d2d-status-btn--active { border-color: var(--hue-zinc); color: var(--ink-muted); background: color-mix(in srgb, var(--hue-zinc) 18%, transparent); }
+/* Sex flikar i bottenmenyn — lite mindre text så allt får plats på 390 px. */
+@media (max-width: 420px) {
+  .d2d-nav-btn { font-size: 10px; }
+  .d2d-mina__meta .d2d-card__date { display: none; }
+}
