@@ -23,6 +23,7 @@ import { useUserName } from "@/lib/users";
 import { D2DDashboard } from "./D2DDashboard";
 import { D2DFeedbackFlik } from "./D2DFeedback";
 import { FelanmalanPanel } from "./D2DFelanmalan";
+import { Fyrverkeri, skjutFyrverkeri } from "./D2DFyrverkeri";
 import "@/styles/d2d.css";
 
 // =============================================================================
@@ -1536,6 +1537,8 @@ function LagenhetForm({
 
   const handleBack = async () => {
     await flush();
+    // Lämnar säljaren en såld lägenhet firas det med fyrverkerier (2 s).
+    if (status === "sald") skjutFyrverkeri();
     onBack();
   };
 
@@ -2223,6 +2226,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
 
   return (
     <div className="d2d-app" style={brandVars as CSSProperties}>
+      <Fyrverkeri />
       {/* Top header */}
       <div className="d2d-header">
         <div className="d2d-header__left">
