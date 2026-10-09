@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { ScriveOkopplade } from "./D2DScriveImport";
 
 /* =============================================================================
    "Signera med Scrive" — under avtalsförslaget i "Vad såldes?".
@@ -11,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 type AvtalStatus = "skapas" | "vantar" | "signerat" | "avvisat" | "avbrutet" | "fel";
 type Avtal = {
-  id: string; status: AvtalStatus; leverans: "plats" | "skickat"; kundNamn: string | null;
+  id: string; status: AvtalStatus; leverans: "plats" | "skickat" | "manuell"; kundNamn: string | null;
   harPdf: boolean; fel: string | null; skapad: string; signerad: string | null; skapadAv: string | null;
 };
 
@@ -41,11 +42,13 @@ const kollaKoppling = () => (kollad ??= anropa<{ configured: boolean }>({ action
 
 const datum = (s: string | null) => (s ? new Date(s).toLocaleString("sv-SE", { dateStyle: "medium", timeStyle: "short" }) : "");
 
-export function ScriveSignering({ lagenhetId, data, sparaForst }: {
+export function ScriveSignering({ lagenhetId, data, sparaForst, onKopplad }: {
   lagenhetId: string;
   data: Record<string, unknown>;
   /** Spara väntande ändringar innan avtalet skapas. */
   sparaForst: () => Promise<void>;
+  /** Ett avtal som gjorts för hand i Scrive kopplades hit — lägenheten har nya uppgifter. */
+  onKopplad?: () => void | Promise<void>;
 }) {
   const [kopplad, setKopplad] = useState<boolean | null>(null);
   const [avtal, setAvtal] = useState<Avtal[] | null>(null);
@@ -158,7 +161,7 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
       {pagar && senaste && (
         <div className="d2d-scrive__vantar">
           <span className="d2d-scrive__meta">
-            {senaste.leverans === "plats" ? "Signering på plats" : "Skickat till kunden"} · {datum(senaste.skapad)}{senaste.skapadAv ? ` · ${senaste.skapadAv}` : ""}
+            {senaste.leverans === "plats" ? "Signering på plats" : senaste.leverans === "manuell" ? "Gjort direkt i Scrive" : "Skickat till kunden"} · {datum(senaste.skapad)}{senaste.skapadAv ? ` · ${senaste.skapadAv}` : ""}
           </span>
           <div className="d2d-scrive__knappar">
             {senaste.leverans === "plats" && (
@@ -185,6 +188,9 @@ export function ScriveSignering({ lagenhetId, data, sparaForst }: {
             </button>
           </div>
           {kopplad === false && <p className="d2d-scrive__hint">Scrive är inte kopplat än. När kopplingen är klar fungerar knapparna direkt.</p>}
+          {kopplad && (
+            <ScriveOkopplade lagenhetId={lagenhetId} onKopplad={async () => { await ladda(); await onKopplad?.(); }} />
+          )}
           {kopplad && saknas.length > 0 && <p className="d2d-scrive__hint">Fyll i kundens {saknas.length > 1 ? `${saknas.slice(0, -1).join(", ")} och ${saknas[saknas.length - 1]}` : saknas[0]} ovan för att kunna skicka avtalet.</p>}
         </>
       )}
