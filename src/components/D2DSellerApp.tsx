@@ -658,13 +658,32 @@ function FastighetsLista({
 // Fastighetsöversikt med knackvy (lägenhetslista)
 // =============================================================================
 
-/** Namnet på säljaren som fått adressen tilldelad (eller "—"). */
-function SaljareCell({ id }: { id: string | null }) {
+/** Namnet på säljaren som fått adressen tilldelad (eller "—"). Är adressen
+ *  såld/signerad av en annan säljare än den som har den nu (säljaren byttes
+ *  på fastigheten efteråt) visas även "såld av …". */
+function SaljareCell({ id, saldAv, signerad }: { id: string | null; saldAv?: string | null; signerad?: boolean }) {
   const name = useUserName(id);
+  const saldAvNamn = useUserName(saldAv ?? null);
   return (
     <span className={`d2d-lag-row__cell d2d-lag-row__cell--saljare${id ? "" : " d2d-lag-row__cell--empty"}`} title={id ? name : undefined}>
       {id ? name : "—"}
+      {!!saldAv && <span className="d2d-lag-row__saldav">{signerad ? "signerad av" : "såld av"} {saldAvNamn}</span>}
     </span>
+  );
+}
+
+/** "Såld av …" / "Signerad av …" på en såld adress. Säljaren som sålde
+ *  (data.saljare) är låst; har adressen sedan flyttats till en annan säljare
+ *  (owner_user_id) visas även vem som har den nu. */
+function SaldAvRad({ status, saljare, agare }: { status: string | null; saljare: string | null; agare: string | null }) {
+  const saljareNamn = useUserName(saljare);
+  const agareNamn = useUserName(agare);
+  if (!saljare || (status !== "sald" && status !== "scrive")) return null;
+  return (
+    <div className="d2d-saldav">
+      <strong>{status === "scrive" ? "Signerad av" : "Såld av"} {saljareNamn}</strong>
+      {!!agare && agare !== saljare && <span className="d2d-saldav__agare"> · tilldelad {agareNamn}</span>}
+    </div>
   );
 }
 
@@ -897,7 +916,10 @@ function LagenhetTabell({
                   const cfg = STATUS_CONFIG[st] ?? STATUS_CONFIG.ej_knackad;
                   const gatuadress = [lagData.gatunamn, lagData.gatunummer].filter(Boolean).join(" ");
                   const kommentar = lagData.kommentar ? String(lagData.kommentar) : "";
-                  const saljareId = (lagData.saljare ? String(lagData.saljare) : null) ?? lag.owner_user_id ?? null;
+                  // Tilldelad säljare = ägaren; den som sålde ligger i data.saljare.
+                  const soldeId = lagData.saljare ? String(lagData.saljare) : null;
+                  const saljareId = lag.owner_user_id ?? soldeId;
+                  const saldAv = (st === "sald" || st === "scrive") && soldeId && soldeId !== saljareId ? soldeId : null;
                   const sparadTelefon = lagData.kund_telefon ? String(lagData.kund_telefon) : "";
                   const sparatNamn = lagData.kund_namn ? String(lagData.kund_namn) : "";
                   const telefon = telefoner[lag.id] ?? sparadTelefon;
@@ -927,7 +949,7 @@ function LagenhetTabell({
                           <circle cx="12" cy="10.5" r=".9" fill="currentColor" stroke="none" />
                         </svg>
                       </span>
-                      {isAdmin && <SaljareCell id={saljareId} />}
+                      {isAdmin && <SaljareCell id={saljareId} saldAv={saldAv} signerad={st === "scrive"} />}
                       <span className="d2d-lag-row__cell d2d-lag-row__cell--addr">{gatuadress || "—"}</span>
                       <span className="d2d-lag-row__cell">{lagData.ingang ? String(lagData.ingang) : "—"}</span>
                       <span className="d2d-lag-row__cell d2d-lag-row__cell--lgh">
@@ -1463,10 +1485,15 @@ function LagenhetForm({
         setSaveState(hasPending() ? "pending" : "saved");
         // Servern skapar nummerbytesärendet i efterhand (trigger) — hämta
         // kopplingen så att "registrerat" + låst startdatum syns direkt.
+        // Vid Såld/Scrive sätter servern också säljaren (den som klickade) —
+        // hämta den och ägaren så "Såld av …" visas direkt.
         if (p.status || Object.keys(p.data).some((k) => k.startsWith("mobil_") || k === "salt_mobil")) {
-          const { data: row } = await supabase.from("records").select("data").eq("id", lagenhetId).maybeSingle();
-          const nb = (row?.data as Record<string, unknown> | undefined)?.mobil_nummerbyte_id ?? null;
-          setData((d) => (d.mobil_nummerbyte_id === nb ? d : { ...d, mobil_nummerbyte_id: nb }));
+          const { data: row } = await supabase.from("records").select("data,owner_user_id").eq("id", lagenhetId).maybeSingle();
+          const rd = (row?.data as Record<string, unknown> | undefined) ?? {};
+          const nb = rd.mobil_nummerbyte_id ?? null;
+          const sj = rd.saljare ?? null;
+          setData((d) => (d.mobil_nummerbyte_id === nb && d.saljare === sj ? d : { ...d, mobil_nummerbyte_id: nb, saljare: sj }));
+          if (row && p.status) setRecord((r) => (r && r.owner_user_id !== row.owner_user_id ? { ...r, owner_user_id: row.owner_user_id } : r));
         }
       } catch (e) {
         // Lägg tillbaka det som inte gick igenom (nyare väntande värden vinner)
@@ -1699,6 +1726,12 @@ function LagenhetForm({
           <button className="btn btn--ghost btn--sm" onClick={() => { void flush(); }}>Försök igen</button>
         </div>
       )}
+
+      <SaldAvRad
+        status={status}
+        saljare={data.saljare ? String(data.saljare) : null}
+        agare={record.owner_user_id}
+      />
 
       {/* Tillfällig lägenhet (skapad av säljare). Ligger den i en tillfällig
           fastighet godkänns den tillsammans med fastigheten — då visas
