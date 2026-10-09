@@ -760,8 +760,6 @@ function FastighetsDetalj({
   // lämnas.
   const [telefoner, setTelefoner] = useState<Record<string, string>>({});
   const [namn, setNamn] = useState<Record<string, string>>({});
-  // Utfällt kort (snabbpanel med namn, telefon, Inte hemma och knackräknare).
-  const [oppet, setOppet] = useState<string | null>(null);
   const [sparFel, setSparFel] = useState<string | null>(null);
 
   /** Uppdatera en lägenhet i listan lokalt (så progressbaren och raden
@@ -937,10 +935,10 @@ function FastighetsDetalj({
             hamnar kommentaren på en egen rad under i stället för i en kolumn.
             Säljarkolumnen visas bara för admin — en ren säljare ser ändå
             bara sina egna adresser.
-            Varje rad är ett kort: pilen längst till höger fäller ut en
+            Varje rad är ett öppet kort: under huvudraden ligger alltid en
             snabbpanel med namn, telefon, knappen Inte hemma och −/+ för
             antal knackningar — så säljaren slipper öppna lägenheten för
-            det vanligaste. Klick på raden öppnar lägenheten som förut. */}
+            det vanligaste. Klick på huvudraden öppnar lägenheten som förut. */}
         {sparFel && <div className="d2d-lag-fel" role="alert">{sparFel}</div>}
         {lagenheter.length > 0 && (
           <div className={`d2d-lag-table${isAdmin ? " d2d-lag-table--admin" : ""}`}>
@@ -954,7 +952,6 @@ function FastighetsDetalj({
               <span className="d2d-lag-table__komm-col">Kommentar</span>
               <span className="d2d-lag-table__status-col">Status</span>
               <span className="d2d-lag-table__ring-col" />
-              <span className="d2d-lag-table__fall-col" />
             </div>
 
             {lagenheter.map((lag) => {
@@ -972,14 +969,12 @@ function FastighetsDetalj({
               const adressText = formatLagenhetAdress(lagData, lag.title);
               const nKnack = Number(lagData.antal_knackningar);
               const knack = Number.isFinite(nKnack) && nKnack > 0 ? nKnack : 0;
-              const utfallt = oppet === lag.id;
               const oppna = () => { rememberRow(listKey, lag.id); onOpenLagenhet(lag.id); };
-              const vaxla = () => setOppet((cur) => (cur === lag.id ? null : lag.id));
               // Raden är en div (inte button) eftersom den innehåller
-              // interaktiva element (ringknapp, utfällningspil) — de får
-              // inte ligga inuti en knapp.
+              // interaktiva element (ringknappen) — de får inte ligga
+              // inuti en knapp.
               return (
-                <div key={lag.id} className={`d2d-lag-kort ${cfg.cssClass}${utfallt ? " d2d-lag-kort--oppet" : ""}`}>
+                <div key={lag.id} className={`d2d-lag-kort ${cfg.cssClass}`}>
                 <div
                   {...returnRow(lag.id)}
                   role="button"
@@ -1034,17 +1029,6 @@ function FastighetsDetalj({
                       <RingIkon />
                     </span>
                   )}
-                  {/* Utfällningspil: öppnar snabbpanelen utan att lämna listan. */}
-                  <button
-                    type="button"
-                    className="d2d-lag-fall d2d-lag-table__fall-col"
-                    onClick={(e) => { e.stopPropagation(); vaxla(); }}
-                    aria-expanded={utfallt}
-                    aria-label={utfallt ? `Fäll ihop ${adressText}` : `Fäll ut ${adressText}`}
-                    title={utfallt ? "Fäll ihop" : "Namn, telefon, Inte hemma"}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
-                  </button>
                   {!!kommentar && (
                     <span className="d2d-lag-row__comment">
                       {kommentar.slice(0, 80)}{kommentar.length > 80 ? "…" : ""}
@@ -1052,58 +1036,56 @@ function FastighetsDetalj({
                   )}
                 </div>
 
-                {utfallt && (
-                  <div className="d2d-lag-panel" onClick={(e) => e.stopPropagation()}>
-                    <label className="d2d-lag-panel__falt">
-                      <span>Namn</span>
-                      <input
-                        type="text"
-                        autoComplete="off"
-                        className="d2d-lag-tel__input"
-                        value={namnVarde}
-                        placeholder="Kundens namn"
-                        onChange={(e) => setNamn((prev) => ({ ...prev, [lag.id]: e.target.value }))}
-                        onBlur={(e) => { void sparaText(lag.id, "kund_namn", e.target.value, sparatNamn); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                      />
-                    </label>
-                    <label className="d2d-lag-panel__falt">
-                      <span>Telefon</span>
-                      <input
-                        type="tel"
-                        inputMode="tel"
-                        autoComplete="off"
-                        className="d2d-lag-tel__input"
-                        value={telefon}
-                        placeholder="Telefonnummer"
-                        onChange={(e) => setTelefoner((prev) => ({ ...prev, [lag.id]: e.target.value }))}
-                        onBlur={(e) => { void sparaText(lag.id, "kund_telefon", e.target.value, sparadTelefon); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                      />
-                    </label>
-                    <div className="d2d-lag-panel__knack">
-                      <button
-                        type="button"
-                        className={`d2d-lag-panel__hemma${st === "inte_hemma" ? " d2d-lag-panel__hemma--aktiv" : ""}`}
-                        onClick={() => { void inteHemma(lag); }}
-                        title="Sätter statusen Inte hemma och räknar upp en knackning"
-                      >
-                        {st === "inte_hemma" ? "Inte hemma igen" : "Inte hemma"}
-                      </button>
-                      <div className="d2d-knack__rad" role="group" aria-label="Antal knackningar">
-                        <button type="button" className="d2d-knack__btn" aria-label="En färre" disabled={knack <= 0}
-                          onClick={() => { void sparaKnack(lag, knack - 1); }}>−</button>
-                        <span className="d2d-lag-panel__antal" aria-live="polite">{knack}</span>
-                        <button type="button" className="d2d-knack__btn" aria-label="En till" disabled={knack >= 99}
-                          onClick={() => { void sparaKnack(lag, knack + 1); }}>+</button>
-                        <span className="d2d-knack__text">{knack === 1 ? "knackning" : "knackningar"}</span>
-                      </div>
-                    </div>
-                    <button type="button" className="btn btn--ghost btn--sm d2d-lag-panel__oppna" onClick={oppna}>
-                      Öppna lägenheten →
+                <div className="d2d-lag-panel">
+                  <label className="d2d-lag-panel__falt">
+                    <span>Namn</span>
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      className="d2d-lag-tel__input"
+                      value={namnVarde}
+                      placeholder="Kundens namn"
+                      onChange={(e) => setNamn((prev) => ({ ...prev, [lag.id]: e.target.value }))}
+                      onBlur={(e) => { void sparaText(lag.id, "kund_namn", e.target.value, sparatNamn); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                    />
+                  </label>
+                  <label className="d2d-lag-panel__falt">
+                    <span>Telefon</span>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="off"
+                      className="d2d-lag-tel__input"
+                      value={telefon}
+                      placeholder="Telefonnummer"
+                      onChange={(e) => setTelefoner((prev) => ({ ...prev, [lag.id]: e.target.value }))}
+                      onBlur={(e) => { void sparaText(lag.id, "kund_telefon", e.target.value, sparadTelefon); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                    />
+                  </label>
+                  <div className="d2d-lag-panel__knack">
+                    <button
+                      type="button"
+                      className={`d2d-lag-panel__hemma${st === "inte_hemma" ? " d2d-lag-panel__hemma--aktiv" : ""}`}
+                      onClick={() => { void inteHemma(lag); }}
+                      title="Sätter statusen Inte hemma och räknar upp en knackning"
+                    >
+                      {st === "inte_hemma" ? "Inte hemma igen" : "Inte hemma"}
                     </button>
+                    <div className="d2d-knack__rad" role="group" aria-label="Antal knackningar">
+                      <button type="button" className="d2d-knack__btn" aria-label="En färre" disabled={knack <= 0}
+                        onClick={() => { void sparaKnack(lag, knack - 1); }}>−</button>
+                      <span className="d2d-lag-panel__antal" aria-live="polite">{knack}</span>
+                      <button type="button" className="d2d-knack__btn" aria-label="En till" disabled={knack >= 99}
+                        onClick={() => { void sparaKnack(lag, knack + 1); }}>+</button>
+                      <span className="d2d-knack__text">{knack === 1 ? "knackning" : "knackningar"}</span>
+                    </div>
                   </div>
-                )}
+                  <button type="button" className="btn btn--ghost btn--sm d2d-lag-panel__oppna" onClick={oppna}>
+                    Öppna lägenheten →
+                  </button>
+                </div>
                 </div>
               );
             })}
