@@ -70,13 +70,16 @@ function d2dSegsFromView(v: D2DView): string[] {
   }
 }
 
-type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "befintlig_telia" | "intresserad" | "sald" | "scrive" | "kall_kund";
+type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "inte_saljbar" | "befintlig_telia" | "intresserad" | "sald" | "scrive" | "kall_kund";
 
 const STATUS_CONFIG: Record<KnockStatus, { label: string; color: string; cssClass: string }> = {
   ej_knackad:       { label: "Ej knackad",       color: "var(--hue-slate)",  cssClass: "d2d-status--slate" },
   inte_hemma:       { label: "Inte hemma",       color: "var(--hue-blue)",   cssClass: "d2d-status--blue" },
   aterkoppling:     { label: "Återkoppling",     color: "var(--hue-amber)",  cssClass: "d2d-status--amber" },
   inte_intresserad: { label: "Inte intresserad", color: "var(--hue-red)",    cssClass: "d2d-status--red" },
+  // Dörren går inte att sälja på (tom lägenhet, lokal, …). Räknas som en
+  // öppnad dörr utan sälj i Utfall, precis som Inte intresserad.
+  inte_saljbar:     { label: "Inte säljbar",     color: "var(--hue-zinc)",   cssClass: "d2d-status--zinc" },
   befintlig_telia:  { label: "Befintlig Telia-kund", color: "var(--hue-sky)", cssClass: "d2d-status--sky" },
   intresserad:      { label: "Intresserad",      color: "var(--hue-green)",  cssClass: "d2d-status--green" },
   sald:             { label: "Såld",             color: "var(--hue-green)",  cssClass: "d2d-status--green-solid" },
@@ -104,7 +107,9 @@ const HIDDEN_STATUS_PICKS = new Set<KnockStatus>(["intresserad"]);
 // "Inte intresserad" — låter statistiken brytas ner senare i CRM:et.
 const EJ_INTRESSERAD_REASONS: Array<{ key: string; label: string }> = [
   { key: "for_gammal",         label: "För gammal" },
-  { key: "bindningstid",       label: "Bindningstid" },
+  // "Bindningstid" är borttagen som anledning (okt 2026) — bindningar
+  // anges i stället per tjänst under "Vad är bundet?". Äldre poster kan ha
+  // värdet kvar; då visas det som vald chip ändå (se nedan).
   { key: "flyttar",            label: "Flyttar" },
   { key: "saknar_behov",       label: "Saknar behov" },
   { key: "dalig_ekonomi",      label: "Dålig ekonomi" },
@@ -688,7 +693,7 @@ function RingIkon() {
  *  (Såld, Scrive) så den gröna delen växer från vänster när man säljer.
  *  "Ej knackad" ritas inte som segment utan är den tomma delen av baren. */
 const PROGRESS_ORDNING: KnockStatus[] = [
-  "sald", "scrive", "intresserad", "aterkoppling", "befintlig_telia", "inte_hemma", "kall_kund", "inte_intresserad",
+  "sald", "scrive", "intresserad", "aterkoppling", "befintlig_telia", "inte_hemma", "kall_kund", "inte_intresserad", "inte_saljbar",
 ];
 
 /** Progressbar för en fastighet: "knackade/antal lägenheter". Varje
@@ -1177,7 +1182,7 @@ function FastighetsDetalj({
 
 /** Ordning i statusfiltret: det som kräver handling först. */
 const ALLA_STATUS_ORDNING: KnockStatus[] = [
-  "ej_knackad", "inte_hemma", "aterkoppling", "scrive", "sald", "intresserad", "befintlig_telia", "kall_kund", "inte_intresserad",
+  "ej_knackad", "inte_hemma", "aterkoppling", "scrive", "sald", "intresserad", "befintlig_telia", "kall_kund", "inte_intresserad", "inte_saljbar",
 ];
 
 /** Alla adresser som är tilldelade den inloggade säljaren (säljare eller
@@ -1633,10 +1638,19 @@ function LagenhetForm({
     : [];
   const formFalt = kundFalt.length ? fields.filter((f) => !KUND_FALT.includes(f.key)) : fields;
 
+  // Fält med fast plats i flödet (ordningen Status → Kommentar → Vad är
+  // bundet → Namn → Telefon → E-post). Återkopplingsdatum visas bara vid
+  // statusen Återkoppling, så det hämtas oberoende av seller_hidden.
+  const kommentarFalt = formFalt.find((f) => f.key === "kommentar");
+  const aterkopplingFalt = configurableFields.find((f) => f.key === "aterkoppling_datum");
+  const KUND_FORST = ["kund_namn", "kund_telefon", "kund_epost"];
+  const kundFaltForst = KUND_FORST.map((k) => formFalt.find((f) => f.key === k)).filter((f): f is FieldDef => !!f);
+  const ovrigaFalt = formFalt.filter((f) => f.key !== "kommentar" && f.key !== "aterkoppling_datum" && !KUND_FORST.includes(f.key));
+
   type FieldGroup = { section: string | null; label: string | null; fields: FieldDef[] };
   const groups: FieldGroup[] = [];
   let current: FieldGroup | null = null;
-  for (const f of formFalt) {
+  for (const f of ovrigaFalt) {
     const sec = f.options.section ?? null;
     if (!current || current.section !== sec) {
       current = { section: sec, label: sec ? (SECTION_LABELS[sec] ?? sec) : null, fields: [] };
@@ -1755,7 +1769,11 @@ function LagenhetForm({
         <div className="d2d-reason-panel">
           <span className="label">Anledning</span>
           <div className="d2d-reason-panel__chips">
-            {EJ_INTRESSERAD_REASONS.map((r) => (
+            {[
+              ...EJ_INTRESSERAD_REASONS,
+              // Äldre poster med den borttagna anledningen visar den tills säljaren väljer en annan.
+              ...(data.ej_intresserad_anledning === "bindningstid" ? [{ key: "bindningstid", label: "Bindningstid (äldre)" }] : []),
+            ].map((r) => (
               <button
                 key={r.key}
                 type="button"
@@ -1766,9 +1784,13 @@ function LagenhetForm({
               </button>
             ))}
           </div>
-          {data.ej_intresserad_anledning === "bindningstid" && !data.bunden_till && (
-            <span className="d2d-sold-panel__hint">Fyll i när bindningen löper ut under Bindningstid nedan.</span>
-          )}
+        </div>
+      )}
+
+      {/* Återkopplingsdatum — bara när säljaren valt Återkoppling. */}
+      {status === "aterkoppling" && aterkopplingFalt && (
+        <div className="d2d-reason-panel d2d-aterkoppling">
+          <FieldInput field={aterkopplingFalt} value={data[aterkopplingFalt.key]} onChange={set(aterkopplingFalt.key, 0)} />
         </div>
       )}
 
@@ -1881,13 +1903,36 @@ function LagenhetForm({
         </div>
       )}
 
-      {/* Bindningstid hos nuvarande operatör — på alla besök där någon öppnade. */}
-      {!!status && ["sald", "scrive", "aterkoppling", "inte_intresserad", "kall_kund", "befintlig_telia"].includes(status) && (
-        <BindningPanel fields={objectDef?.fields ?? []} data={data} set={set} />
+      {/* Ordningen i flödet: Status → Kommentar → Vad är bundet → Namn,
+          Telefon, E-post → övriga fält. */}
+      {kommentarFalt && (
+        <div className="d2d-form">
+          <div className="d2d-form-section">
+            <FieldInput field={kommentarFalt} value={data[kommentarFalt.key]} onChange={set(kommentarFalt.key, 800)} />
+          </div>
+        </div>
+      )}
+
+      {/* Vad är bundet? — per tjänst: när bindningen löper ut och operatör.
+          På alla besök där någon öppnade. */}
+      {!!status && ["sald", "scrive", "aterkoppling", "inte_intresserad", "inte_saljbar", "kall_kund", "befintlig_telia"].includes(status) && (
+        <BindningPanel
+          fields={objectDef?.fields ?? []}
+          data={data}
+          onPatch={(patch) => { setData((d) => ({ ...d, ...patch })); queueSave(patch, null, 0); }}
+        />
       )}
 
       {/* Formulärfält */}
       <div className="d2d-form">
+        {kundFaltForst.length > 0 && (
+          <div className="d2d-form-section">
+            <h3 className="d2d-form-section__title">{SECTION_LABELS.kunddata}</h3>
+            {kundFaltForst.map((f) => (
+              <FieldInput key={f.key} field={f} value={data[f.key]} onChange={set(f.key, TYPING_TYPES.has(f.fieldType) ? 800 : 0)} />
+            ))}
+          </div>
+        )}
         {groups.map((group, gi) => (
           <div key={group.section ?? gi} className="d2d-form-section">
             {group.label && <h3 className="d2d-form-section__title">{group.label}</h3>}
