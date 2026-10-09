@@ -14,6 +14,7 @@ import {
 import { ObjectListPage } from "./ObjectListPage";
 import { lasXlsx, tillObjekt } from "@/lib/xlsx";
 import { StatusPill } from "./StatusPill";
+import { FilterPills, PlusIcon, TopbarActions } from "./PageChrome";
 
 // =============================================================================
 // Kartan — Leaflet laddas via CDN (inget npm-beroende, se motivering i doc:
@@ -129,18 +130,18 @@ function KartaSection({ projektId, totalFastigheter, reloadKey = 0 }: { projektI
   const saknar = totalFastigheter - (punkter?.length ?? 0);
 
   return (
-    <div className="d2dpb-detail__section">
-      <div className="d2dpb-detail__section-header">
-        <h3>Karta</h3>
+    <section className="card d2dpb-sek">
+      <div className="d2dpb-sek__head">
+        <h2>Karta</h2>
         <button className="btn btn--ghost btn--sm" onClick={geokodaNu} disabled={geokodar}>
           {geokodar ? "Geokodar…" : "Geokoda nu"}
         </button>
       </div>
       {totalFastigheter === 0 ? (
-        <div className="d2d-empty">Lägg till fastigheter i projektet för att se dem på kartan.</div>
+        <p className="d2dpb-sek__tom">Lägg till fastigheter i projektet för att se dem på kartan.</p>
       ) : (
         <>
-          <p className="ink-faint">
+          <p className="d2dpb-sek__hjalp">
             {saknar > 0
               ? `${saknar} av ${totalFastigheter} fastighet(er) saknar koordinater ännu. Geokodningen körs automatiskt var 5:e minut, eller kör den direkt med knappen ovan.`
               : `Alla ${totalFastigheter} fastighet(er) har koordinater.`}
@@ -152,7 +153,7 @@ function KartaSection({ projektId, totalFastigheter, reloadKey = 0 }: { projektI
           )}
         </>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -1042,19 +1043,61 @@ function StatusLegend({ statusar, summa, visaNollor = false }: { statusar: SaljS
   );
 }
 
-/** Nyckeltal för ett projekt: lägenheter, knackat, sålt, säljare. */
+/** Nyckeltal: samma rutor som Utfall (stort tal, förklaring under). */
 function Nyckeltal({ summa, fastigheter }: { summa: StatusSumma; fastigheter?: number }) {
   const k = nyckeltal(summa);
+  const tal = (n: number) => n.toLocaleString("sv-SE");
   return (
-    <div className="d2dpb-kpis">
-      {fastigheter != null && <div><b>{fastigheter}</b><span>fastigheter</span></div>}
-      <div><b>{summa.lagenheter.toLocaleString("sv-SE")}</b><span>lägenheter</span></div>
-      <div><b>{k.knackPct} %</b><span>knackade ({k.knackade.toLocaleString("sv-SE")})</span></div>
-      <div><b>{k.salda.toLocaleString("sv-SE")}</b><span>sålda inkl. Scrive</span></div>
-      <div><b>{k.traffPct} %</b><span>sålt av knackade</span></div>
-      <div><b>{summa.saljare}</b><span>säljare</span></div>
+    <div className="d2dpb-tiles">
+      {fastigheter != null && <div className="d2dpb-tile"><b>{tal(fastigheter)}</b><span>fastigheter</span></div>}
+      <div className="d2dpb-tile"><b>{tal(summa.lagenheter)}</b><span>lägenheter</span></div>
+      <div className="d2dpb-tile"><b>{k.knackPct} %</b><span>knackade ({tal(k.knackade)})</span></div>
+      <div className="d2dpb-tile"><b>{tal(k.salda)}</b><span>sålda inkl. Scrive</span></div>
+      <div className="d2dpb-tile"><b>{k.traffPct} %</b><span>sålt av knackade</span></div>
     </div>
   );
+}
+
+/** Fågelvägen i km mellan två punkter (haversine). */
+function avstandKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+  const r = (x: number) => (x * Math.PI) / 180;
+  const dLat = r(b.lat - a.lat), dLon = r(b.lon - a.lon);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(h));
+}
+const kmText = (km: number) => km < 1 ? `${Math.round((km * 1000) / 10) * 10} m` : `${km.toLocaleString("sv-SE", { maximumFractionDigits: 1 })} km`;
+const punktFor = (f: RecordRow) => {
+  const d = f.data as Record<string, unknown>;
+  const lat = Number(d.geo_lat), lon = Number(d.geo_lon);
+  return d.geo_lat != null && d.geo_lon != null && Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+};
+type Granne = { id: string; namn: string; km: number };
+/** De två närmaste fastigheterna i projektet för varje fastighet (null = saknar läge). */
+function narmasteGrannar(rader: RecordRow[]): Map<string, Granne[] | null> {
+  const pts = rader.map((f) => ({ f, p: punktFor(f) }));
+  const res = new Map<string, Granne[] | null>();
+  for (const { f, p } of pts) {
+    if (!p) { res.set(f.id, null); continue; }
+    res.set(f.id, pts.filter((x) => x.f.id !== f.id && x.p)
+      .map((x) => ({ id: x.f.id, namn: x.f.title ?? "Namnlös", km: avstandKm(p, x.p!) }))
+      .sort((a, b) => a.km - b.km).slice(0, 2));
+  }
+  return res;
+}
+/** Turordning som en rutt: börja i nuvarande nr 1 och gå alltid till närmaste kvarvarande. Utan läge hamnar sist. */
+function foreslaTurordning(rader: RecordRow[]): string[] {
+  const med = rader.filter((f) => punktFor(f));
+  const utan = rader.filter((f) => !punktFor(f));
+  if (med.length === 0) return rader.map((f) => f.id);
+  const kvar = [...med];
+  const ordning: RecordRow[] = [kvar.shift()!];
+  while (kvar.length) {
+    const sista = punktFor(ordning[ordning.length - 1])!;
+    let bast = 0;
+    for (let i = 1; i < kvar.length; i++) if (avstandKm(sista, punktFor(kvar[i])!) < avstandKm(sista, punktFor(kvar[bast])!)) bast = i;
+    ordning.push(kvar.splice(bast, 1)[0]);
+  }
+  return [...ordning, ...utan].map((f) => f.id);
 }
 
 async function hamtaPlanering(projektId: string | null) {
@@ -1064,10 +1107,10 @@ async function hamtaPlanering(projektId: string | null) {
 }
 
 function FastighetRow({
-  fastighet, sellers, statusar, summa, onChanged, onRemove,
+  fastighet, sellers, statusar, summa, grannar, onChanged, onRemove,
 }: {
   fastighet: FastRow; sellers: SellerOption[]; statusar: SaljStatus[]; summa?: StatusSumma;
-  onChanged: () => void; onRemove: () => void;
+  grannar?: Granne[] | null; onChanged: () => void; onRemove: () => void;
 }) {
   const [open, setOpen] = useState<"none" | "addresses" | "assign">("none");
   const [turordning, setTurordning] = useState(String((fastighet.data as Record<string, unknown>).turordning ?? ""));
@@ -1100,10 +1143,21 @@ function FastighetRow({
         <div className="d2dpb-rad__namn">
           <strong>{fastighet.title ?? "Namnlös"}</strong>
           <span>{[data.fastighetsbeteckning, `${fastighet._addrCount} adresser`].filter(Boolean).map(String).join(" · ")}</span>
+          <span className={`d2dpb-rad__saljare${assignment.length ? "" : " d2dpb-rad__saljare--ingen"}`}
+            title={assignment.map((x) => `${namn(x.user_id)} ${x.procent} %`).join(", ")}>
+            {assignment.length ? assignment.map((x) => namn(x.user_id)).join(", ") : "Ingen säljare tilldelad"}
+          </span>
         </div>
         <span className={`d2dpb-lage d2dpb-lage--${lage.ton}`}>{lage.text}</span>
-        <div className="d2dpb-rad__saljare" title={assignment.map((x) => `${namn(x.user_id)} ${x.procent} %`).join(", ")}>
-          {assignment.length ? assignment.map((x) => namn(x.user_id)).join(", ") : <span className="ink-faint">Ingen tilldelad</span>}
+        <div className="d2dpb-rad__narmast">
+          {grannar == null ? <span className="ink-faint">Saknar läge på kartan</span>
+            : grannar.length === 0 ? <span className="ink-faint">Ensam i projektet</span>
+            : <>
+                <b>{kmText(grannar[0].km)}</b>
+                <span title={grannar.map((g) => `${g.namn} ${kmText(g.km)}`).join(" · ")}>
+                  {grannar.map((g) => `${g.namn} (${kmText(g.km)})`).join(" · ")}
+                </span>
+              </>}
         </div>
         <div className="d2dpb-rad__stapel">
           <StatusStapel statusar={statusar} summa={sum} />
@@ -1236,6 +1290,7 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
   const [valArbetar, setValArbetar] = useState<string | null>(null);
   const [valFel, setValFel] = useState<string | null>(null);
   const [kartaKey, setKartaKey] = useState(0);
+  const [ordnar, setOrdnar] = useState(false);
   const [plan, setPlan] = useState<{ statusar: SaljStatus[]; projekt: StatusSumma; fastigheter: Record<string, StatusSumma> } | null>(null);
 
   const load = useCallback(async () => {
@@ -1401,42 +1456,72 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
 
   const data = project.data as Record<string, unknown>;
 
+  const grannar = narmasteGrannar(fastigheter);
+  const harLage = fastigheter.filter((f) => punktFor(f)).length;
+
+  async function ordnaEfterNarhet() {
+    const ordning = foreslaTurordning(fastigheter);
+    const utan = fastigheter.length - harLage;
+    if (!confirm(`Sätta turordningen som en rutt – från nr 1 alltid vidare till närmaste fastighet? ${utan > 0 ? `${utan} fastighet(er) utan läge hamnar sist. ` : ""}Du kan ändra numren efteråt.`)) return;
+    setOrdnar(true);
+    try {
+      for (let i = 0; i < ordning.length; i++) await updateRecord(ordning[i], { turordning: i + 1 });
+    } catch { /* syns efter omladdningen */ }
+    setOrdnar(false);
+    await load();
+  }
+
   return (
     <div className="d2dpb-detail">
-      <div className="d2dpb-detail__header">
-        <button className="btn btn--ghost btn--sm" onClick={onBack}>← Alla projekt</button>
-        <h2>{project.title ?? "Projekt"}</h2>
-        <StatusPill status={project.status} def={projDef(project.status)} />
-        <button
-          className="btn btn--ghost btn--sm d2dpb-detail__delete"
-          onClick={deleteProject}
-          disabled={deleting}
-        >
-          {deleting ? "Tar bort…" : "Ta bort projekt"}
+      <TopbarActions>
+        <button className="btn btn--ghost d2dpb-farlig" onClick={deleteProject} disabled={deleting} aria-label="Ta bort projekt" title="Ta bort projekt">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
+          <span className="btn__label">{deleting ? "Tar bort…" : "Ta bort projekt"}</span>
         </button>
-      </div>
-      {deleteErr && <div className="d2d-error">{deleteErr}</div>}
-      {!!data.description && <p className="ink-faint">{String(data.description)}</p>}
+        <button className="btn btn--brand" onClick={approve} disabled={approving || fastigheter.length === 0} aria-label="Godkänn och dela ut adresser"
+          title="Delar ut adresserna till säljarna enligt tilldelningen per fastighet och gör dem synliga i säljarnas app.">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>
+          <span className="btn__label">{approving ? "Godkänner…" : "Godkänn och dela ut adresser"}</span>
+        </button>
+      </TopbarActions>
 
-      {plan && (
-        <div className="d2dpb-summa">
-          <Nyckeltal summa={plan.projekt} fastigheter={fastigheter.length} />
+      <div className="d2dpb-crumb">
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onBack}>← Alla projekt</button>
+        <h2 className="d2dpb-crumb__title">{project.title ?? "Projekt"}</h2>
+        <StatusPill status={project.status} def={projDef(project.status)} />
+        {!!data.description && <span className="d2dpb-crumb__meta">{String(data.description)}</span>}
+      </div>
+      {deleteErr && <div className="card d2dpb-note d2dpb-note--fel">{deleteErr}</div>}
+      {approveMsg && <div className="card d2dpb-note d2dpb-note--ok">✓ {approveMsg}</div>}
+      {approveErr && <div className="card d2dpb-note d2dpb-note--fel">{approveErr}</div>}
+
+      {plan && <Nyckeltal summa={plan.projekt} fastigheter={fastigheter.length} />}
+
+      {plan && plan.projekt.lagenheter > 0 && (
+        <section className="card d2dpb-sek">
+          <div className="d2dpb-sek__head"><h2>Säljstatus</h2>
+            <span className="d2dpb-sek__meta">{plan.projekt.saljare} säljare har lägenheter i projektet</span></div>
           <StatusStapel statusar={plan.statusar} summa={plan.projekt} />
           <StatusLegend statusar={plan.statusar} summa={plan.projekt} visaNollor />
-        </div>
+        </section>
       )}
 
-      <div className="d2dpb-detail__section">
-        <div className="d2dpb-detail__section-header">
-          <h3>Fastigheter ({fastigheter.length})</h3>
+      <section className="card d2dpb-sek d2dpb-sek--tabell">
+        <div className="d2dpb-sek__head">
+          <h2>Fastigheter <span className="d2dpb-sek__antal">{fastigheter.length}</span></h2>
+          {fastigheter.length > 1 && (
+            <button className="btn btn--ghost btn--sm" onClick={ordnaEfterNarhet} disabled={ordnar || harLage < 2}
+              title="Sätter turordningen som en rutt: från nr 1 alltid vidare till närmaste fastighet.">
+              {ordnar ? "Ordnar…" : "Ordna turordning efter närhet"}
+            </button>
+          )}
         </div>
-        {fastigheter.length === 0 && (
-          <div className="d2d-empty">Inga fastigheter tillagda ännu. Bocka i leveranser i listan nedan.</div>
-        )}
-        {fastigheter.length > 0 && (
+        {fastigheter.length === 0 ? (
+          <p className="d2dpb-sek__tom">Inga fastigheter i projektet ännu. Välj dem i leveranslistan nedan eller importera en adresslista.</p>
+        ) : (
           <div className="d2dpb-tabell" style={{ "--d2dpb-antal": plan?.statusar.length ?? 0 } as React.CSSProperties}>
             <div className="d2dpb-rad__main d2dpb-tabell__head" aria-hidden="true">
-              <span>#</span><span>Fastighet</span><span>Läge</span><span>Säljare</span><span>Säljstatus</span>
+              <span>#</span><span>Fastighet · säljare</span><span>Läge</span><span>Närmast</span><span>Säljstatus</span>
               {(plan?.statusar ?? []).map((st) => (
                 <span key={st.key} className="d2dpb-tabell__status" title={st.label}>
                   <i style={{ background: statusFarg(st) }} />{st.label}
@@ -1451,6 +1536,7 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
                 sellers={sellers}
                 statusar={plan?.statusar ?? []}
                 summa={plan?.fastigheter[f.id]}
+                grannar={grannar.get(f.id)}
                 onChanged={load}
                 onRemove={() => removeFastighet(f.id)}
               />
@@ -1464,21 +1550,13 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
             onAdded={load}
           />
         )}
-        <ExcelImportPanel
-          projektId={projektId}
-          fastigheter={fastigheter}
-          onDone={load}
-        />
-      </div>
+      </section>
 
       {deliveryDef && (
-        <div className="d2dpb-detail__section d2dpb-leveranser">
-          <div className="d2dpb-detail__section-header">
-            <h3>Välj fastigheter från leveranslistan</h3>
-          </div>
-          <p className="ink-faint">
-            Filtrera som i Leveranser och bocka i de fastigheter som ska ingå i projektet. De läggs till direkt och
-            geokodas, så de syns på kartan nedan.
+        <section className="card d2dpb-sek d2dpb-leveranser">
+          <div className="d2dpb-sek__head"><h2>Lägg till fastigheter från leveranslistan</h2></div>
+          <p className="d2dpb-sek__hjalp">
+            Filtrera som i Leveranser och bocka i de fastigheter som ska ingå. De läggs till direkt och geokodas, så att de syns på kartan och får avstånd i tabellen.
           </p>
           {valFel && <div className="d2d-error">{valFel}</div>}
           <ObjectListPage
@@ -1488,22 +1566,19 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
             fastaKolumner={PROJEKT_KOLUMNER}
             picker={{ valda, onVal: valjLeveranser, arbetar: valArbetar, etikett: "i projektet" }}
           />
-        </div>
+        </section>
       )}
 
-      <KartaSection projektId={projektId} totalFastigheter={fastigheter.length} reloadKey={kartaKey} />
+      <section className="card d2dpb-sek">
+        <div className="d2dpb-sek__head"><h2>Importera adresslista</h2></div>
+        <ExcelImportPanel
+          projektId={projektId}
+          fastigheter={fastigheter}
+          onDone={load}
+        />
+      </section>
 
-      <div className="d2dpb-detail__approve">
-        <button className="btn btn--brand" onClick={approve} disabled={approving || fastigheter.length === 0}>
-          {approving ? "Godkänner…" : "Godkänn projekt och dela ut adresser"}
-        </button>
-        <p className="ink-faint">
-          Delar ut adresserna till säljarna enligt tilldelningen per fastighet (en säljare får alla,
-          flera säljare får de adresser du bockat i), och gör dem synliga i säljarnas app.
-        </p>
-        {approveMsg && <div className="d2d-save-ok">✓ {approveMsg}</div>}
-        {approveErr && <div className="d2d-error">{approveErr}</div>}
-      </div>
+      <KartaSection projektId={projektId} totalFastigheter={fastigheter.length} reloadKey={kartaKey} />
     </div>
   );
 }
@@ -1519,7 +1594,7 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [visaAvslutade, setVisaAvslutade] = useState(false);
+  const [urval, setUrval] = useState<"aktiva" | "avslutade" | "alla">("aktiva");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1553,8 +1628,8 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
 
   if (loading) return <div className="d2d-loading">Laddar projekt…</div>;
 
-  const synliga = items.filter((p) => visaAvslutade || p.status !== "avslutat");
-  const antalAvslutade = items.length - items.filter((p) => p.status !== "avslutat").length;
+  const antalAvslutade = items.filter((p) => p.status === "avslutat").length;
+  const synliga = items.filter((p) => urval === "alla" || (urval === "avslutade") === (p.status === "avslutat"));
   const totalt: StatusSumma = synliga.reduce<StatusSumma>((acc, p) => {
     const antal = { ...acc.antal };
     for (const [k, n] of Object.entries(p.antal)) antal[k] = (antal[k] ?? 0) + n;
@@ -1563,46 +1638,63 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
 
   return (
     <div className="d2dpb-list">
-      <div className="d2dpb-list__header">
-        <h2>D2D-projekt</h2>
-        <div className="d2dpb-list__actions">
-          {antalAvslutade > 0 && (
-            <label className="d2dpb-list__toggle">
-              <input type="checkbox" checked={visaAvslutade} onChange={(e) => setVisaAvslutade(e.target.checked)} />
-              Visa avslutade ({antalAvslutade})
-            </label>
-          )}
-          <button className="btn btn--brand btn--sm" onClick={() => setCreating((c) => !c)}>
-            {creating ? "Avbryt" : "+ Nytt projekt"}
-          </button>
-        </div>
-      </div>
+      <TopbarActions>
+        <button className="btn btn--brand" onClick={() => setCreating((c) => !c)}>
+          <PlusIcon /><span className="btn__label">Nytt projekt</span>
+        </button>
+      </TopbarActions>
 
       {creating && (
-        <div className="d2dpb-list__new">
-          <input
-            className="input"
-            placeholder="Projektnamn"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && create()}
-            autoFocus
-          />
-          <button className="btn btn--brand btn--sm" onClick={create}>Skapa</button>
+        <div className="card d2dpb-sek d2dpb-ny">
+          <div className="d2dpb-sek__head"><h2>Nytt projekt</h2></div>
+          <div className="d2dpb-ny__rad">
+            <input
+              className="input"
+              placeholder="Projektnamn, t.ex. Umeå – Ålidhem"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && create()}
+              autoFocus
+            />
+            <button className="btn btn--ghost" onClick={() => { setCreating(false); setNewName(""); }}>Avbryt</button>
+            <button className="btn btn--brand" onClick={create} disabled={!newName.trim()}>Skapa</button>
+          </div>
           {error && <span className="d2d-error">{error}</span>}
         </div>
       )}
 
-      {synliga.length > 0 && (
-        <div className="d2dpb-summa">
-          <Nyckeltal summa={totalt} fastigheter={synliga.reduce((n, p) => n + p.fastigheter, 0)} />
+      <div className="d2dpb-filter">
+        <FilterPills
+          active={urval}
+          onSelect={(k) => setUrval(k as typeof urval)}
+          items={[
+            { key: "aktiva", label: "Aktiva", count: items.length - antalAvslutade },
+            { key: "avslutade", label: "Avslutade", count: antalAvslutade },
+            { key: "alla", label: "Alla", count: items.length },
+          ]}
+        />
+      </div>
+
+      {synliga.length > 0 && <Nyckeltal summa={totalt} fastigheter={synliga.reduce((n, p) => n + p.fastigheter, 0)} />}
+
+      {totalt.lagenheter > 0 && (
+        <section className="card d2dpb-sek">
+          <div className="d2dpb-sek__head"><h2>Säljstatus</h2>
+            <span className="d2dpb-sek__meta">{urval === "aktiva" ? "Aktiva projekt" : urval === "avslutade" ? "Avslutade projekt" : "Alla projekt"}</span></div>
+          <StatusStapel statusar={statusar} summa={totalt} />
           <StatusLegend statusar={statusar} summa={totalt} visaNollor />
-        </div>
+        </section>
       )}
 
-      {synliga.length === 0 && <div className="d2d-empty">Inga D2D-projekt ännu.</div>}
+      {synliga.length === 0 && (
+        <div className="card d2dpb-sek"><p className="d2dpb-sek__tom">
+          {items.length === 0 ? "Inga D2D-projekt ännu. Skapa ett med Nytt projekt uppe till höger." : "Inga projekt i det här urvalet."}
+        </p></div>
+      )}
 
       {synliga.length > 0 && (
+        <section className="card d2dpb-sek d2dpb-sek--tabell">
+        <div className="d2dpb-sek__head"><h2>Projekt <span className="d2dpb-sek__antal">{synliga.length}</span></h2></div>
         <div className="d2dpb-ptabell" style={{ "--d2dpb-antal": statusar.length } as React.CSSProperties}>
           <div className="d2dpb-prad d2dpb-tabell__head" aria-hidden="true">
             <span>Projekt</span><span>Status</span><span>Fastigheter</span><span>Lägenheter</span><span>Säljstatus</span>
@@ -1636,6 +1728,7 @@ function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
             );
           })}
         </div>
+        </section>
       )}
     </div>
   );
@@ -1796,32 +1889,21 @@ export function D2DProjectBuilder({ objectDefFor, onOpenRecord }: {
   }, [view.kind]);
 
   return (
-    <div className="d2dpb d2dpb--bred">
+    <div className="page d2dpb">
       {view.kind !== "project" && (
-        <div className="d2dpb-toplevel-tabs">
-          <button
-            className={`btn btn--sm ${view.kind === "list" ? "btn--brand" : "btn--ghost"}`}
-            onClick={() => setView({ kind: "list" })}
-          >
-            Projekt
-          </button>
-          <button
-            className={`btn btn--sm ${view.kind === "karta" ? "btn--brand" : "btn--ghost"}`}
-            onClick={() => setView({ kind: "karta" })}
-          >
-            Karta
-          </button>
-          <button
-            className={`btn btn--sm ${view.kind === "godkanna" ? "btn--brand" : "btn--ghost"}`}
-            onClick={() => setView({ kind: "godkanna" })}
-          >
-            Att godkänna
-            {!!antalGodk && <span className="d2dpb-godk__antal">{antalGodk}</span>}
-          </button>
+        <div className="tab-bar d2dpb-tabs" role="tablist">
+          {([["list", "Projekt"], ["karta", "Leveranskarta"], ["godkanna", "Att godkänna"]] as const).map(([k, label]) => (
+            <button key={k} role="tab" aria-selected={view.kind === k}
+              className={`tab-bar__tab${view.kind === k ? " tab-bar__tab--active" : ""}`}
+              onClick={() => setView({ kind: k } as typeof view)}>
+              {label}
+              {k === "godkanna" && !!antalGodk && <span className="tab-bar__count">{antalGodk}</span>}
+            </button>
+          ))}
         </div>
       )}
       {view.kind === "list" && <ProjectList onOpen={(id) => setView({ kind: "project", id })} />}
-      {view.kind === "karta" && <LeveransKarta />}
+      {view.kind === "karta" && <section className="card d2dpb-sek"><LeveransKarta /></section>}
       {view.kind === "godkanna" && (
         <AttGodkanna onOpenRecord={onOpenRecord} onOpenProjekt={(id) => setView({ kind: "project", id })} onAntal={setAntalGodk} />
       )}
