@@ -438,7 +438,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                         aria-current={activeKey === "__d2d__"}
                         onClick={() => selectAndClose("__d2d__")}
                       >
-                        Blitz
+                        D2D-sälj
                       </button>
                       {/* Säljarfeedback från Blitz — bara granskaren (Lukas) */}
                       {d2dFeedback && (
