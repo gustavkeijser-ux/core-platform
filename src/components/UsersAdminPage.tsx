@@ -210,7 +210,7 @@ function NewUserDialog({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
                   );
                 })}
               </div>
-              <div className="formfield__help">Dörrsäljare utan andra roller ser bara Blitz. Administratör ser allt.</div>
+              <div className="formfield__help">Dörrsäljare utan andra roller ser bara D2D-sälj. Administratör ser allt.</div>
             </div>
 
             <div className="formfield">
