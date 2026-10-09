@@ -422,10 +422,12 @@ const EXCEL_RUBRIK_TILL_FALT: Record<string, keyof AddrRow> = {
 };
 
 function AddressEditor({
-  fastighetId, existingCount, onImported,
+  fastighetId, existingCount, onImported, statusar = [], sellers = [],
 }: {
   fastighetId: string; existingCount: number; onImported: () => void;
+  statusar?: SaljStatus[]; sellers?: SellerOption[];
 }) {
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [rows, setRows] = useState<AddrRow[]>([{ ...EMPTY_ADDR_ROW }]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -434,7 +436,6 @@ function AddressEditor({
   // ── Redan inlagda adresser — med kommentarbubbla ──────────────────────
   const [adresser, setAdresser] = useState<RecordRow[]>([]);
   const [loadingList, setLoadingList] = useState(false);
-  const [openKommentar, setOpenKommentar] = useState<string | null>(null);
 
   const loadAdresser = useCallback(async () => {
     setLoadingList(true);
@@ -521,35 +522,53 @@ function AddressEditor({
         </button>
       </div>
 
-      {adresser.length > 0 && (
-        <div className="d2dpb-addr__list">
-          {adresser.map((a) => {
-            const ad = a.data as Record<string, unknown>;
-            const namn = [ad.gatunamn, ad.gatunummer].filter(Boolean).join(" ")
-              + (ad.ingang ? ` ${ad.ingang}` : "")
-              + (a.title ? ` · lgh ${a.title}` : "");
-            const kommentar = ad.kommentar ? String(ad.kommentar) : null;
-            return (
-              <div key={a.id} className="d2dpb-addr__row">
-                <span className="d2dpb-addr__row-namn">{namn.trim() || a.title || "—"}</span>
-                {kommentar && (
-                  <button
-                    type="button"
-                    className="d2dpb-addr__bubble"
-                    title="Visa kommentar"
-                    onClick={() => setOpenKommentar((cur) => (cur === a.id ? null : a.id))}
-                  >
-                    💬
+      {adresser.length > 0 && (() => {
+        const antal: Record<string, number> = {};
+        for (const a of adresser) { const k = a.status ?? "ej_knackad"; antal[k] = (antal[k] ?? 0) + 1; }
+        const synliga = statusFilter ? adresser.filter((a) => (a.status ?? "ej_knackad") === statusFilter) : adresser;
+        const saljarNamn = (id: unknown) => id ? (sellers.find((x) => x.id === String(id))?.name ?? "Okänd") : null;
+        return (
+          <div className="d2dpb-lgh">
+            {statusar.length > 0 && (
+              <div className="d2dpb-lgh__filter" role="group" aria-label="Filtrera på status">
+                <button type="button" className="d2dpb-lgh__chip" aria-pressed={!statusFilter} onClick={() => setStatusFilter(null)}>
+                  Alla <b>{adresser.length}</b>
+                </button>
+                {statusar.filter((st) => antal[st.key]).map((st) => (
+                  <button key={st.key} type="button" className="d2dpb-lgh__chip" aria-pressed={statusFilter === st.key}
+                    onClick={() => setStatusFilter(statusFilter === st.key ? null : st.key)}>
+                    <i style={{ background: statusFarg(st) }} />{st.label} <b>{antal[st.key]}</b>
                   </button>
-                )}
-                {kommentar && openKommentar === a.id && (
-                  <div className="d2dpb-addr__bubble-pop">{kommentar}</div>
-                )}
+                ))}
               </div>
-            );
-          })}
-        </div>
-      )}
+            )}
+            <div className="d2dpb-lgh__tabell">
+              <div className="d2dpb-lgh__rad d2dpb-lgh__rad--head" aria-hidden="true">
+                <span>Adress</span><span>Lgh</span><span>Säljstatus</span><span>Säljare</span><span>Kund</span><span>Kommentar</span>
+              </div>
+              {synliga.map((a) => {
+                const ad = a.data as Record<string, unknown>;
+                const adress = ([ad.gatunamn, ad.gatunummer].filter(Boolean).join(" ") + (ad.ingang ? ` ${ad.ingang}` : "")).trim();
+                const kommentar = ad.kommentar ? String(ad.kommentar) : null;
+                const st = statusar.find((x) => x.key === (a.status ?? "ej_knackad"));
+                const saljare = saljarNamn(ad.saljare ?? a.owner_user_id);
+                return (
+                  <div key={a.id} className="d2dpb-lgh__rad">
+                    <span className="d2dpb-lgh__adress">{adress || "—"}</span>
+                    <span className="d2dpb-lgh__nr">{a.title ? `lgh ${a.title}` : "—"}</span>
+                    <span>{st
+                      ? <span className="d2dpb-lgh__status" style={{ "--st": statusFarg(st) } as React.CSSProperties}><i />{st.label}</span>
+                      : <span className="ink-faint">{a.status ?? "—"}</span>}</span>
+                    <span className={saljare ? "" : "ink-faint"}>{saljare ?? "Ej tilldelad"}</span>
+                    <span className={ad.kund_namn ? "" : "ink-faint d2dpb-lgh__tom"}>{ad.kund_namn ? String(ad.kund_namn) : "—"}</span>
+                    <span className={`d2dpb-lgh__komm${kommentar ? "" : " ink-faint d2dpb-lgh__tom"}`} title={kommentar ?? undefined}>{kommentar ?? "—"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
       {loadingList && adresser.length === 0 && <div className="d2d-loading">Laddar adresser…</div>}
 
       <div className="d2dpb-addr__table-wrap">
@@ -1094,7 +1113,7 @@ function FastighetRow({
           <span key={st.key} className="d2dpb-rad__antal" data-label={st.label}>{sum.antal[st.key] || "–"}</span>
         ))}
         <div className="d2dpb-rad__knappar">
-          <button className="btn btn--ghost btn--sm" aria-pressed={open === "addresses"} onClick={() => setOpen(open === "addresses" ? "none" : "addresses")}>Adresser</button>
+          <button className="btn btn--ghost btn--sm" aria-pressed={open === "addresses"} onClick={() => setOpen(open === "addresses" ? "none" : "addresses")}>Lägenheter</button>
           <button className="btn btn--ghost btn--sm" aria-pressed={open === "assign"} onClick={() => setOpen(open === "assign" ? "none" : "assign")}>Tilldela</button>
           <button className="btn btn--ghost btn--sm d2dpb-rad__bort" onClick={onRemove} title="Ta bort fastigheten ur projektet" aria-label="Ta bort fastigheten ur projektet">✕</button>
         </div>
@@ -1106,6 +1125,8 @@ function FastighetRow({
           fastighetId={fastighet.id}
           existingCount={fastighet._addrCount}
           onImported={onChanged}
+          statusar={statusar}
+          sellers={sellers}
         />
       )}
       {open === "assign" && (
