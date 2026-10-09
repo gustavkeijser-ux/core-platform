@@ -170,32 +170,137 @@
   .d2dpb-godk__knappar { justify-content: flex-end; }
 }
 
-/* ── Adresslistan: telefonkolumn + ringknapp ─────────────────────────────
-   Ikon | (Säljare) | Adress | Ingång | Lgh | Namn | Telefon | Kommentar |
-   Status | Ring. Telefonfältet redigeras direkt i raden (kund_telefon) och
-   ringknappen är en tel:-länk till höger om statusen. På mobil (≤480 px)
-   hamnar telefonfältet på en egen rad under kolumnerna och ringknappen
-   stannar längst till höger i huvudraden. */
+/* ── Adresslistan: kort per lägenhet med snabbpanel ──────────────────────
+   Ikon | (Säljare) | Adress | Ingång | Lgh | Namn | Kommentar | Status |
+   Ring | Pil. Varje rad är ett kort (.d2d-lag-kort): huvudraden öppnar
+   lägenheten, pilen längst till höger fäller ut en panel med namn, telefon
+   (kund_namn/kund_telefon, sparas när fältet lämnas), knappen Inte hemma
+   och −/+ för antal knackningar. Ringknappen är en tel:-länk. Kortets ram
+   och skugga ligger på kortet, inte på raden (app.css lägger dem på raden
+   — nollas här). */
 
 .d2d-detail .d2d-lag-table {
-  --lag-cols: 2.5rem minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.1fr) 8.5rem minmax(0, 1.6fr) 8.5rem 2.25rem;
+  --lag-cols: 2.5rem minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.1fr) minmax(0, 1.6fr) 8.5rem 2.25rem 2rem;
 }
 .d2d-detail .d2d-lag-table--admin {
-  --lag-cols: 2.5rem minmax(0, 1fr) minmax(0, 1.3fr) 4rem 4rem minmax(0, 1fr) 8.5rem minmax(0, 1.5fr) 8.5rem 2.25rem;
+  --lag-cols: 2.5rem minmax(0, 1fr) minmax(0, 1.3fr) 4rem 4rem minmax(0, 1fr) minmax(0, 1.5fr) 8.5rem 2.25rem 2rem;
 }
 
+.d2d-lag-kort {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.d2d-lag-kort:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+.d2d-lag-kort--oppet { border-color: var(--border-strong); }
+.d2d-detail .d2d-lag-kort .d2d-lag-row {
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-lg);
+  box-shadow: none;
+}
+.d2d-detail .d2d-lag-kort .d2d-lag-row:hover { box-shadow: none; }
+.d2d-detail .d2d-lag-kort .d2d-lag-row:active { transform: none; }
 .d2d-lag-row:focus-visible {
   outline: 2px solid var(--brand);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
+
+/* Antal knackningar som liten siffra efter namnet ("3×"). */
+.d2d-lag-row__knack {
+  margin-left: var(--sp-1);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--hue-blue);
+  white-space: nowrap;
+}
+
+/* Utfällningspil längst till höger. */
+.d2d-lag-fall {
+  justify-self: end;
+  width: 2rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.d2d-lag-fall:hover { background: var(--overlay-soft); color: var(--ink); }
+.d2d-lag-fall:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.d2d-lag-fall svg { transition: transform var(--dur) var(--ease); }
+.d2d-lag-kort--oppet .d2d-lag-fall svg { transform: rotate(180deg); }
+
+/* Snabbpanelen under raden. */
+.d2d-lag-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-4) var(--sp-4) calc(var(--sp-4) + 2.5rem + var(--sp-3));
+  cursor: default;
+}
+.d2d-lag-panel__falt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.d2d-lag-panel__knack {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.d2d-lag-panel__hemma {
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--hue-blue);
+  background: color-mix(in srgb, var(--hue-blue) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hue-blue) 40%, transparent);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.d2d-lag-panel__hemma:hover { filter: brightness(1.05); }
+.d2d-lag-panel__hemma:active { transform: scale(.97); }
+.d2d-lag-panel__hemma--aktiv { background: var(--hue-blue); color: #fff; }
+.d2d-lag-panel .d2d-knack__btn:disabled { opacity: .4; cursor: default; }
+.d2d-lag-panel__antal {
+  min-width: 2rem;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--ink);
+}
+.d2d-lag-panel__oppna { justify-self: end; white-space: nowrap; }
 
 .d2d-lag-tel__input {
   width: 100%;
   min-width: 0;
-  min-height: 32px;
-  padding: 2px var(--sp-2);
+  min-height: 40px;
+  padding: 2px var(--sp-3);
   font: inherit;
   font-size: var(--text-sm);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
   color: var(--ink);
   background: var(--surface-2, var(--surface));
   border: 1px solid var(--border);
@@ -207,6 +312,15 @@
   outline: none;
   border-color: var(--brand);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent);
+}
+
+.d2d-lag-fel {
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-sm);
+  color: var(--hue-red);
+  background: color-mix(in srgb, var(--hue-red) 10%, transparent);
+  border-radius: var(--r-md);
 }
 
 /* Grön ringknapp — samma gröna accent som Såld/Intresserad. */
@@ -234,21 +348,33 @@
 
 @media (max-width: 480px) {
   .d2d-detail .d2d-lag-table {
-    --lag-cols: 2rem minmax(0, 1.25fr) 2.75rem 2.75rem minmax(0, 1fr) 2rem;
+    --lag-cols: 2rem minmax(0, 1fr) 2.75rem 2.75rem 2rem 1.75rem;
   }
   .d2d-detail .d2d-lag-table--admin {
-    --lag-cols: 2rem minmax(0, .9fr) minmax(0, 1.2fr) 2.25rem 2.75rem minmax(0, .9fr) 2rem;
+    --lag-cols: 2rem minmax(0, .9fr) minmax(0, 1fr) 2.25rem 2.75rem 2rem 1.75rem;
   }
-  /* Telefonfältet på egen rad under kolumnerna (ovanför kommentaren). */
-  .d2d-lag-table__head .d2d-lag-table__tel-col { display: none; }
-  .d2d-lag-row .d2d-lag-table__tel-col {
-    grid-column: 2 / -1;
-    margin-top: var(--sp-1);
-    order: 1;             /* efter ringknappen i huvudraden */
-  }
-  .d2d-lag-row .d2d-lag-row__comment { order: 2; }
-  .d2d-lag-tel__input { min-height: 36px; max-width: 12rem; }
+  .d2d-detail .d2d-lag-kort .d2d-lag-row { border-radius: var(--r-md); }
+  .d2d-lag-kort { border-radius: var(--r-md); }
   .d2d-lag-ring { width: 2rem; height: 2rem; }
+  .d2d-lag-fall { width: 1.75rem; height: 2rem; }
+  /* Namnet (+ antal knackningar) på en egen rad under kolumnerna i
+     stället för en smal kolumn där det bryts mitt i ordet. */
+  .d2d-lag-table__head .d2d-lag-table__namn-col { display: none; }
+  .d2d-detail .d2d-lag-row .d2d-lag-row__cell--namn {
+    grid-column: 2 / -1;
+    order: 1;
+    margin-top: 2px;
+    hyphens: none;
+  }
+  .d2d-detail .d2d-lag-row .d2d-lag-row__cell--namn.d2d-lag-row__cell--empty { display: none; }
+  .d2d-detail .d2d-lag-row .d2d-lag-row__comment { order: 2; }
+  .d2d-lag-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--sp-2) var(--sp-3);
+    padding: 0 var(--sp-3) var(--sp-3);
+  }
+  .d2d-lag-panel__knack { grid-column: 1 / -1; justify-content: space-between; }
+  .d2d-lag-panel__oppna { grid-column: 1 / -1; justify-self: stretch; }
 }
 
 /* ── Utfall: snitt antal avtal per kund ─────────────────────────────────── */
