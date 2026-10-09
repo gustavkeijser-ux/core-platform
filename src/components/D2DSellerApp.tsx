@@ -1868,7 +1868,16 @@ function LagenhetForm({
               )}
             </div>
           )}
-          {status === "scrive" && <ScriveSignering lagenhetId={record.id} data={data} sparaForst={flush} />}
+          {status === "scrive" && (
+            <ScriveSignering lagenhetId={record.id} data={data} sparaForst={flush}
+              onKopplad={async () => {
+                // Ett avtal från Scrive kopplades: servern skrev kunduppgifter och
+                // tjänster på lägenheten — hämta om så att formuläret visar dem.
+                await flush();
+                const { data: row } = await supabase.from("records").select("data, status").eq("id", lagenhetId).maybeSingle();
+                if (row) { setData((row.data ?? {}) as Record<string, unknown>); if (row.status) setStatus(row.status); }
+              }} />
+          )}
         </div>
       )}
 
