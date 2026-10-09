@@ -42,7 +42,7 @@ const ORD: Record<Kalla, { enhet: string; rubrik: string; kolumn: string }> = {
 };
 
 const STATUS: Record<string, string> = {
-  sald: "Såld", scrive: "Signera med Scrive", aterkoppling: "Återkoppling", inte_intresserad: "Inte intresserad", befintlig_telia: "Befintlig Telia-kund", kall_kund: "Kall kund", ovrigt: "Övrigt", inte_hemma: "Inte hemma",
+  sald: "Såld", scrive: "Signera med Scrive", aterkoppling: "Återkoppling", inte_intresserad: "Inte intresserad", inte_saljbar: "Inte säljbar", befintlig_telia: "Befintlig Telia-kund", kall_kund: "Kall kund", ovrigt: "Övrigt", inte_hemma: "Inte hemma",
 };
 const KATEGORI: Array<[string, string]> = [
   ["bredband", "Bredband"], ["tv", "TV (utöver Start/Bas)"], ["mobil_huvud", "Mobil – huvudabonnemang"], ["mobil_extra", "Mobil – extraanvändare (antal)"],
@@ -60,7 +60,8 @@ const EJ_INTR: Record<string, string> = {
 const TJANST: Record<string, string> = { mbb: "Mobilt bredband", mobil: "Mobil", bredband: "Fast bredband", tv: "TV" };
 const OPERATOR: Record<string, string> = {
   telenor: "Telenor", tele2: "Tele2", tre: "Tre", comviq: "Comviq", telia: "Telia", bahnhof: "Bahnhof",
-  bredband2: "Bredband2", allente: "Allente", hallon: "Hallon", annan: "Annan", okand: "Inte angivet",
+  bredband2: "Bredband2", allente: "Allente", hallon: "Hallon", fello: "Fello", vimla: "Vimla", halebop: "Halebop",
+  ownit: "Ownit", sappa: "Sappa", annan: "Annan", okand: "Inte angivet",
 };
 const MANAD = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 const manadStr = (m: string) => { const [y, mm] = m.split("-"); return `${MANAD[Number(mm) - 1] ?? mm} ${y}`; };
@@ -283,12 +284,12 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         <section className="card utf__sek">
           <h2>Utfall av besöken</h2>
           <div className="utf__stack" role="img" aria-label="Fördelning av utfall">
-            {["sald", "scrive", "aterkoppling", "inte_intresserad", "befintlig_telia", "kall_kund", "inte_hemma"].filter((k) => (s[k] ?? 0) > 0).map((k) => (
+            {["sald", "scrive", "aterkoppling", "inte_intresserad", "inte_saljbar", "befintlig_telia", "kall_kund", "inte_hemma"].filter((k) => (s[k] ?? 0) > 0).map((k) => (
               <div key={k} className={`utf__seg utf__seg--${k}`} style={{ flex: s[k] }} title={`${STATUS[k]}: ${s[k]}`}>{s[k]}</div>
             ))}
           </div>
           <div className="utf__legend">
-            {["sald", "scrive", "aterkoppling", "inte_intresserad", "befintlig_telia", "kall_kund", "inte_hemma"].filter((k) => !["scrive", "befintlig_telia"].includes(k) || (s[k] ?? 0) > 0).map((k) => (
+            {["sald", "scrive", "aterkoppling", "inte_intresserad", "inte_saljbar", "befintlig_telia", "kall_kund", "inte_hemma"].filter((k) => !["scrive", "befintlig_telia", "inte_saljbar"].includes(k) || (s[k] ?? 0) > 0).map((k) => (
               <span key={k}><i className={`utf__seg--${k}`} />{STATUS[k]} {s[k] ?? 0}</span>
             ))}
           </div>
