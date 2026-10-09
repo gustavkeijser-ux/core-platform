@@ -85,18 +85,24 @@ const VILANDE = 8;
 const KLAR = 9; // 9 och 99 räknas som helt klart
 
 /**
- * Hur långt kortet har kommit: det lägsta steget bland fastigheter som är i gång
- * (vilande och avslutade räknas inte). Bara avslutade → klart. Bara vilande → vilande.
+ * Hur långt kortet har kommit: genomsnittligt steg över fastigheterna, viktat
+ * efter antal (avslutade = 9, vilande räknas inte). Bara vilande → vilande.
  */
 function kortSteg(g: AgareGrupp, label: (key: string | null) => string | undefined): number | "vilande" | null {
   if (g.antal === 0) return null;
-  const steg = g.status.map((s) => stegFor(label(s.key))).filter((n): n is number => n !== null);
-  const aktiva = steg.filter((n) => n !== VILANDE && n < KLAR);
-  if (aktiva.length) return Math.min(...aktiva);
-  if (steg.some((n) => n >= KLAR)) return KLAR;
-  if (steg.some((n) => n === VILANDE)) return "vilande";
-  return null;
+  let summa = 0, antal = 0, vilande = 0;
+  for (const s of g.status) {
+    const n = stegFor(label(s.key));
+    if (n === null) continue;
+    if (n === VILANDE) { vilande += s.n; continue; }
+    summa += Math.min(n, KLAR) * s.n;
+    antal += s.n;
+  }
+  if (antal > 0) return summa / antal;
+  return vilande > 0 ? "vilande" : null;
 }
+
+const snittFmt = new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 1 });
 
 /** Röd (steg 0) → orange → gul → grön (steg 9/99). */
 function stegFarg(steg: number | "vilande"): string {
@@ -172,7 +178,7 @@ export function LeveransAgareKort({ objectDef, grupper, loading, onOpen }: Props
         const avslutad = g.post_status === "avslutad";
         const steg = kortSteg(g, (k) => statusDef(k)?.label);
         const ram = steg === null ? undefined : stegFarg(steg);
-        const stegText = steg === null ? null : steg === "vilande" ? "Vilande" : steg >= KLAR ? "Klar" : `Steg ${steg} av 9`;
+        const stegText = steg === null ? null : steg === "vilande" ? "Vilande" : steg >= KLAR ? "Klar" : `Snitt ${snittFmt.format(steg)} av 9`;
         const statusar = [...g.status].sort((a, b) => ordning(a.key) - ordning(b.key));
         const klara = CHECKLISTA.filter((c) => p[c.key] === true);
         const saknas = CHECKLISTA.filter((c) => p[c.key] !== true);
@@ -198,7 +204,7 @@ export function LeveransAgareKort({ objectDef, grupper, loading, onOpen }: Props
                 )}
               </div>
               <div className="lev-agare__etiketter">
-                {stegText && <span className="lev-agare__steg" title="Fastigheten som kommit kortast (vilande och avslutade räknas inte)">{stegText}</span>}
+                {stegText && <span className="lev-agare__steg" title="Genomsnittligt steg för fastigheterna (avslutade = 9, vilande räknas inte)">{stegText}</span>}
                 {g.post_status && (
                   <span className={`lev-agare__poststatus${avslutad ? " is-avslutad" : ""}`}>{avslutad ? "Avslutad" : "Pågående"}</span>
                 )}
