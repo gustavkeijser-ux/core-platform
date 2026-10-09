@@ -4,6 +4,7 @@ import type { FieldDef } from "@/lib/data";
 import { beraknaAvtal, loadPrislista, onPrislista, type Prislista } from "@/lib/d2dPris";
 import { prisKategorier } from "./D2DAvtal";
 import { FilterPills, SkeletonRows } from "./PageChrome";
+import { ScriveOkopplade } from "./D2DScriveImport";
 
 /* =============================================================================
    Door to door → Avtal. Tre flikar:
@@ -16,7 +17,7 @@ import { FilterPills, SkeletonRows } from "./PageChrome";
 
 type Avtal = {
   id: string; status: "skapas" | "vantar" | "signerat" | "avvisat" | "avbrutet" | "fel";
-  leverans: "plats" | "skickat"; kundNamn: string | null; skapad: string; signerad: string | null;
+  leverans: "plats" | "skickat" | "manuell"; kundNamn: string | null; skapad: string; signerad: string | null;
   harPdf: boolean; fel: string | null; lagenhetId: string; adress: string | null; lgh: string | null;
   ort: string | null; fastighet: string | null; projekt: string | null; projektId: string | null;
   saljare: string | null; tjanster: string[]; manadSumma: number | null; engangSumma: number | null;
@@ -186,6 +187,10 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
           <div className="card"><b>{kr(scriveManad)}</b><span>per månad, signerade</span></div>
         </div>
 
+        <section className="card utf__sek d2davt__okop">
+          <ScriveOkopplade onKopplad={() => { void ladda(); }} />
+        </section>
+
         <section className="card utf__sek">
           <div className="utf__sekhuvud">
             <h2>Scrive-avtal</h2>
@@ -229,6 +234,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
                       <td data-label="Status">
                         <span className={`d2d-scrive__status d2d-scrive__status--${a.status}`}>{STATUS[a.status]}</span>
                         {a.leverans === "skickat" && a.status === "vantar" && <small className="utf__sub"> skickat till kunden</small>}
+                        {a.leverans === "manuell" && <small className="utf__sub"> gjort i Scrive</small>}
                       </td>
                       <td data-label="">
                         {a.harPdf && (
