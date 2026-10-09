@@ -266,7 +266,7 @@ export default function App() {
     : view?.kind === "d2dbuilder" ? "Projekt, adresser och tilldelning"
     : view?.kind === "d2dutfall" ? "Utfall, merförsäljning och bindningstider"
     : view?.kind === "d2davtal" ? "Avtal signerade med Scrive i D2D-vyn"
-    : view?.kind === "d2dfeedback" ? "Feedback från säljarna i Blitz — granskas innan den skickas vidare"
+    : view?.kind === "d2dfeedback" ? "Feedback från säljarna i D2D-sälj — granskas innan den skickas vidare"
     : view?.kind === "d2dloner" ? "Kommande bonusar enligt lönemodellen — pinnar per säljare och månad"
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
     : view?.kind === "feedback" ? "Fel, idéer och önskemål från användarna"
