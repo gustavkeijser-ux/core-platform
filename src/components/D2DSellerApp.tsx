@@ -36,8 +36,9 @@ type D2DView =
   | { kind: "signerade" }
   | { kind: "aterkopplingar" }
   | { kind: "feedback" }
+  | { kind: "mina" }
   | { kind: "fastighet"; id: string }
-  | { kind: "lagenhet"; id: string; fastighetId: string; from?: "signerade" | "aterkopplingar" };
+  | { kind: "lagenhet"; id: string; fastighetId: string; from?: "signerade" | "aterkopplingar" | "mina" };
 
 /** URL (#/d2d/…) ↔ vy, så en omladdning stannar på samma fastighet/adress. */
 function d2dViewFromSegs(segs: string[]): D2DView {
@@ -46,11 +47,12 @@ function d2dViewFromSegs(segs: string[]): D2DView {
   if (kind === "signerade") return { kind: "signerade" };
   if (kind === "aterkopplingar") return { kind: "aterkopplingar" };
   if (kind === "feedback") return { kind: "feedback" };
+  if (kind === "mina") return { kind: "mina" };
   if (kind === "projekt" && id) return { kind: "projekt", id };
   if (kind === "fastighet" && id) return { kind: "fastighet", id };
   if (kind === "lagenhet" && id) {
     // from = listan man öppnade adressen från, så Tillbaka går dit igen.
-    const src = from === "signerade" || from === "aterkopplingar" ? from : undefined;
+    const src = from === "signerade" || from === "aterkopplingar" || from === "mina" ? from : undefined;
     return { kind: "lagenhet", id, fastighetId: extra && extra !== "-" ? extra : "", from: src };
   }
   // Startsidan när man klickar på Door to Door: dashboarden.
@@ -1122,6 +1124,8 @@ function LagenhetForm({
   onBack,
   isAdmin = false,
   onFieldsChanged,
+  inbaddad = false,
+  onSaved,
 }: {
   lagenhetId: string;
   fastighetId: string;
@@ -1129,6 +1133,12 @@ function LagenhetForm({
   onBack: () => void;
   isAdmin?: boolean;
   onFieldsChanged?: () => void;
+  /** Inbäddad i ett kort (ringlistan): ingen topbar med adress och
+   *  tillbakaknapp — kortet runt omkring visar adressen. */
+  inbaddad?: boolean;
+  /** Varje lyckad sparning (status och/eller fält) — så listan utanför
+   *  kan uppdatera raden utan omladdning. */
+  onSaved?: (patch: { status: string | null; data: Record<string, unknown> }) => void;
 }) {
   const [record, setRecord] = useState<RecordRow | null>(null);
   const [data, setData] = useState<Record<string, unknown>>({});
@@ -1177,6 +1187,10 @@ function LagenhetForm({
   // direkt vid klick (status, val, ja/nej, datum). Sparas även när man går
   // tillbaka, byter app eller stänger sidan.
   const pendingRef = useRef<{ data: Record<string, unknown>; status: string | null }>({ data: {}, status: null });
+  // onSaved via ref så flush (och effekten som sparar vid avmontering)
+  // inte skapas om varje gång föräldern renderar.
+  const onSavedRef = useRef(onSaved);
+  useEffect(() => { onSavedRef.current = onSaved; }, [onSaved]);
   const timerRef = useRef<number | null>(null);
   const inflightRef = useRef<Promise<void> | null>(null);
 
@@ -1197,6 +1211,7 @@ function LagenhetForm({
       try {
         await updateRecord(lagenhetId, Object.keys(p.data).length ? p.data : undefined, p.status);
         setSaveState(hasPending() ? "pending" : "saved");
+        onSavedRef.current?.({ status: p.status, data: p.data });
         // Servern skapar nummerbytesärendet i efterhand (trigger) — hämta
         // kopplingen så att "registrerat" + låst startdatum syns direkt.
         if (p.status || Object.keys(p.data).some((k) => k.startsWith("mobil_") || k === "salt_mobil")) {
@@ -1387,17 +1402,22 @@ function LagenhetForm({
   }
 
   return (
-    <div className="d2d-detail">
+    <div className={`d2d-detail${inbaddad ? " d2d-detail--inbaddad" : ""}`}>
       {/* Topbar — adress/lägenhet som statisk text, inte en redigerbar
-          ruta, bara kontext om var säljaren står just nu. */}
-      <div className="d2d-topbar">
-        <button className="d2d-back" onClick={() => { void handleBack(); }}>
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4l-6 6 6 6"/></svg>
-        </button>
-        <div className="d2d-topbar__title">
-          <h2>{fullAdress}</h2>
-          {!!headerUndertext && <span className="d2d-topbar__sub">{headerUndertext}</span>}
-        </div>
+          ruta, bara kontext om var säljaren står just nu. Inbäddad i
+          ringlistan: bara sparstatus och Anpassa fält, adressen står i kortet. */}
+      <div className={`d2d-topbar${inbaddad ? " d2d-topbar--inbaddad" : ""}`}>
+        {!inbaddad && (
+          <button className="d2d-back" onClick={() => { void handleBack(); }}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4l-6 6 6 6"/></svg>
+          </button>
+        )}
+        {!inbaddad && (
+          <div className="d2d-topbar__title">
+            <h2>{fullAdress}</h2>
+            {!!headerUndertext && <span className="d2d-topbar__sub">{headerUndertext}</span>}
+          </div>
+        )}
         {isAdmin && (
           <button
             className="btn btn--ghost btn--sm d2d-topbar__admin"
@@ -1751,6 +1771,227 @@ function AterkopplingarLista({
 }
 
 // =============================================================================
+// Mina adresser — säljarens egna lägenheter, filtrerade på status
+// =============================================================================
+
+/** Ordning i statusfiltret och vid sortering på status: det som kräver
+ *  handling först (Återkoppling, Inte hemma, Ej knackad), avslutade sist. */
+const MINA_STATUS_ORDNING: KnockStatus[] = [
+  "aterkoppling", "inte_hemma", "ej_knackad", "scrive", "sald", "intresserad", "befintlig_telia", "kall_kund", "inte_intresserad",
+];
+type MinaSort = "status" | "adress" | "kontakt";
+
+/** Ringlista: alla adresser som är tilldelade den inloggade säljaren
+ *  (säljare eller ägare = jag), oavsett projekt, med statusfilter och
+ *  sortering. Tryck på en rad fäller ut den till ett kort med hela
+ *  adressformuläret (status, kunddata, Vad såldes?, Scrive) — så säljaren
+ *  kan ringa och sälja direkt i listan utan att lämna den. */
+function MinaAdresserLista({ minId, isAdmin, objectDef, onFieldsChanged }: {
+  minId: string | null;
+  isAdmin: boolean;
+  objectDef: ObjectDef | undefined;
+  onFieldsChanged?: () => void;
+}) {
+  const [items, setItems] = useState<RecordRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<KnockStatus | "alla">("alla");
+  const [sort, setSort] = useState<MinaSort>("status");
+  const [oppen, setOppen] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!minId) return;
+    (async () => {
+      setLoading(true);
+      try {
+        // Direkt mot records: list_records_filtered kan inte filtrera på
+        // ägare. RLS gör ändå att en ren säljare bara ser sina egna rader;
+        // villkoret här gör att även admin ser just sina.
+        const { data } = await supabase
+          .from("records")
+          .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
+          .eq("object_type", "d2d_lagenhet")
+          .or(`owner_user_id.eq.${minId},data->>saljare.eq.${minId}`)
+          .limit(1000);
+        setItems(((data ?? []) as RecordRow[]).sort(jamforLagenheter));
+      } catch {
+        // tyst
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [minId]);
+
+  // Formuläret i det utfällda kortet sparar själv — spegla ändringen i raden.
+  const sparat = useCallback((id: string, patch: { status: string | null; data: Record<string, unknown> }) => {
+    setItems((prev) => prev.map((l) =>
+      l.id === id
+        ? { ...l, status: patch.status ?? l.status, data: { ...(l.data as Record<string, unknown>), ...patch.data } }
+        : l
+    ));
+  }, []);
+
+  const returnRow = useReturnToRow("mina", !loading);
+
+  const statusAv = (l: RecordRow): KnockStatus => {
+    const st = (l.status ?? "ej_knackad") as KnockStatus;
+    return STATUS_CONFIG[st] ? st : "ej_knackad";
+  };
+  const antal: Partial<Record<KnockStatus, number>> = {};
+  for (const l of items) { const k = statusAv(l); antal[k] = (antal[k] ?? 0) + 1; }
+
+  const visade = items
+    // Det utfällda kortet stannar kvar även om statusen just bytts bort
+    // från filtret — annars försvinner det under fingrarna.
+    .filter((l) => filter === "alla" || statusAv(l) === filter || l.id === oppen)
+    .sort((a, b) => {
+      if (sort === "status") {
+        const d = MINA_STATUS_ORDNING.indexOf(statusAv(a)) - MINA_STATUS_ORDNING.indexOf(statusAv(b));
+        if (d !== 0) return d;
+      }
+      if (sort === "kontakt") {
+        const ka = String((a.data as Record<string, unknown>).senast_kontakt ?? "");
+        const kb = String((b.data as Record<string, unknown>).senast_kontakt ?? "");
+        if (ka !== kb) return kb.localeCompare(ka); // senaste först, tomma sist
+      }
+      return jamforLagenheter(a, b);
+    });
+
+  if (loading) return <div className="d2d-loading">Laddar…</div>;
+
+  return (
+    <div className="d2d-list">
+      <div className="d2d-list__header">
+        <h2>Mina adresser</h2>
+        <span className="d2d-list__count">{filter === "alla" ? items.length : `${visade.length} av ${items.length}`} st</span>
+      </div>
+
+      {items.length === 0 && (
+        <div className="d2d-empty">Du har inga tilldelade adresser ännu.</div>
+      )}
+
+      {items.length > 0 && (
+        <>
+          {/* Statusfilter: en bubbla per status som finns, med antal. */}
+          <div className="d2d-status-picker d2d-mina__filter" role="group" aria-label="Filtrera på status">
+            <button
+              type="button"
+              className={`d2d-status-btn${filter === "alla" ? " d2d-status-btn--active" : ""}`}
+              onClick={() => setFilter("alla")}
+            >
+              Alla {items.length}
+            </button>
+            {MINA_STATUS_ORDNING.filter((k) => (antal[k] ?? 0) > 0).map((k) => (
+              <button
+                key={k}
+                type="button"
+                className={`d2d-status-btn ${STATUS_CONFIG[k].cssClass}${filter === k ? " d2d-status-btn--active" : ""}`}
+                onClick={() => setFilter(filter === k ? "alla" : k)}
+              >
+                {STATUS_CONFIG[k].label} {antal[k]}
+              </button>
+            ))}
+          </div>
+
+          <label className="d2d-mina__sort">
+            <span>Sortera</span>
+            <select className="input" value={sort} onChange={(e) => setSort(e.target.value as MinaSort)}>
+              <option value="status">Status</option>
+              <option value="adress">Adress</option>
+              <option value="kontakt">Senast kontakt</option>
+            </select>
+          </label>
+
+          {visade.length === 0 && (
+            <div className="d2d-empty">Inga adresser med den statusen.</div>
+          )}
+
+          {visade.map((item) => {
+            const data = item.data as Record<string, unknown>;
+            const st = statusAv(item);
+            const cfg = STATUS_CONFIG[st];
+            const n = Number(data.antal_knackningar);
+            const knack = Number.isFinite(n) && n > 0 ? n : 0;
+            const kontakt = data.senast_kontakt ? String(data.senast_kontakt).slice(0, 10) : "";
+            const adress = formatLagenhetAdress(data, item.title);
+            const telefon = data.kund_telefon ? String(data.kund_telefon) : "";
+            const telHref = telefonLank(telefon);
+            const utfalld = oppen === item.id;
+            const vaxla = () => { rememberRow("mina", item.id); setOppen((cur) => (cur === item.id ? null : item.id)); };
+            return (
+              <div key={item.id} className={`d2d-lag-kort d2d-mina__kort ${cfg.cssClass}${utfalld ? " d2d-mina__kort--oppen" : ""}`}>
+                {/* Raden är en div (inte button): ringknappen är en länk. */}
+                <div
+                  {...returnRow(item.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={utfalld}
+                  className="d2d-card d2d-mina__rad"
+                  onClick={vaxla}
+                  onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); vaxla(); } }}
+                >
+                  <span className="d2d-lag-row__icon" style={{ "--st": cfg.color } as CSSProperties} aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="5" y="2.5" width="10" height="15" rx="1.5" />
+                      <circle cx="12" cy="10.5" r=".9" fill="currentColor" stroke="none" />
+                    </svg>
+                  </span>
+                  <div className="d2d-card__main">
+                    <span className="d2d-card__title">{adress}</span>
+                    {(!!data.kund_namn || !!telefon || knack > 0) && (
+                      <span className="d2d-card__sub">
+                        {[data.kund_namn ? String(data.kund_namn) : "", telefon].filter(Boolean).join(" · ")}
+                        {knack > 0 && <span className="d2d-lag-row__knack">{knack}×</span>}
+                      </span>
+                    )}
+                    {!utfalld && !!data.kommentar && (
+                      <span className="d2d-card__comment">{String(data.kommentar).slice(0, 80)}{String(data.kommentar).length > 80 ? "…" : ""}</span>
+                    )}
+                  </div>
+                  <div className="d2d-mina__meta">
+                    <span className="d2d-lag-card__badge">{cfg.label}</span>
+                    {kontakt && <span className="d2d-card__date">{kontakt}</span>}
+                  </div>
+                  {/* Ringknapp — tel:-länk, nedtonad utan nummer. */}
+                  {telHref ? (
+                    <a href={telHref} className="d2d-lag-ring" onClick={(e) => e.stopPropagation()} aria-label={`Ring ${telefon}`} title={`Ring ${telefon}`}>
+                      <RingIkon />
+                    </a>
+                  ) : (
+                    <span className="d2d-lag-ring d2d-lag-ring--tom" aria-hidden="true" title="Inget telefonnummer">
+                      <RingIkon />
+                    </span>
+                  )}
+                </div>
+
+                {/* Utfällt: hela adressformuläret (status, kunddata, Vad
+                    såldes?, Scrive …) inbäddat — säljaren säljer direkt här. */}
+                {utfalld && (
+                  <div className="d2d-mina__form">
+                    <LagenhetForm
+                      lagenhetId={item.id}
+                      fastighetId=""
+                      objectDef={objectDef}
+                      isAdmin={isAdmin}
+                      inbaddad
+                      onFieldsChanged={onFieldsChanged}
+                      onSaved={(patch) => sparat(item.id, patch)}
+                      onBack={() => setOppen(null)}
+                    />
+                    <button type="button" className="btn btn--ghost btn--sm d2d-mina__stang" onClick={() => setOppen(null)}>
+                      Fäll ihop
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
 // Huvudkomponent — D2D Seller App
 // =============================================================================
 
@@ -1788,7 +2029,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
 
   // ── Navigering
   const navTab = view.kind === "signerade" ? "signerade" : view.kind === "aterkopplingar" ? "aterkopplingar"
-    : view.kind === "feedback" ? "feedback" : view.kind === "oversikt" ? "oversikt" : "fastigheter";
+    : view.kind === "feedback" ? "feedback" : view.kind === "mina" ? "mina" : view.kind === "oversikt" ? "oversikt" : "fastigheter";
 
   function renderContent() {
     switch (view.kind) {
@@ -1856,10 +2097,20 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
       case "feedback":
         // Säljarens feedback → Lukas granskar i CRM:et (D2DFeedback.tsx).
         return <D2DFeedbackFlik />;
+
+      case "mina":
+        return (
+          <MinaAdresserLista
+            minId={minId}
+            isAdmin={isAdmin}
+            objectDef={lagDef}
+            onFieldsChanged={loadMetadata}
+          />
+        );
     }
   }
 
-  if (loading) return <div className="d2d-loading">Laddar Blitz…</div>;
+  if (loading) return <div className="d2d-loading">Laddar D2D-sälj…</div>;
 
   // Är vi i en detaljvy? Visa inte bottom-nav
   const inDetail = view.kind === "fastighet" || view.kind === "lagenhet";
@@ -1886,7 +2137,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
                 <path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10" />
               </svg>
             </span>
-            Blitz
+            D2D-sälj
           </div>
         </div>
         <div className="d2d-header__actions">
@@ -1922,6 +2173,16 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
               <line x1="10" y1="3" x2="10" y2="17"/>
             </svg>
             Projekt
+          </button>
+          <button
+            className={`d2d-nav-btn${navTab === "mina" ? " d2d-nav-btn--active" : ""}`}
+            onClick={() => setView({ kind: "mina" })}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 8l7-5 7 5v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>
+              <path d="M8 17v-5h4v5"/>
+            </svg>
+            Adresser
           </button>
           <button
             className={`d2d-nav-btn${navTab === "signerade" ? " d2d-nav-btn--active" : ""}`}
