@@ -33,6 +33,8 @@ type Props = {
   d2dFeedback?: { vantar: number };
   /** Door to door → Löner visas bara för dem med lönebehörighet (Lukas, Jonas, Gustav). */
   d2dLoner?: boolean;
+  /** Antal öppna nummerbyten/porteringar — siffra vid Door to door → Nummerbyten. */
+  nummerbytenOppna?: number;
 };
 
 function initialer(namn: string) {
@@ -263,7 +265,7 @@ function Chevron({ open }: { open: boolean }) {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, nummerbytenOppna }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -415,8 +417,8 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
               >
                 {group.icon}
                 <span className="sidebar__label">{group.label}</span>
-                {group.id === "d2d" && !isOpen && !!d2dFeedback?.vantar && (
-                  <span className="sidebar__badge" title="Säljarfeedback som väntar">{d2dFeedback.vantar}</span>
+                {group.id === "d2d" && !isOpen && !!((d2dFeedback?.vantar ?? 0) + (nummerbytenOppna ?? 0)) && (
+                  <span className="sidebar__badge" title="Säljarfeedback som väntar och öppna nummerbyten">{(d2dFeedback?.vantar ?? 0) + (nummerbytenOppna ?? 0)}</span>
                 )}
                 <Chevron open={isOpen} />
               </button>
@@ -488,6 +490,9 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                         onClick={() => selectAndClose(o.key)}
                       >
                         {o.labelPlural}
+                        {o.key === "nummerbyte" && !!nummerbytenOppna && (
+                          <span className="sidebar__badge" title="Öppna nummerbyten">{nummerbytenOppna}</span>
+                        )}
                       </button>
                       {/* Leveransöversikt (kort per fastighetsägare) direkt under Projektplanen */}
                       {o.key === "delivery" && (
