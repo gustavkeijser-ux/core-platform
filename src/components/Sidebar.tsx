@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { ObjectDef, TenantBranding } from "@/lib/data";
 import { useUserName } from "@/lib/users";
 import { ARBETSVYER, type Arbetsvy } from "@/lib/arbetsvyer";
@@ -276,6 +276,51 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
+/* ── Arbetsvy (rullgardin) ───────────────────────────────────────────── */
+
+function VyValjare({ vyer, vald, onValj }: { vyer: Arbetsvy[]; vald: Arbetsvy | null; onValj: (v: Arbetsvy) => void }) {
+  const [oppen, setOppen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!oppen) return;
+    const klick = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOppen(false); };
+    const tangent = (e: KeyboardEvent) => { if (e.key === "Escape") setOppen(false); };
+    document.addEventListener("mousedown", klick);
+    document.addEventListener("keydown", tangent);
+    return () => { document.removeEventListener("mousedown", klick); document.removeEventListener("keydown", tangent); };
+  }, [oppen]);
+  const aktuell = ARBETSVYER.find((v) => v.key === vald);
+  return (
+    <div className="sidebar__vyval" ref={ref}>
+      <button type="button" className="sidebar__vyval-knapp" aria-haspopup="listbox" aria-expanded={oppen} onClick={() => setOppen((o) => !o)}>
+        <span className="sidebar__vyval-text">
+          <span className="sidebar__vyval-etikett">Vy</span>
+          <span className="sidebar__vyval-namn">{aktuell?.label ?? "Välj vy"}</span>
+        </span>
+        <Chevron open={oppen} />
+      </button>
+      {oppen && (
+        <ul className="sidebar__vyval-lista" role="listbox" aria-label="Arbetsvy">
+          {ARBETSVYER.filter((v) => vyer.includes(v.key)).map((v) => (
+            <li key={v.key}>
+              <button type="button" role="option" aria-selected={vald === v.key} className="sidebar__vyval-val"
+                onClick={() => { onValj(v.key); setOppen(false); }}>
+                <span className="sidebar__vyval-text">
+                  <span className="sidebar__vyval-namn">{v.label}</span>
+                  <span className="sidebar__vyval-besk">{v.beskrivning}</span>
+                </span>
+                {vald === v.key && (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" /></svg>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
 export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, nummerbytenOppna, arbetsvyer, arbetsvy, onValjArbetsvy }: Props) {
@@ -369,14 +414,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         </div>
         {/* Arbetsvy — växlar bara vad menyn visar. */}
         {(arbetsvyer?.length ?? 0) > 1 && (
-          <div className="sidebar__vyer" role="group" aria-label="Arbetsvy">
-            {ARBETSVYER.filter((v) => arbetsvyer!.includes(v.key)).map((v) => (
-              <button key={v.key} type="button" className="sidebar__vy" aria-pressed={arbetsvy === v.key}
-                title={`${v.label}: ${v.beskrivning}`} onClick={() => onValjArbetsvy?.(v.key)}>
-                {v.kort}
-              </button>
-            ))}
-          </div>
+          <VyValjare vyer={arbetsvyer!} vald={arbetsvy ?? null} onValj={(v) => onValjArbetsvy?.(v)} />
         )}
         <nav className="sidebar__nav">
         {item("__dashboard__", "Översikt", ICONS.__dashboard__)}
