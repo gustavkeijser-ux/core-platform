@@ -23,6 +23,7 @@ import { D2DFeedbackGranskning, d2dFeedbackAntalVantar, d2dFeedbackArGranskare }
 import { D2DLonerPage, d2dLonBehorig } from "@/components/D2DLon";
 import { MyTasksPage } from "@/components/MyTasksPage";
 import { NummerbytenPage } from "@/components/NummerbytenPage";
+import { getStatusCounts } from "@/lib/statusCounts";
 import { CasesPage } from "@/components/CasesPage";
 import { CaseView } from "@/components/CaseView";
 import { type CaseFilter, type CaseCounts, listArenden } from "@/lib/cases";
@@ -122,6 +123,8 @@ export default function App() {
   const [d2dGranskare, setD2dGranskare] = useState(false);
   const [d2dLoner, setD2dLoner] = useState(false);
   const [d2dFeedbackVantar, setD2dFeedbackVantar] = useState(0);
+  // Öppna nummerbyten/porteringar — siffra vid menyvalet Nummerbyten (uppdateras varje minut).
+  const [nummerbytenOppna, setNummerbytenOppna] = useState(0);
   // AI-assistenten: panel nere till vänster, öppnas från ikonen ovanför Import.
   const [aiOpen, setAiOpen] = useState(false);
   const myName = useUserName(session?.user.id);
@@ -197,6 +200,14 @@ export default function App() {
     const t = window.setInterval(tick, 60_000);
     return () => { on = false; window.clearInterval(t); };
   }, [metaReady, d2dGranskare, route.segs[0]]);
+  useEffect(() => {
+    if (!metaReady || !isAdmin) return;
+    let on = true;
+    const tick = () => getStatusCounts("nummerbyte", true).then((c) => { if (on) setNummerbytenOppna(c?.byStatus.oppen ?? 0); });
+    tick();
+    const t = window.setInterval(tick, 60_000);
+    return () => { on = false; window.clearInterval(t); };
+  }, [metaReady, isAdmin, route.segs[0]]);
 
   /** Ladda om metadata (t.ex. efter fältändringar eller ändrad branding).
    *  OBS: måste ligga före alla villkorliga return-satser — hooks får
@@ -324,6 +335,7 @@ export default function App() {
         newFeedback={newFeedback}
         d2dFeedback={d2dGranskare ? { vantar: d2dFeedbackVantar } : undefined}
         d2dLoner={d2dLoner}
+        nummerbytenOppna={nummerbytenOppna}
         user={{ id: session.user.id, email: session.user.email ?? "", role: isAdmin ? "Administratör" : isSeller ? "Säljare" : "Användare" }}
         onOpenSettings={() => setView({ kind: "settings", tab: "profil" })}
         onSignOut={() => supabase.auth.signOut()}
