@@ -49,7 +49,9 @@ type SaljareRad = Niva & {
    *  lon = provision + bonus + justeringar. */
   provision?: number; provisionInklVantar?: number; justeringar?: number; lon?: number; lonInklVantar?: number;
   justeringarRader?: Justering[];
-  produkter?: Array<{ nyckel: string; antal: number; pinnar: number; antalScrive?: number; pinnarScrive?: number }>;
+  produkter?: Array<{ nyckel: string; etikett?: string; antal: number; pinnar: number; antalScrive?: number; pinnarScrive?: number }>;
+  /** Blitz: sålda tjänster i perioden (bredband per hastighet, även router/TV-box), antal Såld + Scrive-signerade. */
+  tjanster?: Array<{ nyckel: string; etikett: string; antal: number; antalScrive: number }>;
 };
 type Manad = {
   manad: string; utbetalning: string; krPerPinne?: number; saljare: SaljareRad[];
