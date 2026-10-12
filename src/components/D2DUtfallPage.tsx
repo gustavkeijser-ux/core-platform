@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FilterPills, SkeletonRows } from "./PageChrome";
 import "@/styles/d2d.css";
@@ -26,7 +26,9 @@ type Utfall = {
   kalla?: Kalla;
   scrive?: { skickade: number; signerade: number; vantar: number; avbrutna: number };
   /** avtal = summa avtal (tjänster) hos säljarens sålda/signerade kunder; snittet räknas här. */
-  perSaljare: Array<{ id: string; namn: string | null; besok: number; oppnade: number; salda: number; mer: number; avtal?: number }>;
+  perSaljare: Array<{ id: string; namn: string | null; besok: number; oppnade: number; salda: number; mer: number; avtal?: number;
+    /** Sålda tjänster i urvalet (bredband per hastighet, TV, streaming, mobil, extraanvändare, router, TV-box). */
+    tjanster?: Array<{ nyckel: string; etikett: string; antal: number }> }>;
   aterringning: Rad[];
   projekt: Array<{ id: string; title: string | null }>;
   saljare: Array<{ id: string; namn: string | null }>;
@@ -152,6 +154,8 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
   const u = alla?.[kalla] ?? null;
   const [fel, setFel] = useState<string | null>(null);
   const [horisont, setHorisont] = useState<"3" | "6" | "alla">("6");
+  /** Utfälld säljare i "Per säljare" (visar tjänsterna). */
+  const [oppenSaljare, setOppenSaljare] = useState<string | null>(null);
 
   // Alla tre flikarna hämtas på en gång, så att byte av flik går direkt.
   useEffect(() => {
@@ -393,21 +397,43 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         {u.perSaljare.length > 0 && (
           <section className="card utf__sek">
             <h2>Per säljare</h2>
-            <p className="utf__ingress">Snitt avtal/kund = antal avtal (tjänster) delat med antal {ord.enhet} kunder. Hela urvalet: {snitt(u.sald.avtalSumma, u.sald.antal)}.</p>
+            <p className="utf__ingress">Snitt avtal/kund = antal avtal (tjänster) delat med antal {ord.enhet} kunder. Hela urvalet: {snitt(u.sald.avtalSumma, u.sald.antal)}. Klicka på en säljare för att se vilka tjänster som sålts.</p>
             <div className="rtable-scroll">
               <table className="rtable utf__tabell">
                 <thead><tr><th>Säljare</th><th>Besök</th><th>Öppnade</th><th>{ord.kolumn}</th><th>Mer än bredband</th><th>Snitt avtal/kund</th></tr></thead>
                 <tbody>
-                  {u.perSaljare.map((p) => (
-                    <tr key={p.id} className="rtable__row">
-                      <td className="rtable__title" data-label="Säljare">{p.namn ?? "Okänd"}</td>
-                      <td data-label="Besök" className="utf__num">{p.besok}</td>
-                      <td data-label="Öppnade" className="utf__num">{p.oppnade}</td>
-                      <td data-label={ord.kolumn} className="utf__num">{p.salda} ({pct(p.salda, p.oppnade)} %)</td>
-                      <td data-label="Mer än bredband" className="utf__num">{p.mer} av {p.salda}</td>
-                      <td data-label="Snitt avtal/kund" className="utf__num">{snitt(p.avtal, p.salda)}</td>
-                    </tr>
-                  ))}
+                  {u.perSaljare.map((p) => {
+                    const open = oppenSaljare === p.id;
+                    const tj = p.tjanster ?? [];
+                    return (
+                      <Fragment key={p.id}>
+                        <tr className={`rtable__row utf__saljare${open ? " utf__saljare--open" : ""}`} onClick={() => setOppenSaljare(open ? null : p.id)}
+                          aria-expanded={open} title={open ? "Dölj tjänster" : "Visa sålda tjänster"}>
+                          <td className="rtable__title" data-label="Säljare">
+                            <span className="utf__saljare-namn"><span className="utf__saljare-pil" aria-hidden>{open ? "▾" : "▸"}</span>{p.namn ?? "Okänd"}</span>
+                          </td>
+                          <td data-label="Besök" className="utf__num">{p.besok}</td>
+                          <td data-label="Öppnade" className="utf__num">{p.oppnade}</td>
+                          <td data-label={ord.kolumn} className="utf__num">{p.salda} ({pct(p.salda, p.oppnade)} %)</td>
+                          <td data-label="Mer än bredband" className="utf__num">{p.mer} av {p.salda}</td>
+                          <td data-label="Snitt avtal/kund" className="utf__num">{snitt(p.avtal, p.salda)}</td>
+                        </tr>
+                        {open && (
+                          <tr className="rtable__row utf__saljare-detalj">
+                            <td colSpan={6}>
+                              {tj.length === 0 ? <span className="formfield__help">Inga sålda tjänster i urvalet.</span> : (
+                                <div className="utf__tjanster">
+                                  {tj.map((t) => (
+                                    <div key={t.nyckel} className="utf__tjanst"><span>{t.etikett}</span><span>{t.antal} st</span></div>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
