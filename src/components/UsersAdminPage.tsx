@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDateTime, relTime } from "@/lib/cases";
+import { ARBETSVYER, type Arbetsvy, hamtaAllasArbetsvyer, sattArbetsvyer } from "@/lib/arbetsvyer";
 import { EmptyState, PlusIcon, SearchField, SkeletonRows, TopbarActions } from "./PageChrome";
 
 /* =============================================================================
@@ -41,6 +42,9 @@ export function UsersAdminPage({ meId }: { meId: string }) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [draftRoles, setDraftRoles] = useState<string[]>([]);
+  // Arbetsvyer (vilken meny personen ser). Administratörer har alltid alla.
+  const [vyer, setVyer] = useState<Record<string, Arbetsvy[]>>({});
+  const [draftVyer, setDraftVyer] = useState<Arbetsvy[]>([]);
   const [busy, setBusy] = useState(false);
   const [showNew, setShowNew] = useState(false);
 
@@ -48,6 +52,7 @@ export function UsersAdminPage({ meId }: { meId: string }) {
     try {
       const r = await call<{ users: User[]; roles: Role[] }>({ action: "list" });
       setUsers(r.users); setRoles(r.roles); setError(null);
+      setVyer(await hamtaAllasArbetsvyer().catch(() => ({})));
     } catch (e) { setError(e instanceof Error ? e.message : "Kunde inte hämta användarna."); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -57,12 +62,13 @@ export function UsersAdminPage({ meId }: { meId: string }) {
     return (users ?? []).filter((u) => !q || [u.fullName, u.email, ...u.roles.map((r) => r.name)].some((s) => s.toLowerCase().includes(q)));
   }, [users, search]);
 
-  function startEdit(u: User) { setEditing(u.id); setDraftRoles(u.roles.map((r) => r.key)); }
+  function startEdit(u: User) { setEditing(u.id); setDraftRoles(u.roles.map((r) => r.key)); setDraftVyer(vyer[u.id] ?? []); }
 
   async function saveRoles(u: User) {
     setBusy(true);
     try {
       await call({ action: "set_roles", userId: u.id, roleKeys: draftRoles });
+      await sattArbetsvyer(u.id, draftVyer);
       setEditing(null); await load();
     } catch (e) { setError(e instanceof Error ? e.message : "Kunde inte spara rollerna."); }
     finally { setBusy(false); }
@@ -108,6 +114,26 @@ export function UsersAdminPage({ meId }: { meId: string }) {
                     </div>
                   ) : u.roles.length === 0 ? <span className="usr__norole">Ingen roll</span>
                     : u.roles.map((r) => <span key={r.key} className={`usr__role${r.key === "admin" ? " usr__role--admin" : ""}`}>{r.name}</span>)}
+                  <div className="usr__vyer">
+                    <span className="usr__vyer-label">Vyer</span>
+                    {isEditing ? (
+                      draftRoles.includes("admin") ? <span className="usr__norole">Administratörer ser alla vyer</span> : (
+                        <div className="chips">
+                          {ARBETSVYER.filter((v) => v.key !== "admin").map((v) => {
+                            const on = draftVyer.includes(v.key);
+                            return (
+                              <button key={v.key} type="button" className="chip" aria-pressed={on} title={v.beskrivning}
+                                onClick={() => setDraftVyer((d) => on ? d.filter((k) => k !== v.key) : [...d, v.key])}>
+                                {v.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )
+                    ) : u.roles.some((r) => r.key === "admin") ? <span className="usr__vy usr__vy--alla">Alla vyer</span>
+                      : (vyer[u.id] ?? []).length === 0 ? <span className="usr__norole">Hela menyn</span>
+                      : ARBETSVYER.filter((v) => vyer[u.id]!.includes(v.key)).map((v) => <span key={v.key} className="usr__vy">{v.label}</span>)}
+                  </div>
                   <div className="usr__meta">
                     {u.lastSignInAt
                       ? <span title={fmtDateTime(u.lastSignInAt, { withYear: true })}>Inloggad {relTime(u.lastSignInAt)}</span>
@@ -123,7 +149,7 @@ export function UsersAdminPage({ meId }: { meId: string }) {
                       <button className="btn btn--sm btn--brand" disabled={busy} onClick={() => void saveRoles(u)}>{busy ? "Sparar…" : "Spara"}</button>
                     </>
                   ) : (
-                    <button className="btn btn--sm btn--ghost" onClick={() => startEdit(u)}>Ändra roller</button>
+                    <button className="btn btn--sm btn--ghost" onClick={() => startEdit(u)}>Ändra roller och vyer</button>
                   )}
                 </div>
               </article>
