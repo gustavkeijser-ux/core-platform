@@ -36,6 +36,8 @@ type Props = {
   d2dLoner?: boolean;
   /** Antal öppna nummerbyten/porteringar — siffra vid Door to door → Nummerbyten. */
   nummerbytenOppna?: number;
+  /** Antal öppna VT-beställningar — siffra vid Door to door → VT-beställningar. */
+  vtOppna?: number;
   /** Arbetsvyer (bara menyn): de vyer användaren får växla mellan och den valda.
    *  Färre än två vyer → ingen väljare. Ingen vald vy → hela menyn (som admin). */
   arbetsvyer?: Arbetsvy[];
@@ -101,7 +103,7 @@ const MENU_GROUPS: MenuGroup[] = [
         <path d="M6.5 14V10h3v4" />
       </svg>
     ),
-    keys: ["__d2dutfall__", "__d2davtal__", "d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte"],
+    keys: ["__d2dutfall__", "__d2davtal__", "d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte", "vt_bestallning"],
   },
 ];
 
@@ -323,7 +325,7 @@ function VyValjare({ vyer, vald, onValj }: { vyer: Arbetsvy[]; vald: Arbetsvy | 
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, nummerbytenOppna, arbetsvyer, arbetsvy, onValjArbetsvy }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, nummerbytenOppna, vtOppna, arbetsvyer, arbetsvy, onValjArbetsvy }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -487,8 +489,8 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
               >
                 {group.icon}
                 <span className="sidebar__label">{group.label}</span>
-                {group.id === "d2d" && !isOpen && !!((d2dFeedback?.vantar ?? 0) + (nummerbytenOppna ?? 0)) && (
-                  <span className="sidebar__badge" title="Säljarfeedback som väntar och öppna nummerbyten">{(d2dFeedback?.vantar ?? 0) + (nummerbytenOppna ?? 0)}</span>
+                {group.id === "d2d" && !isOpen && !!((d2dFeedback?.vantar ?? 0) + (nummerbytenOppna ?? 0) + (vtOppna ?? 0)) && (
+                  <span className="sidebar__badge" title="Säljarfeedback som väntar, öppna nummerbyten och VT-beställningar">{(d2dFeedback?.vantar ?? 0) + (nummerbytenOppna ?? 0) + (vtOppna ?? 0)}</span>
                 )}
                 <Chevron open={isOpen} />
               </button>
@@ -562,6 +564,9 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                         {o.labelPlural}
                         {o.key === "nummerbyte" && !!nummerbytenOppna && (
                           <span className="sidebar__badge" title="Öppna nummerbyten">{nummerbytenOppna}</span>
+                        )}
+                        {o.key === "vt_bestallning" && !!vtOppna && (
+                          <span className="sidebar__badge" title="Signerade avtal som ska beställas i VT">{vtOppna}</span>
                         )}
                       </button>
                       {/* Leveransöversikt (kort per fastighetsägare) direkt under Projektplanen */}
