@@ -1059,3 +1059,25 @@
   .vt-rad { grid-template-columns: minmax(0, 1fr); }
   .vt-rad__knappar { grid-column: 1; grid-row: auto; flex-direction: row-reverse; justify-content: space-between; align-items: center; padding-right: var(--sp-1); }
 }
+
+/* ── Utfall: klickbar säljare → sålda tjänster ─────────────────────────── */
+.utf__saljare { cursor: pointer; }
+.utf__saljare:hover td { background: var(--surface-sunk); }
+.utf__saljare-namn { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.utf__saljare-pil { color: var(--ink-faint); font-size: var(--text-xs); width: 1em; }
+.utf__saljare-detalj td { padding-top: 0; padding-bottom: var(--sp-3); background: var(--surface-sunk); }
+.utf__tjanster { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 2px var(--sp-4); max-width: 900px; }
+.utf__tjanst { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-sm); padding: 2px 0; border-bottom: 1px dashed var(--border); }
+.utf__tjanst span:first-child { text-align: left; }
+.utf__tjanst span:last-child { font-variant-numeric: tabular-nums; color: var(--ink-muted); white-space: nowrap; }
+@media (max-width: 720px) {
+  .utf__saljare-detalj td { display: block; }
+  .utf__saljare-detalj td::before { content: none; }
+  .utf__tjanster { grid-template-columns: 1fr; }
+}
+
+/* ── Säljarprofil: sålda tjänster i perioden ────────────────────────────── */
+.d2dp-tjanster { display: flex; flex-direction: column; gap: 2px; }
+.d2dp-tjanst { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-sm); padding: 3px 0; border-bottom: 1px dashed var(--border); }
+.d2dp-tjanst span:last-child { font-variant-numeric: tabular-nums; color: var(--ink-muted); white-space: nowrap; }
+.d2dp-tjanster__hjalp { margin: 0; font-size: var(--text-xs); color: var(--ink-faint); }
