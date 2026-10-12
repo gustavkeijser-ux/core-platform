@@ -1,6 +1,7 @@
 import { Fragment, useState } from "react";
 import type { ObjectDef, TenantBranding } from "@/lib/data";
 import { useUserName } from "@/lib/users";
+import { ARBETSVYER, type Arbetsvy } from "@/lib/arbetsvyer";
 import { AiMascot } from "./AiAssistant";
 
 type Props = {
@@ -35,6 +36,18 @@ type Props = {
   d2dLoner?: boolean;
   /** Antal öppna nummerbyten/porteringar — siffra vid Door to door → Nummerbyten. */
   nummerbytenOppna?: number;
+  /** Arbetsvyer (bara menyn): de vyer användaren får växla mellan och den valda.
+   *  Färre än två vyer → ingen väljare. Ingen vald vy → hela menyn (som admin). */
+  arbetsvyer?: Arbetsvy[];
+  arbetsvy?: Arbetsvy | null;
+  onValjArbetsvy?: (vy: Arbetsvy) => void;
+};
+
+/** Vad varje arbetsvy visar i menyn. Admin (och ingen vy) visar allt. */
+const VY_MENY: Record<Exclude<Arbetsvy, "admin">, { grupper: string[]; arenden: boolean; register: boolean }> = {
+  fastighetssaljare: { grupper: ["salj"], arenden: false, register: true },
+  d2d: { grupper: ["d2d"], arenden: false, register: false },
+  leverans: { grupper: ["leverans"], arenden: true, register: true },
 };
 
 function initialer(namn: string) {
@@ -265,7 +278,7 @@ function Chevron({ open }: { open: boolean }) {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, nummerbytenOppna }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, nummerbytenOppna, arbetsvyer, arbetsvy, onValjArbetsvy }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -284,6 +297,13 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
   function toggle(id: string) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }
+
+  const vyMeny = arbetsvy && arbetsvy !== "admin" ? VY_MENY[arbetsvy] : null;
+  const visaGrupp = (id: string) => !vyMeny || vyMeny.grupper.includes(id);
+  const visaArenden = !vyMeny || vyMeny.arenden;
+  const visaRegister = !vyMeny || vyMeny.register;
+  // En vy med en enda grupp: håll den utfälld, så man slipper klicka.
+  const ensamGrupp = vyMeny && vyMeny.grupper.length === 1 && !vyMeny.arenden ? vyMeny.grupper[0] : null;
 
   // Objektmap för snabb lookup
   const objMap = new Map(objects.map((o) => [o.key, o]));
@@ -347,6 +367,17 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         <div className="sidebar__org">
           <span className="sidebar__org-name">{branding?.name || "ConnectEstate"}</span>
         </div>
+        {/* Arbetsvy — växlar bara vad menyn visar. */}
+        {(arbetsvyer?.length ?? 0) > 1 && (
+          <div className="sidebar__vyer" role="group" aria-label="Arbetsvy">
+            {ARBETSVYER.filter((v) => arbetsvyer!.includes(v.key)).map((v) => (
+              <button key={v.key} type="button" className="sidebar__vy" aria-pressed={arbetsvy === v.key}
+                title={`${v.label}: ${v.beskrivning}`} onClick={() => onValjArbetsvy?.(v.key)}>
+                {v.kort}
+              </button>
+            ))}
+          </div>
+        )}
         <nav className="sidebar__nav">
         {item("__dashboard__", "Översikt", ICONS.__dashboard__)}
         {item("__tasks__", "Mina uppgifter", ICONS.__tasks__)}
@@ -355,7 +386,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
 
         {/* ÄRENDEN — allt som är arbete, överst under Översikt (Förslag B, punkt 6).
          *  Fälls ut/ihop som övriga moduler. */}
-        {canCases && (() => {
+        {canCases && visaArenden && (() => {
           const caseActive = (activeKey ?? "").startsWith("__cases_") || activeKey === "__newcase__";
           const isOpen = !!expanded.arenden || caseActive;
           const forsenade = caseCounts?.overdue ?? 0;
@@ -398,7 +429,8 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
 
         {/* Grupperade sektioner */}
         {MENU_GROUPS.map((group) => {
-          const isOpen = !!expanded[group.id];
+          if (!visaGrupp(group.id)) return null;
+          const isOpen = !!expanded[group.id] || ensamGrupp === group.id;
           const groupObjects = group.keys
             .map((k) => objMap.get(k))
             .filter(Boolean) as ObjectDef[];
@@ -523,13 +555,13 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
         })}
 
         {/* REGISTER — kunder, kontakter, avtal och partners. */}
-        {(registerItems.length > 0 || standalone.length > 0) && <div className="sidebar__section-label">Register</div>}
-        {registerItems.map((o) => item(o.key, o.labelPlural, ICONS[o.key] ?? ICONS.contact))}
-        {standalone.map((o) => item(o.key, o.labelPlural, ICONS[o.key] ?? fallbackIcon()))}
+        {visaRegister && (registerItems.length > 0 || standalone.length > 0) && <div className="sidebar__section-label">Register</div>}
+        {visaRegister && registerItems.map((o) => item(o.key, o.labelPlural, ICONS[o.key] ?? ICONS.contact))}
+        {visaRegister && standalone.map((o) => item(o.key, o.labelPlural, ICONS[o.key] ?? fallbackIcon()))}
 
         {/* ADMINISTRATION */}
         <div className="sidebar__section-label">Administration</div>
-        {isAdmin && item("__feedback__", "Feedback", ICONS.__feedback__, { n: newFeedback })}
+        {isAdmin && !vyMeny && item("__feedback__", "Feedback", ICONS.__feedback__, { n: newFeedback })}
         {item("__settings__", "Inställningar", ICONS.settings)}
       </nav>
       <div className="sidebar__bottom">
