@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import "@/styles/d2d.css";
 import type { RecordRow } from "@/lib/data";
 import { listRecords, nummerbyteComplete, nummerbyteSetAdmin, nummerbyteSetStart, DataError } from "@/lib/data";
 import { UserBadge, useTenantUsers } from "@/lib/users";
@@ -205,14 +206,13 @@ export function NummerbytenPage() {
                 <div className="nb-numbers">
                   <table className="nb-table">
                     <thead>
-                      <tr><th>Typ</th><th>Tillfälligt nummer</th><th>Ska ersättas med</th><th>Står på numret idag</th></tr>
+                      <tr><th>Typ</th><th>Nummer som porteras in</th><th>Står på numret idag</th></tr>
                     </thead>
                     <tbody>
                       {nr.map((n, i) => (
                         <tr key={i}>
                           <td data-label="Typ">{n.typ === "huvud" ? <span className="mnr-badge">Huvudnummer</span> : "Extraanvändare"}</td>
-                          <td data-label="Tillfälligt nummer" className="nb-mono">{n.tillfalligt || "—"}</td>
-                          <td data-label="Ska ersättas med" className="nb-mono"><strong>{n.riktigt || "—"}</strong></td>
+                          <td data-label="Nummer som porteras in" className="nb-mono"><strong>{n.riktigt || "—"}</strong>{!!n.tillfalligt && <span className="nb-tillf"> (ersätter {n.tillfalligt})</span>}</td>
                           <td data-label="Står på numret idag">{n.agare || "—"}</td>
                         </tr>
                       ))}
@@ -264,7 +264,7 @@ function ConfirmDialog({ r, onClose, onConfirm }: { r: RecordRow; onClose: () =>
         <p className="nb-dialog__kund"><strong>{str(d(r, "kund"))}</strong> · {str(d(r, "adress"))}</p>
         <ul className="nb-dialog__nums">
           {nr.map((n, i) => (
-            <li key={i}>{n.typ === "huvud" ? "Huvudnummer" : "Extraanvändare"}: {n.tillfalligt} → <strong>{n.riktigt}</strong></li>
+            <li key={i}>{n.typ === "huvud" ? "Huvudnummer" : "Extraanvändare"}: <strong>{n.riktigt}</strong>{!!n.tillfalligt && <> (ersätter {n.tillfalligt})</>}</li>
           ))}
         </ul>
         <label className="nb-check">
