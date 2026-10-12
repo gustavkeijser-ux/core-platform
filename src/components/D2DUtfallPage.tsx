@@ -28,7 +28,9 @@ type Utfall = {
   /** avtal = summa avtal (tjänster) hos säljarens sålda/signerade kunder; snittet räknas här. */
   perSaljare: Array<{ id: string; namn: string | null; besok: number; oppnade: number; salda: number; mer: number; avtal?: number;
     /** Sålda tjänster i urvalet (bredband per hastighet, TV, streaming, mobil, extraanvändare, router, TV-box). */
-    tjanster?: Array<{ nyckel: string; etikett: string; antal: number }> }>;
+    tjanster?: Array<{ nyckel: string; etikett: string; antal: number }>;
+    /** Antal per kategori (samma nycklar som sald.kategorier) — underlag för attach rate per säljare. */
+    kategorier?: Record<string, number> }>;
   aterringning: Rad[];
   projekt: Array<{ id: string; title: string | null }>;
   saljare: Array<{ id: string; namn: string | null }>;
@@ -49,6 +51,12 @@ const STATUS: Record<string, string> = {
 const KATEGORI: Array<[string, string]> = [
   ["bredband", "Bredband"], ["tv", "TV (utöver Start/Bas)"], ["mobil_huvud", "Mobil – huvudabonnemang"], ["mobil_extra", "Mobil – extraanvändare (antal)"],
   ["streaming_film", "Streaming film och serier"], ["streaming_sport", "Sportpaket"], ["trygghet", "Trygghetspaket"],
+];
+/** Attach rate: tilläggstjänster per tecknat bredband. [nyckel i kategorier, etikett, kort etikett (per säljare)]. */
+const ATTACH: Array<[string, string, string]> = [
+  ["tv", "TV (utöver Start/Bas)", "TV"], ["tv_alla", "TV inkl. Start/Bas", "TV alla"], ["streaming_film", "Streaming film och serier", "Streaming"],
+  ["streaming_sport", "Sportpaket", "Sport"], ["trygghet", "Trygghetspaket", "Trygghet"], ["mobil_huvud", "Mobil – huvudabonnemang", "Mobil"],
+  ["mobil_extra", "Mobil – extraanvändare", "Extra"], ["router", "Router", "Router"], ["tvbox", "TV-box", "TV-box"],
 ];
 const EJ_MER: Record<string, string> = {
   tittar_lite: "Tittar lite på TV/streaming", mobil_bunden: "Mobilen är bunden", har_telia: "Har redan Telia",
@@ -215,6 +223,8 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
   const oppnade = u ? u.besok - (s.inte_hemma ?? 0) : 0;
   const maxKv = Math.max(1, ...kvartal.map((k) => k.n));
   const baraBredband = u ? u.sald.antal - u.sald.merAnBredband : 0;
+  /** Tecknade bredband i urvalet — nämnaren för attach rate. */
+  const bredband = u?.sald.kategorier.bredband ?? 0;
 
   return (
     <div className="page utf">
@@ -284,6 +294,28 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
             ({(alla?.sald?.sald.antal ?? 0)} sålda + {(alla?.scrive?.sald.antal ?? 0)} signerade = {u.sald.antal} kunder).
           </p>
         )}
+
+        <section className="card utf__sek">
+          <h2>Attach rate <span className="utf__snitt">per tecknat bredband ({bredband} st)</span></h2>
+          {bredband === 0 ? <p className="formfield__help">Inga tecknade bredband i urvalet.</p> : (
+            <div className="utf__attach">
+              {ATTACH.map(([k, lbl]) => {
+                const n = u.sald.kategorier[k] ?? 0;
+                return (
+                  <div key={k} className={`utf__attach-tile${n === 0 ? " utf__attach-tile--tom" : ""}`}>
+                    <b>{pct(n, bredband)} %</b>
+                    <span>{lbl}</span>
+                    <small>{n} av {bredband}</small>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <p className="formfield__help">
+            Andel av de {ord.enhet} kunderna med bredband som också tecknade tjänsten. TV Start och TV Bas räknas inte som TV-försäljning men syns i "TV inkl. Start/Bas".
+            Extraanvändare räknas per styck, så andelen kan överstiga 100 %.
+          </p>
+        </section>
 
         <section className="card utf__sek">
           <h2>Utfall av besöken</h2>
@@ -400,11 +432,13 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
             <p className="utf__ingress">Snitt avtal/kund = antal avtal (tjänster) delat med antal {ord.enhet} kunder. Hela urvalet: {snitt(u.sald.avtalSumma, u.sald.antal)}. Klicka på en säljare för att se vilka tjänster som sålts.</p>
             <div className="rtable-scroll">
               <table className="rtable utf__tabell">
-                <thead><tr><th>Säljare</th><th>Besök</th><th>Öppnade</th><th>{ord.kolumn}</th><th>Mer än bredband</th><th>Snitt avtal/kund</th></tr></thead>
+                <thead><tr><th>Säljare</th><th>Besök</th><th>Öppnade</th><th>{ord.kolumn}</th><th>Mer än bredband</th><th>Snitt avtal/kund</th><th>Attach TV</th></tr></thead>
                 <tbody>
                   {u.perSaljare.map((p) => {
                     const open = oppenSaljare === p.id;
                     const tj = p.tjanster ?? [];
+                    const kat = p.kategorier ?? {};
+                    const bb = kat.bredband ?? 0;
                     return (
                       <Fragment key={p.id}>
                         <tr className={`rtable__row utf__saljare${open ? " utf__saljare--open" : ""}`} onClick={() => setOppenSaljare(open ? null : p.id)}
@@ -417,10 +451,21 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
                           <td data-label={ord.kolumn} className="utf__num">{p.salda} ({pct(p.salda, p.oppnade)} %)</td>
                           <td data-label="Mer än bredband" className="utf__num">{p.mer} av {p.salda}</td>
                           <td data-label="Snitt avtal/kund" className="utf__num">{snitt(p.avtal, p.salda)}</td>
+                          <td data-label="Attach TV" className="utf__num">{bb > 0 ? `${pct(kat.tv ?? 0, bb)} %` : "–"}</td>
                         </tr>
                         {open && (
                           <tr className="rtable__row utf__saljare-detalj">
-                            <td colSpan={6}>
+                            <td colSpan={7}>
+                              {bb > 0 && (
+                                <div className="utf__attach-rad">
+                                  <span className="utf__attach-rad__rubrik">Attach rate per bredband ({bb} st)</span>
+                                  {ATTACH.map(([k, , kort]) => (
+                                    <span key={k} className={`utf__attach-chip${(kat[k] ?? 0) === 0 ? " utf__attach-chip--tom" : ""}`} title={`${kat[k] ?? 0} av ${bb}`}>
+                                      {kort} <b>{pct(kat[k] ?? 0, bb)} %</b>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                               {tj.length === 0 ? <span className="formfield__help">Inga sålda tjänster i urvalet.</span> : (
                                 <div className="utf__tjanster">
                                   {tj.map((t) => (
