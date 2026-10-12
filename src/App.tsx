@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getMetadata, type ObjectDef, type TenantBranding } from "@/lib/data";
 import { LoginPage } from "@/components/LoginPage";
 import { ForcedPasswordChangePage } from "@/components/ForcedPasswordChangePage";
+import { type Arbetsvy, type MinaArbetsvyer, hamtaMinaArbetsvyer, valjArbetsvy } from "@/lib/arbetsvyer";
 import { Sidebar } from "@/components/Sidebar";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { ThemeToggle, useTheme } from "@/lib/theme";
@@ -127,6 +128,8 @@ export default function App() {
   const [nummerbytenOppna, setNummerbytenOppna] = useState(0);
   // AI-assistenten: panel nere till vänster, öppnas från ikonen ovanför Import.
   const [aiOpen, setAiOpen] = useState(false);
+  // Arbetsvy (Fastighetssäljare / D2D / Leverans / Admin) — styr bara menyn.
+  const [arbetsvyer, setArbetsvyer] = useState<MinaArbetsvyer>({ vyer: [], vald: null });
   const myName = useUserName(session?.user.id);
   const { theme } = useTheme();
 
@@ -192,6 +195,16 @@ export default function App() {
     d2dLonBehorig().then((b) => { if (on) setD2dLoner(b); });
     return () => { on = false; };
   }, [metaReady]);
+  useEffect(() => {
+    if (!metaReady) return;
+    let on = true;
+    hamtaMinaArbetsvyer().then((v) => { if (on) setArbetsvyer(v); });
+    return () => { on = false; };
+  }, [metaReady, session?.user.id]);
+  const bytArbetsvy = (vy: Arbetsvy) => {
+    setArbetsvyer((a) => ({ ...a, vald: vy }));
+    void valjArbetsvy(vy);
+  };
   useEffect(() => {
     if (!metaReady || !d2dGranskare) return;
     let on = true;
@@ -336,6 +349,9 @@ export default function App() {
         d2dFeedback={d2dGranskare ? { vantar: d2dFeedbackVantar } : undefined}
         d2dLoner={d2dLoner}
         nummerbytenOppna={nummerbytenOppna}
+        arbetsvyer={arbetsvyer.vyer}
+        arbetsvy={arbetsvyer.vald}
+        onValjArbetsvy={bytArbetsvy}
         user={{ id: session.user.id, email: session.user.email ?? "", role: isAdmin ? "Administratör" : isSeller ? "Säljare" : "Användare" }}
         onOpenSettings={() => setView({ kind: "settings", tab: "profil" })}
         onSignOut={() => supabase.auth.signOut()}
