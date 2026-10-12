@@ -4950,15 +4950,29 @@ body { color: var(--ink); }
 .sidebar__mark { width: 26px; height: 26px; border-radius: 8px; }
 .sidebar__org { padding: 7px 10px; border-radius: 8px; background: var(--surface-alt); border: 0; margin: 0; }
 .sidebar__org-name { font-family: var(--font-body); font-weight: 600; font-size: 12px; }
-/* Arbetsvy-väljare under organisationen: 2 × 2 knappar, vald vy markeras. */
-.sidebar__vyer { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; margin-top: 6px; border-radius: 8px; background: var(--surface-sunk); }
-.sidebar__vy {
-  min-height: 30px; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
-  font: inherit; font-size: 11.5px; font-weight: 600; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+/* Arbetsvy-väljare (rullgardin) under organisationen. */
+.sidebar__vyval { position: relative; margin-top: 6px; }
+.sidebar__vyval-knapp {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 40px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; text-align: left;
 }
-.sidebar__vy:hover { color: var(--ink); }
-.sidebar__vy[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
-.sidebar__vy:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.sidebar__vyval-knapp:hover { border-color: var(--border-strong); background: var(--surface-alt); }
+.sidebar__vyval-knapp:focus-visible, .sidebar__vyval-val:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.sidebar__vyval-text { display: flex; flex-direction: column; min-width: 0; }
+.sidebar__vyval-etikett { font-size: 10px; font-weight: 700; letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--ink-faint); }
+.sidebar__vyval-namn { font-size: 12.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar__vyval-besk { font-size: 11px; line-height: 1.3; color: var(--ink-muted); }
+.sidebar__vyval-lista {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; margin: 0; padding: 4px; list-style: none;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md);
+}
+.sidebar__vyval-val {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 44px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; font: inherit; cursor: pointer; text-align: left; color: var(--brand);
+}
+.sidebar__vyval-val:hover { background: var(--surface-alt); }
+.sidebar__vyval-val[aria-selected="true"] { background: var(--brand-soft); }
 .sidebar__nav { gap: 1px; }
 .sidebar__item {
   min-height: 34px; padding: 6px 8px; border-radius: 8px; gap: 10px;
