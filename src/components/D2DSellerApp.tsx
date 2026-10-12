@@ -1,3 +1,4 @@
+import { VtSaljarPanel } from "./D2DVtBestallningar";
 import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -1998,7 +1999,8 @@ function SigneradeLista({
   useEffect(() => {
     (async () => {
       try {
-        const res = await listRecords({ objectType: "d2d_lagenhet", status: "sald", limit: 200 });
+        // Både sålda och Scrive-signerade (status scrive) räknas som signerade kunder.
+        const res = await listRecords({ objectType: "d2d_lagenhet", filters: [{ field: "__status", op: "in", value: ["sald", "scrive"] }], limit: 200 });
         setItems(res.items);
       } catch {
         // tyst
@@ -2014,6 +2016,8 @@ function SigneradeLista({
 
   return (
     <div className="d2d-list">
+      {/* Signerade avtal som ska beställas i VT (mobil helst 45 / senast 30 dagar före start, övrigt 30). */}
+      <VtSaljarPanel onOpenLagenhet={(id) => onOpenLagenhet(id, "")} />
       <div className="d2d-list__header">
         <h2>Signerade kunder</h2>
         <span className="d2d-list__count">{items.length} st</span>
