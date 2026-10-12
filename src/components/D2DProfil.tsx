@@ -244,6 +244,21 @@ export function SaljarProfil({ id, namn, minId, salj, namnPa, pinnar, onClose, o
           </section>
         )}
 
+        {pinnRad && (pinnRad.tjanster?.length ?? 0) > 0 && (
+          <section className="d2dd__section">
+            <h3 className="d2dp-h3">Sålda tjänster — {MANADER[nu.getMonth()]}</h3>
+            <div className="d2dp-tjanster">
+              {pinnRad.tjanster!.map((t) => (
+                <div key={t.nyckel} className="d2dp-tjanst">
+                  <span>{t.etikett}</span>
+                  <span>{t.antal}{t.antalScrive > 0 && <small className="d2d-lon__scrive"> ({t.antalScrive})</small>} st</span>
+                </div>
+              ))}
+            </div>
+            <p className="d2dp-tjanster__hjalp">Antal sålda i löneperioden; Scrive-signerade som ännu inte är Sålda inom parentes.</p>
+          </section>
+        )}
+
         <section className="d2dd__section">
           <h3 className="d2dp-h3">Sälj per dag — {MANADER[nu.getMonth()]}</h3>
           <div className="d2dp-dagar" role="img" aria-label={`Sälj per dag i ${MANADER[nu.getMonth()]}: totalt ${kpi.m}`}>
