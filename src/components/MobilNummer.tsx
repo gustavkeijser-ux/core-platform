@@ -8,13 +8,15 @@ import { useEffect, useState } from "react";
  *        – Tillfälligt (ersätts med befintligt) → tillfalligt  (kräver uppgifter)
  *        – Nytt nummer (behålls)                → nytt_nummer
  *
- * Vid "tillfalligt" är startdatum, huvudnumret och ev. extraanvändare
- * obligatoriska. När allt är ifyllt skapar servern automatiskt ett
+ * Vid "tillfalligt" är startdatum, kundens befintliga nummer och vem som
+ * står på det obligatoriska (för huvudnumret och ev. extraanvändare). Det
+ * tillfälliga/slumpade numret fylls inte i av säljaren (borttaget okt 2026 —
+ * fältet finns kvar i datan för äldre poster). När allt är ifyllt skapar servern automatiskt ett
  * nummerbytesärende + en admin-uppgift (se migration 0029). Startdatum
  * låses för säljaren när ärendet finns — bara admin kan ändra det.
  */
 
-export type NummerRad = { typ: "huvud" | "extra"; tillfalligt: string; riktigt: string; agare: string };
+export type NummerRad = { typ: "huvud" | "extra"; tillfalligt?: string; riktigt: string; agare: string };
 
 type Props = {
   lagenhetId: string;
@@ -24,7 +26,7 @@ type Props = {
   onPatch: (patch: Record<string, unknown>, delayMs: number) => void;
 };
 
-const TOM_RAD = (typ: NummerRad["typ"]): NummerRad => ({ typ, tillfalligt: "", riktigt: "", agare: "" });
+const TOM_RAD = (typ: NummerRad["typ"]): NummerRad => ({ typ, riktigt: "", agare: "" });
 
 function rader(data: Record<string, unknown>): NummerRad[] {
   const v = data.mobil_nummer as { rows?: unknown } | null | undefined;
@@ -92,11 +94,11 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch }: Props) 
     if (extra > angivet) patch.mobil_extra_antal = extra;
     onPatch(patch, delay);
   };
-  const setCell = (i: number, key: keyof Omit<NummerRad, "typ">, v: string) =>
+  const setCell = (i: number, key: "riktigt" | "agare", v: string) =>
     saveRows(rows.map((r, j) => (j === i ? { ...r, [key]: v } : r)));
 
   const saknas = (v: string) => !v.trim();
-  const komplett = !!start && rows.every((r) => !saknas(r.tillfalligt) && !saknas(r.riktigt) && !saknas(r.agare));
+  const komplett = !!start && rows.every((r) => !saknas(r.riktigt) && !saknas(r.agare));
 
   return (
     <div className="mnr">
@@ -180,12 +182,7 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch }: Props) 
                 {r.typ === "huvud" ? <><span className="mnr-badge">Huvudnummer</span></> : <>Extraanvändare {i}</>}
               </legend>
               <label className="mnr-field">
-                <span className="label">{r.typ === "huvud" ? "Tillfälligt/slumpat nummer *" : "Slumpat/tillfälligt nummer *"}</span>
-                <input className={`input${saknas(r.tillfalligt) ? " mnr-input--missing" : ""}`} type="tel" inputMode="tel"
-                  placeholder="076-111 11 11" value={r.tillfalligt} onChange={(e) => setCell(i, "tillfalligt", e.target.value)} />
-              </label>
-              <label className="mnr-field">
-                <span className="label">{r.typ === "huvud" ? "Kundens befintliga nummer (porteras in) *" : "Riktigt nummer som ska ersätta det *"}</span>
+                <span className="label">{r.typ === "huvud" ? "Kundens befintliga nummer (porteras in) *" : "Extraanvändarens befintliga nummer (porteras in) *"}</span>
                 <input className={`input${saknas(r.riktigt) ? " mnr-input--missing" : ""}`} type="tel" inputMode="tel"
                   placeholder="073-331 71 42" value={r.riktigt} onChange={(e) => setCell(i, "riktigt", e.target.value)} />
               </label>
