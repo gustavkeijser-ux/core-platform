@@ -989,3 +989,6 @@
   .d2dpb-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .d2dpb-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
+
+/* Nummerbyten: äldre poster kan ha ett tillfälligt nummer antecknat. */
+.nb-tillf { font-family: var(--font-body); color: var(--ink-muted); font-size: var(--text-sm); white-space: normal; }
