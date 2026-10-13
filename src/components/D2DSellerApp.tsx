@@ -1,4 +1,5 @@
 import { VtSaljarPanel } from "./D2DVtBestallningar";
+import { AngerPanel } from "./D2DAnger";
 import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -72,7 +73,7 @@ function d2dSegsFromView(v: D2DView): string[] {
   }
 }
 
-type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "inte_saljbar" | "befintlig_telia" | "intresserad" | "sald" | "scrive" | "kall_kund";
+type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "inte_saljbar" | "befintlig_telia" | "intresserad" | "sald" | "scrive" | "kall_kund" | "anger";
 
 const STATUS_CONFIG: Record<KnockStatus, { label: string; color: string; cssClass: string }> = {
   ej_knackad:       { label: "Ej knackad",       color: "var(--hue-slate)",  cssClass: "d2d-status--slate" },
@@ -90,6 +91,9 @@ const STATUS_CONFIG: Record<KnockStatus, { label: string; color: string; cssClas
   scrive:           { label: "Signera med Scrive", color: "var(--hue-violet)", cssClass: "d2d-status--violet" },
   // Ersätter "Övrigt" (borttagen 2026-10, befintliga flyttades hit).
   kall_kund:        { label: "Kall kund",        color: "var(--hue-zinc)",   cssClass: "d2d-status--zinc" },
+  // Kunden har ångrat sig efter Såld/Scrive. Markeras via "Kunden har ångrat sig…" (D2DAnger.tsx),
+  // inte som vanlig statusbubbla. Tjänsterna ligger kvar för statistiken.
+  anger:            { label: "Ånger",            color: "var(--hue-red)",    cssClass: "d2d-status--red" },
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -103,7 +107,7 @@ const SECTION_LABELS: Record<string, string> = {
 // "Intresserad" är för löst definierat för att vara en egen slutstatus
 // (jfr "Såld"), så den plockas bort ur väljaren men finns kvar i
 // STATUS_CONFIG eftersom befintliga poster kan ha statusen satt sedan innan.
-const HIDDEN_STATUS_PICKS = new Set<KnockStatus>(["intresserad"]);
+const HIDDEN_STATUS_PICKS = new Set<KnockStatus>(["intresserad", "anger"]);
 
 // Anledningar säljaren kan välja mellan när en lägenhet markeras
 // "Inte intresserad" — låter statistiken brytas ner senare i CRM:et.
@@ -714,7 +718,7 @@ function RingIkon() {
  *  (Såld, Scrive) så den gröna delen växer från vänster när man säljer.
  *  "Ej knackad" ritas inte som segment utan är den tomma delen av baren. */
 const PROGRESS_ORDNING: KnockStatus[] = [
-  "sald", "scrive", "intresserad", "aterkoppling", "befintlig_telia", "inte_hemma", "kall_kund", "inte_intresserad", "inte_saljbar",
+  "sald", "scrive", "intresserad", "aterkoppling", "befintlig_telia", "inte_hemma", "kall_kund", "inte_intresserad", "inte_saljbar", "anger",
 ];
 
 /** Progressbar för en fastighet: "knackade/antal lägenheter". Varje
@@ -1206,7 +1210,7 @@ function FastighetsDetalj({
 
 /** Ordning i statusfiltret: det som kräver handling först. */
 const ALLA_STATUS_ORDNING: KnockStatus[] = [
-  "ej_knackad", "inte_hemma", "aterkoppling", "scrive", "sald", "intresserad", "befintlig_telia", "kall_kund", "inte_intresserad", "inte_saljbar",
+  "ej_knackad", "inte_hemma", "aterkoppling", "scrive", "sald", "anger", "intresserad", "befintlig_telia", "kall_kund", "inte_intresserad", "inte_saljbar",
 ];
 
 /** Alla adresser som är tilldelade den inloggade säljaren (säljare eller
@@ -1765,8 +1769,8 @@ function LagenhetForm({
           adressens egna där importen hade sådana. */}
       <InfraBox title="Förutsättningar" rows={infraRows(fastData, data)} emptyText="Ingen info om nät/TV ifylld för den här adressen." />
 
-      {/* Statusväljare — stora knappar */}
-      <div className="d2d-status-picker">
+      {/* Statusväljare — stora knappar. Vid ånger kan bara admin byta status. */}
+      {(status !== "anger" || isAdmin) && <div className="d2d-status-picker">
         {Object.entries(STATUS_CONFIG)
           .filter(([key]) => !HIDDEN_STATUS_PICKS.has(key as KnockStatus))
           .map(([key, cfg]) => (
@@ -1778,7 +1782,7 @@ function LagenhetForm({
               {cfg.label}
             </button>
           ))}
-      </div>
+      </div>}
 
       {/* Inte hemma: hur många gånger dörren har knackats. */}
       {status === "inte_hemma" && (() => {
@@ -1940,6 +1944,12 @@ function LagenhetForm({
         </div>
       )}
 
+      {/* Ånger: markera (på Såld/Scrive) eller visa (status Ånger). */}
+      {record && !!status && (
+        <AngerPanel lagenhetId={record.id} status={status} data={data} isAdmin={isAdmin} sparaForst={flush}
+          onAndrad={(st, d) => { setStatus(st); setData(d); }} />
+      )}
+
       {/* Ordningen i flödet: Status → Kommentar → Vad är bundet → Namn,
           Telefon, E-post → övriga fält. */}
       {kommentarFalt && (
@@ -2000,7 +2010,7 @@ function SigneradeLista({
     (async () => {
       try {
         // Både sålda och Scrive-signerade (status scrive) räknas som signerade kunder.
-        const res = await listRecords({ objectType: "d2d_lagenhet", filters: [{ field: "__status", op: "in", value: ["sald", "scrive"] }], limit: 200 });
+        const res = await listRecords({ objectType: "d2d_lagenhet", filters: [{ field: "__status", op: "in", value: ["sald", "scrive", "anger"] }], limit: 200 });
         setItems(res.items);
       } catch {
         // tyst
@@ -2030,9 +2040,9 @@ function SigneradeLista({
       {items.map((item) => {
         const data = item.data as Record<string, unknown>;
         return (
-          <button key={item.id} className="d2d-card d2d-card--signed" {...returnRow(item.id)} onClick={() => { rememberRow("signerade", item.id); onOpenLagenhet(item.id, ""); }}>
+          <button key={item.id} className={`d2d-card d2d-card--signed${item.status === "anger" ? " d2d-card--anger" : ""}`} {...returnRow(item.id)} onClick={() => { rememberRow("signerade", item.id); onOpenLagenhet(item.id, ""); }}>
             <div className="d2d-card__main">
-              <span className="d2d-card__title">{formatLagenhetAdress(data, item.title)}</span>
+              <span className="d2d-card__title">{formatLagenhetAdress(data, item.title)}{item.status === "anger" && <span className="d2d-anger-tag">Ånger</span>}</span>
               {!!data.kund_namn && <span className="d2d-card__sub">{String(data.kund_namn)}</span>}
               {!!data.produkt && <span className="d2d-card__meta-text">{String(data.produkt)}</span>}
             </div>
