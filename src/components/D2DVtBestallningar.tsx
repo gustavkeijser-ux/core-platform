@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { EmptyState, FilterPills, SkeletonRows } from "./PageChrome";
 import { dagarTill } from "./MobilNummer";
+import { TeliaImport } from "./D2DAnger";
 import "@/styles/d2d.css";
 
 /**
@@ -210,6 +211,9 @@ export function VtBestallningarPage({ onOpenRecord }: { onOpenRecord?: (id: stri
             </ul>
           )}
       </div>
+
+      {/* Telias VT-fil: Cancelled = ånger, Open/Complete = orderlagd. */}
+      <TeliaImport onKlar={ladda} />
     </div>
   );
 }
