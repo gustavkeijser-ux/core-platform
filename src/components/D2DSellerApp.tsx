@@ -319,6 +319,7 @@ function TillfalligFastighetForm({ projektId, onCreated, onCancel }: {
   const skapa = async () => {
     if (!ok || busy) return;
     setBusy(true); setFel(null);
+    urvalCache = null; // ny fastighet ska synas direkt i listorna
     const { data, error } = await supabase.rpc("d2d_skapa_tillfallig_fastighet", {
       p_projekt_id: projektId === UTAN_PROJEKT ? null : projektId,
       p_gatuadress: adress.trim(),
@@ -378,6 +379,7 @@ function TillfalligLagenhetForm({ fastighetId, fastData, onCreated, onCancel }: 
   const skapa = async () => {
     if (!ok || busy) return;
     setBusy(true); setFel(null);
+    urvalCache = null;
     const { data, error } = await supabase.rpc("d2d_skapa_tillfallig_adress", {
       p_fastighet_id: fastighetId,
       p_lgh_nummer: nummer.trim(),
@@ -441,70 +443,33 @@ type D2DUrval = {
 };
 
 /**
- * Fastigheterna säljaren har adresser i, plus vilka projekt de hör till.
- * Kopplingarna lägenhet → fastighet hämtas direkt. RLS på relationships
- * kräver att båda posterna är synliga, och d2d_lagenhet är scopad till
- * säljarens egna rader (scope "own" för dörrsäljare) — så en säljare får
- * bara fastigheter där den har adresser, admin får alla.
+ * Fastigheterna med lägenheter (alla säljare ser alla), plus egna tillfälliga
+ * fastigheter utan lägenheter, och vilka projekt de hör till. Ett anrop
+ * (d2d_saljar_urval) i stället för att bläddra igenom alla
+ * lägenhet→fastighet-relationer — det tog många sekunder med ~10 000
+ * lägenheter. Svaret cachas en kort stund så att projekt → fastigheter
+ * inte hämtar samma sak två gånger.
  */
-async function hamtaUrval(): Promise<D2DUrval> {
-  const PAGE = 1000;
-  const fastSet = new Set<string>();
-  for (let from = 0; ; from += PAGE) {
-    const { data: rels, error } = await supabase
-      .from("relationships")
-      .select("to_record_id")
-      .eq("rel_type", "d2d_lag_fastighet")
-      .range(from, from + PAGE - 1);
+let urvalCache: { at: number; p: Promise<D2DUrval> } | null = null;
+const URVAL_TTL = 60_000;
+
+function hamtaUrval(): Promise<D2DUrval> {
+  if (urvalCache && Date.now() - urvalCache.at < URVAL_TTL) return urvalCache.p;
+  const p = (async (): Promise<D2DUrval> => {
+    const { data, error } = await supabase.rpc("d2d_saljar_urval");
     if (error) throw error;
-    for (const r of rels ?? []) fastSet.add(r.to_record_id as string);
-    if (!rels || rels.length < PAGE) break;
-  }
-  // Egna tillfälliga fastigheter utan lägenheter ännu syns inte via
-  // relationerna — ta med dem så säljaren hittar tillbaka till dem.
-  const { data: session } = await supabase.auth.getSession();
-  const minId = session.session?.user.id;
-  if (minId) {
-    const { data: egna } = await supabase.from("records").select("id")
-      .eq("object_type", "d2d_fastighet").eq("owner_user_id", minId)
-      .eq("data->>tillfallig", "true").is("deleted_at", null);
-    for (const r of egna ?? []) fastSet.add(r.id as string);
-  }
-
-  const fastIds = Array.from(fastSet);
-  if (fastIds.length === 0) return { fastigheter: [], projektFor: new Map(), projekt: [] };
-
-  const fastigheter: RecordRow[] = [];
-  const projektFor = new Map<string, string>();
-  // .in() med många id:n blir en lång URL — hämta i omgångar.
-  for (let i = 0; i < fastIds.length; i += 200) {
-    const ids = fastIds.slice(i, i + 200);
-    const [{ data: fastData, error: fErr }, { data: projRels, error: pErr }] = await Promise.all([
-      supabase.from("records")
-        .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
-        .in("id", ids).is("deleted_at", null),
-      supabase.from("relationships").select("from_record_id,to_record_id")
-        .eq("rel_type", "d2d_fast_projekt").in("from_record_id", ids),
-    ]);
-    if (fErr) throw fErr;
-    if (pErr) throw pErr;
-    fastigheter.push(...((fastData ?? []) as RecordRow[]));
-    for (const r of projRels ?? []) projektFor.set(r.from_record_id as string, r.to_record_id as string);
-  }
-  for (const f of fastigheter) if (!projektFor.has(f.id)) projektFor.set(f.id, UTAN_PROJEKT);
-
-  const projIds = Array.from(new Set(Array.from(projektFor.values()).filter((id) => id !== UTAN_PROJEKT)));
-  let projekt: RecordRow[] = [];
-  if (projIds.length > 0) {
-    const { data } = await supabase.from("records")
-      .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
-      .in("id", projIds).is("deleted_at", null);
-    projekt = (data ?? []) as RecordRow[];
-  }
-  // Fastigheter vars projekt inte går att läsa (borttaget) hamnar under "Utan projekt".
-  const kanda = new Set(projekt.map((p) => p.id));
-  for (const [f, pid] of projektFor) if (pid !== UTAN_PROJEKT && !kanda.has(pid)) projektFor.set(f, UTAN_PROJEKT);
-  return { fastigheter, projektFor, projekt };
+    const svar = (data ?? {}) as { fastigheter?: Array<RecordRow & { projekt_id: string | null }>; projekt?: RecordRow[] };
+    const fastigheter: RecordRow[] = [];
+    const projektFor = new Map<string, string>();
+    for (const f of svar.fastigheter ?? []) {
+      fastigheter.push(f);
+      projektFor.set(f.id, f.projekt_id ?? UTAN_PROJEKT);
+    }
+    return { fastigheter, projektFor, projekt: svar.projekt ?? [] };
+  })();
+  urvalCache = { at: Date.now(), p };
+  p.catch(() => { urvalCache = null; });
+  return p;
 }
 
 // =============================================================================
