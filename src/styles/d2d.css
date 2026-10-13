@@ -1149,4 +1149,31 @@
 @media (max-width: 600px) {
   .telia-imp__head { flex-direction: column; }
   .telia-imp__atg { white-space: normal; }
+/* ── CRM → Door to door → Lägenheter ──────────────────────────────────────
+   Samma uppbyggnad som "Alla adresser" i säljarvyn (filter, progressbar,
+   lägenhetskort med snabbpanel), men för alla lägenheter i systemet och
+   med ett kommentarsfält i panelen. Lägenheten öppnas i säljarens vy
+   (status + försäljning) på samma sida. */
+.d2dlag .d2d-alla__filter { padding-top: 0; }
+.d2dlag .d2d-alla__val { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.d2dlag .d2d-alla__val label { flex: none; }
+.d2dlag__rensa { margin-left: auto; }
+.d2dlag__mer { display: flex; justify-content: center; padding: var(--sp-4) 0; }
+.d2dlag--form .d2d-topbar { top: 0; }
+
+/* Kommentar i snabbpanelen: en egen rad över hela bredden, under namn/telefon. */
+.d2d-lag-panel--komm { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; }
+.d2d-lag-panel--komm .d2d-lag-panel__komm { grid-column: 1 / -1; order: 5; }
+.d2d-lag-panel__textarea {
+  min-height: 2.75rem;
+  padding: var(--sp-2) var(--sp-3);
+  line-height: 1.35;
+  resize: vertical;
+}
+@media (max-width: 480px) {
+  .d2dlag .d2d-alla__val { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+  .d2dlag__tabell { font-size: var(--text-xs); padding-left: var(--sp-2); padding-right: var(--sp-2); }
+  .d2d-lag-panel--komm { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .d2d-lag-panel--komm .d2d-lag-panel__komm { order: 0; }
+  .d2d-lag-panel--komm .d2d-lag-panel__oppna { order: 6; }
 }
