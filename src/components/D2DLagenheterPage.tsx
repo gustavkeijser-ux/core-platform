@@ -1,5 +1,6 @@
 import type { ObjectDef } from "@/lib/data";
 import { ObjectListPage } from "./ObjectListPage";
+import { D2DTotalImport } from "./D2DTotalImport";
 
 /* =============================================================================
    Door to door → Lägenheter (CRM): tabellvyn — alla lägenheter med markera,
@@ -24,6 +25,7 @@ export function D2DLagenheterPage({ objectDef, onOpenRecord, onMetadataChanged, 
       onMetadataChanged={onMetadataChanged}
       reloadKey={reloadKey}
       stateKeySuffix=":tabell"
+      banner={<D2DTotalImport />}
     />
   );
 }
