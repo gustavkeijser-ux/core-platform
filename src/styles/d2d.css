@@ -1151,17 +1151,76 @@
   .telia-imp__atg { white-space: normal; }
 }
 
-/* ── CRM → Door to door → Lägenheter ──────────────────────────────────────
-   Samma uppbyggnad som "Alla adresser" i säljarvyn (filter, progressbar,
-   lägenhetskort med snabbpanel), men för alla lägenheter i systemet och
-   med ett kommentarsfält i panelen. Lägenheten öppnas i säljarens vy
-   (status + försäljning) på samma sida. */
-.d2dlag .d2d-alla__filter { padding-top: 0; }
-.d2dlag .d2d-alla__val { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.d2dlag .d2d-alla__val label { flex: none; }
-.d2dlag__rensa { margin-left: auto; }
-.d2dlag__mer { display: flex; justify-content: center; padding: var(--sp-4) 0; }
-.d2dlag--form .d2d-topbar { top: 0; }
+/* ── D2D-sälj → Projekt → Alla lägenheter (D2DAllaLagenheter) ─────────────
+   Tabell där klick på raden fäller ut kortet (namn, telefon, kommentar,
+   Inte hemma/knackningar och status). Såld/Scrive öppnar lägenheten i ett
+   fönster (.d2d-modal) för tjänster och kunduppgifter. */
+.d2d-allalgh__filter { display: flex; flex-direction: column; gap: var(--sp-3); }
+.d2d-allalgh__sok { width: 100%; font-size: 16px; }
+.d2d-allalgh__val--admin { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.d2d-allalgh__val--admin label { flex: none; }
+.d2d-allalgh__rensa { margin-left: auto; }
+.d2d-allalgh__mer { display: flex; justify-content: center; padding: var(--sp-4) 0; }
+.d2d-allalgh__hint { margin: 0 0 var(--sp-2); font-size: var(--text-xs); color: var(--ink-muted); }
+/* Tabelläge: tätare rader med bara en skiljelinje; statusfärgen blir en
+   smal list till vänster. Den utfällda raden blir ett kort med statusram. */
+.d2d-detail .d2d-lag-table--expander {
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.d2d-detail .d2d-lag-table--expander .d2d-lag-table__head {
+  padding-top: var(--sp-2);
+  padding-bottom: var(--sp-2);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+.d2d-detail .d2d-lag-table--expander .d2d-lag-kort,
+.d2d-detail .d2d-lag-table--expander .d2d-lag-kort[class*="d2d-status--"] {
+  cursor: pointer;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: inset 3px 0 0 var(--lag-st, transparent);
+}
+.d2d-detail .d2d-lag-table--expander .d2d-lag-kort.d2d-status--slate { box-shadow: none; }
+.d2d-detail .d2d-lag-table--expander .d2d-lag-kort:last-child { border-bottom: 0; }
+.d2d-detail .d2d-lag-table--expander .d2d-lag-kort:hover { background: var(--surface-alt); }
+.d2d-detail .d2d-lag-table--expander .d2d-lag-kort .d2d-lag-row {
+  padding-top: var(--sp-2);
+  padding-bottom: var(--sp-2);
+  border-radius: 0;
+}
+.d2d-detail .d2d-lag-table--expander .d2d-lag-row__icon { width: 2rem; height: 2rem; }
+.d2d-detail .d2d-lag-table--expander .d2d-lag-kort.d2d-lag-kort--utfalld {
+  margin: var(--sp-2);
+  border: 2px solid var(--lag-st, var(--border-strong));
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  background: var(--surface);
+}
+.d2d-detail .d2d-lag-table--expander .d2d-lag-kort--utfalld .d2d-lag-row { padding-top: var(--sp-3); }
+.d2d-lag-panel__status { grid-column: 1 / -1; order: 6; margin: 0; }
+.d2d-lag-panel__anger { grid-column: 1 / -1; order: 6; justify-self: start; margin-left: 0; }
+.d2d-lag-panel--komm .d2d-lag-panel__oppna { order: 7; }
+
+.d2d-modal {
+  position: fixed; inset: 0; z-index: 60; display: flex; justify-content: center; align-items: flex-start;
+  padding: var(--sp-6) var(--sp-4); overflow-y: auto; background: var(--scrim);
+}
+.d2d-modal__ruta {
+  width: 100%; max-width: 760px; background: var(--canvas); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md); overflow: hidden;
+}
+.d2d-modal__ruta .d2d-topbar { position: sticky; top: 0; }
+@media (max-width: 600px) {
+  .d2d-modal { padding: 0; }
+  .d2d-modal__ruta { max-width: none; min-height: 100%; border-radius: 0; }
+  .d2d-allalgh__val--admin { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+}
 
 /* Kommentar i snabbpanelen: en egen rad över hela bredden, under namn/telefon. */
 .d2d-lag-panel--komm { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; }
@@ -1173,9 +1232,7 @@
   resize: vertical;
 }
 @media (max-width: 480px) {
-  .d2dlag .d2d-alla__val { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
-  .d2dlag__tabell { font-size: var(--text-xs); padding-left: var(--sp-2); padding-right: var(--sp-2); }
   .d2d-lag-panel--komm { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .d2d-lag-panel--komm .d2d-lag-panel__komm { order: 0; }
-  .d2d-lag-panel--komm .d2d-lag-panel__oppna { order: 6; }
+  .d2d-lag-panel--komm .d2d-lag-panel__oppna { order: 7; }
 }
