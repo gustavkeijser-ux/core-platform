@@ -996,7 +996,13 @@ const PROJ_STATUS: Record<string, { label: string; color: string }> = {
 };
 const projDef = (s: string | null) => s && PROJ_STATUS[s] ? { key: s, ...PROJ_STATUS[s] } as never : undefined;
 /** Scrive får egen färg i stapeln så den skiljs från Såld. */
-const statusFarg = (st: SaljStatus) => `var(--hue-${st.key === "scrive" ? "violet" : st.color}, var(--hue-slate))`;
+/** Färgen för en status i staplar och förklaringar: i första hand
+ *  säljarvyns statusfärg (`--d2d-st-<status>` i styles/d2d.css), annars
+ *  färgen från status_definitions (hex eller hue-namn). */
+const statusFarg = (st: SaljStatus) => {
+  const reserv = st.color?.startsWith("#") ? st.color : `var(--hue-${st.color || "slate"}, var(--hue-slate))`;
+  return `var(--d2d-st-${st.key}, ${reserv})`;
+};
 
 function nyckeltal(s: StatusSumma) {
   const total = s.lagenheter;
