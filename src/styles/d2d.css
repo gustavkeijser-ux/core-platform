@@ -3,6 +3,77 @@
    Äldre D2D-CSS ligger kvar i src/app.css tills Master flyttar ut den.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Statusfärger (Gustavs val, okt 2026) ────────────────────────────────
+   En variabel per lägenhetsstatus. Samma hexkoder ligger i
+   status_definitions.color så CRM:ets statuspiller (StatusPill) visar
+   exakt samma färg. Används av STATUS_CONFIG i D2DSellerApp.tsx, av
+   projektbyggarens staplar (statusFarg) och av klasserna d2d-status--<status>.
+   --d2d-st-<status>-ink är textfärgen på helfärgad bakgrund: ljusa färger
+   får mörk text, mörka får vit. Statusar utan eget val (Inte säljbar,
+   Intresserad, Ånger) behåller systemets färgtoner. */
+:root {
+  --d2d-st-sald:             #6EC475;
+  --d2d-st-scrive:           #B2BEB5;
+  --d2d-st-aterkoppling:     #F39A3D;
+  --d2d-st-befintlig_telia:  #714693;
+  --d2d-st-inte_hemma:       #C4756E;
+  --d2d-st-kall_kund:        #756EC4;
+  --d2d-st-inte_intresserad: #FF0800;
+  --d2d-st-ej_knackad:       #414A4C;
+  --d2d-st-inte_saljbar:     var(--hue-zinc);
+  --d2d-st-intresserad:      var(--hue-green);
+  --d2d-st-anger:            var(--hue-red);
+
+  --d2d-st-sald-ink:             #14213D;
+  --d2d-st-scrive-ink:           #14213D;
+  --d2d-st-aterkoppling-ink:     #14213D;
+  --d2d-st-befintlig_telia-ink:  #fff;
+  --d2d-st-inte_hemma-ink:       #fff;
+  --d2d-st-kall_kund-ink:        #fff;
+  --d2d-st-inte_intresserad-ink: #fff;
+  --d2d-st-ej_knackad-ink:       #fff;
+  --d2d-st-inte_saljbar-ink:     #14213D;
+  --d2d-st-intresserad-ink:      #fff;
+  --d2d-st-anger-ink:            #fff;
+}
+
+/* Varje status sätter sin färg (--lag-st) och textfärg (--lag-ink) på
+   elementet: lägenhetskortet, statusknappen eller pillret. */
+.d2d-status--sald             { --lag-st: var(--d2d-st-sald);             --lag-ink: var(--d2d-st-sald-ink); }
+.d2d-status--scrive           { --lag-st: var(--d2d-st-scrive);           --lag-ink: var(--d2d-st-scrive-ink); }
+.d2d-status--aterkoppling     { --lag-st: var(--d2d-st-aterkoppling);     --lag-ink: var(--d2d-st-aterkoppling-ink); }
+.d2d-status--befintlig_telia  { --lag-st: var(--d2d-st-befintlig_telia);  --lag-ink: var(--d2d-st-befintlig_telia-ink); }
+.d2d-status--inte_hemma       { --lag-st: var(--d2d-st-inte_hemma);       --lag-ink: var(--d2d-st-inte_hemma-ink); }
+.d2d-status--kall_kund        { --lag-st: var(--d2d-st-kall_kund);        --lag-ink: var(--d2d-st-kall_kund-ink); }
+.d2d-status--inte_intresserad { --lag-st: var(--d2d-st-inte_intresserad); --lag-ink: var(--d2d-st-inte_intresserad-ink); }
+.d2d-status--ej_knackad       { --lag-st: var(--d2d-st-ej_knackad);       --lag-ink: var(--d2d-st-ej_knackad-ink); }
+.d2d-status--inte_saljbar     { --lag-st: var(--d2d-st-inte_saljbar);     --lag-ink: var(--d2d-st-inte_saljbar-ink); }
+.d2d-status--intresserad      { --lag-st: var(--d2d-st-intresserad);      --lag-ink: var(--d2d-st-intresserad-ink); }
+.d2d-status--anger            { --lag-st: var(--d2d-st-anger);            --lag-ink: var(--d2d-st-anger-ink); }
+
+/* Statuspillret på ett lägenhetskort (ersätter hue-klasserna i app.css):
+   tonad bakgrund med texten i statusfärgen blandad mot --ink så den läses
+   i både ljust och mörkt läge. Helfärgat på statusfärgade kort, se
+   "Fastighetsvyn / Alla adresser" nedan. */
+.d2d-lag-kort[class*="d2d-status--"] .d2d-lag-card__badge {
+  background: color-mix(in srgb, var(--lag-st) 16%, transparent);
+  color: color-mix(in srgb, var(--lag-st) 70%, var(--ink));
+}
+
+/* Statusknapparna i statusväljaren: vald knapp får ram i statusfärgen och
+   tonad bakgrund; Såld, Signera med Scrive och Ej knackad är helfärgade. */
+.d2d-status-btn[class*="d2d-status--"].d2d-status-btn--active {
+  border-color: var(--lag-st);
+  color: color-mix(in srgb, var(--lag-st) 70%, var(--ink));
+  background: color-mix(in srgb, var(--lag-st) 14%, transparent);
+}
+.d2d-status-btn.d2d-status--sald.d2d-status-btn--active,
+.d2d-status-btn.d2d-status--scrive.d2d-status-btn--active,
+.d2d-status-btn.d2d-status--ej_knackad.d2d-status-btn--active {
+  color: var(--lag-ink);
+  background: var(--lag-st);
+}
+
 /* ── Feedback i säljarvyn (fliken Feedback) ─────────────────────────────── */
 
 .d2d-fb__form {
@@ -723,8 +794,6 @@
   font-size: var(--text-xs);
   color: var(--ink-muted);
 }
-.d2d-status--sky.d2d-status-btn--active  { border-color: var(--hue-sky);  color: color-mix(in srgb, var(--hue-sky) 75%, var(--ink)); background: color-mix(in srgb, var(--hue-sky) 12%, transparent); }
-.d2d-status--zinc.d2d-status-btn--active { border-color: var(--hue-zinc); color: var(--ink-muted); background: color-mix(in srgb, var(--hue-zinc) 18%, transparent); }
 @media (max-width: 480px) {
   .d2d-alla__val { flex-direction: column; gap: var(--sp-2); }
   .d2d-detail .d2d-lag-row .d2d-lag-row__fast { order: 1; }
@@ -778,8 +847,17 @@
 .d2d-bindning__etikett { font-size: var(--text-sm); color: var(--ink-muted); }
 /* Återkopplingsdatum (bara vid status Återkoppling) */
 .d2d-aterkoppling .formfield { margin: 0; }
-/* Utfall: Inte säljbar i utfallsstapeln */
-.utf__seg--inte_saljbar { background: color-mix(in srgb, var(--hue-zinc) 35%, transparent); color: var(--ink); }
+/* Utfall: utfallsstapeln och förklaringen i statusfärgerna (--d2d-st-*),
+   samma som i säljarvyn. Dubbel klass så reglerna vinner över app.css
+   oavsett i vilken ordning filerna hamnar i bygget. */
+.utf__seg.utf__seg--sald,             .utf__legend i.utf__seg--sald             { background: var(--d2d-st-sald);             color: var(--d2d-st-sald-ink); }
+.utf__seg.utf__seg--scrive,           .utf__legend i.utf__seg--scrive           { background: var(--d2d-st-scrive);           color: var(--d2d-st-scrive-ink); }
+.utf__seg.utf__seg--aterkoppling,     .utf__legend i.utf__seg--aterkoppling     { background: var(--d2d-st-aterkoppling);     color: var(--d2d-st-aterkoppling-ink); }
+.utf__seg.utf__seg--inte_intresserad, .utf__legend i.utf__seg--inte_intresserad { background: var(--d2d-st-inte_intresserad); color: var(--d2d-st-inte_intresserad-ink); }
+.utf__seg.utf__seg--inte_hemma,       .utf__legend i.utf__seg--inte_hemma       { background: var(--d2d-st-inte_hemma);       color: var(--d2d-st-inte_hemma-ink); }
+.utf__seg.utf__seg--befintlig_telia,  .utf__legend i.utf__seg--befintlig_telia  { background: var(--d2d-st-befintlig_telia);  color: var(--d2d-st-befintlig_telia-ink); }
+.utf__seg.utf__seg--kall_kund,        .utf__legend i.utf__seg--kall_kund        { background: var(--d2d-st-kall_kund);        color: var(--d2d-st-kall_kund-ink); }
+.utf__seg.utf__seg--inte_saljbar,     .utf__legend i.utf__seg--inte_saljbar     { background: color-mix(in srgb, var(--d2d-st-inte_saljbar) 35%, transparent); color: var(--ink); }
 
 /* Såld/signerad adress: säljaren som sålde är låst (data.saljare). Byts
    säljaren på fastigheten följer adressen med (ägare) men står kvar som såld
@@ -801,36 +879,26 @@
 }
 
 /* ── Fastighetsvyn / Alla adresser: färgad ram runt varje lägenhetskort ──
-   Statusfärgen (--lag-st) sätts per statusklass på kortet och blir en
-   tydlig 2 px ram runt hela kortet; statuspillret är helfärgat. Bakgrunden
-   är kortets vanliga yta. Ej knackad har den vanliga grå ramen. */
-.d2d-lag-kort.d2d-status--slate  { --lag-st: var(--hue-slate); }
-.d2d-lag-kort.d2d-status--blue   { --lag-st: var(--hue-blue); }
-.d2d-lag-kort.d2d-status--amber  { --lag-st: var(--hue-amber); }
-.d2d-lag-kort.d2d-status--red    { --lag-st: var(--hue-red); }
-.d2d-lag-kort.d2d-status--green,
-.d2d-lag-kort.d2d-status--green-solid { --lag-st: var(--hue-green); }
-.d2d-lag-kort.d2d-status--violet { --lag-st: var(--hue-violet); }
-.d2d-lag-kort.d2d-status--sky    { --lag-st: var(--hue-sky); }
-.d2d-lag-kort.d2d-status--zinc   { --lag-st: var(--hue-zinc); }
-
-.d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--slate) {
+   Statusfärgen (--lag-st) sätts av klassen d2d-status--<status> (överst i
+   filen) och blir en tydlig 2 px ram runt hela kortet; statuspillret är
+   helfärgat med --lag-ink som textfärg. Bakgrunden är kortets vanliga yta.
+   Ej knackad har den vanliga grå ramen men pillret i sin färg. */
+.d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--ej_knackad) {
   border: 2px solid var(--lag-st);
 }
-.d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--slate):hover {
+.d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--ej_knackad):hover {
   border-color: var(--lag-st);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--lag-st) 25%, transparent), var(--shadow-md);
 }
 /* Ej knackad: 2 px också, så korten är lika höga, men i vanlig ramfärg. */
-.d2d-lag-kort.d2d-status--slate { border-width: 2px; }
+.d2d-lag-kort.d2d-status--ej_knackad { border-width: 2px; }
 
-/* Statuspillret helfärgat på statusfärgade kort. */
-.d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--slate) .d2d-lag-card__badge {
+/* Statuspillret helfärgat på korten. */
+.d2d-lag-kort[class*="d2d-status--"]:not(.d2d-status--ej_knackad) .d2d-lag-card__badge,
+.d2d-lag-kort.d2d-status--ej_knackad[class*="d2d-status--"] .d2d-lag-card__badge {
   background: var(--lag-st);
-  color: #fff;
+  color: var(--lag-ink, #fff);
 }
-.d2d-lag-kort.d2d-status--amber[class*="d2d-status--"] .d2d-lag-card__badge,
-.d2d-lag-kort.d2d-status--zinc[class*="d2d-status--"] .d2d-lag-card__badge { color: #14213D; } /* mörk text på gul/grå */
 
 /* Fyrverkerier när säljaren lämnar en såld lägenhet (D2DFyrverkeri.tsx). */
 .d2d-fyrverkeri {
@@ -1186,7 +1254,7 @@
   border-radius: 0;
   box-shadow: inset 3px 0 0 var(--lag-st, transparent);
 }
-.d2d-detail .d2d-lag-table--expander .d2d-lag-kort.d2d-status--slate { box-shadow: none; }
+.d2d-detail .d2d-lag-table--expander .d2d-lag-kort.d2d-status--ej_knackad { box-shadow: none; }
 .d2d-detail .d2d-lag-table--expander .d2d-lag-kort:last-child { border-bottom: 0; }
 .d2d-detail .d2d-lag-table--expander .d2d-lag-kort:hover { background: var(--surface-alt); }
 .d2d-detail .d2d-lag-table--expander .d2d-lag-kort .d2d-lag-row {
