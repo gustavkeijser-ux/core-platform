@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import "@/styles/d2d.css";
 import { BlitzPinnar, usePinnOversikt } from "./D2DLon";
+import { MinaAnger } from "./D2DAnger";
 import { ProfilRad, SaljarProfil, Fyrverkeri, manadsPlacering } from "./D2DProfil";
 
 // =============================================================================
@@ -292,6 +293,9 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
 
       {/* Pinnar och bonustrappa den här månaden (lönemodellen, D2DLon.tsx) */}
       <BlitzPinnar minId={minId} data={pinnData} onOpenProfil={setProfil} />
+
+      {/* Ånger — säljarens egna (admin/kundtjänst: alla per säljare). */}
+      <MinaAnger minId={minId} />
 
       {/* Förra månadens toppsäljare */}
       {hall.forraVinnare.length > 0 && (
