@@ -45,6 +45,8 @@ type Justering = { id: string; belopp: number; kommentar: string; skapadAt: stri
 type SaljareRad = Niva & {
   id: string; namn: string; pinnar: number; vantar: number; affarer: number; affarerVantar: number;
   bonusInklVantar: number;
+  /** Ånger registrerade i perioden för affärer som löneräknats i en tidigare period (dras av i pinnar). */
+  anger?: number; angerPinnar?: number;
   /** Lön (bara på Löner-sidan — Blitz får inte beloppen): provision = pinnar × kr/pinne,
    *  lon = provision + bonus + justeringar. */
   provision?: number; provisionInklVantar?: number; justeringar?: number; lon?: number; lonInklVantar?: number;
@@ -293,7 +295,8 @@ export function PinnKort({ s, trappa, jag, lon, onOpen }: {
       className={`d2d-pinnar__kort${jag ? " d2d-pinnar__kort--jag" : ""}${klar ? " d2d-pinnar__kort--klar" : ""}${onOpen ? " d2d-pinnar__kort--klick" : ""}`}>
       <div className="d2d-pinnar__kort-head">
         <span className="d2d-pinnar__namn">{s.namn}{jag ? " (du)" : ""}</span>
-        <span className="d2d-pinnar__tal">{pn(s.pinnar)}<Paren n={s.vantar} f={pn} /> <small>pinnar</small></span>
+        <span className="d2d-pinnar__tal">{pn(s.pinnar)}<Paren n={s.vantar} f={pn} /> <small>pinnar</small>
+          {!!s.anger && <small className="d2d-loner__neg" title="Ånger på affärer från en tidigare period dras av"> −{pn(s.angerPinnar ?? 0)} ånger</small>}</span>
       </div>
       <div className="d2d-pinnar__stapel" role="progressbar" aria-valuemin={fran} aria-valuemax={till} aria-valuenow={s.pinnar}
         title={`${pn(s.pinnar)} av ${till} pinnar${s.vantar ? ` (+${pn(s.vantar)} Scrive-signerade, räknas när de blir Sålda)` : ""}`}>
@@ -484,6 +487,7 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
           med status <strong>Såld</strong>, den löneperiod de blev sålda; lönen betalas ut {data.modell.utbetalningManaderEfter ?? 1} månad{(data.modell.utbetalningManaderEfter ?? 1) === 1 ? "" : "er"} efter.
           Scrive-signerade som ännu inte är Sålda står inom parentes och ingår bara i den potentiella lönen. Välj <strong>Sålda</strong> för bara den
           riktiga lönen eller <strong>Scrive</strong> för vad de signerade avtalen ger när de blir Sålda. Klicka på en säljare för underlag och justeringar.
+          <strong>Ånger:</strong> ångras en affär i samma löneperiod räknas den inte alls; ångras den efter att perioden gått dras pinnarna av i den period ångern registrerades.
           Modellen ändras under Inställningar → Priser.
         </p>
         <div className="d2dd__chips d2d-loner__urval" role="group" aria-label="Vilka affärer som räknas">
@@ -536,7 +540,8 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
                     <button type="button" className="d2d-loner__tr" role="row" aria-expanded={open} onClick={() => oppna(key)}>
                       <span className="d2d-loner__namn">{s.namn}</span>
                       <span>{v.affarer}<Paren n={v.affarerP} /></span>
-                      <span className="d2d-loner__pinnar">{pn(v.pinnar)}<Paren n={v.pinnarP} f={pn} /></span>
+                      <span className="d2d-loner__pinnar">{pn(v.pinnar)}<Paren n={v.pinnarP} f={pn} />
+                        {!!s.anger && <small className="d2d-loner__neg" title={`${s.anger} ånger från tidigare period dras av`}> −{pn(s.angerPinnar ?? 0)} ånger</small>}</span>
                       <span>{kr(v.provision)}</span>
                       <span className={v.bonus > 0 ? "d2d-loner__bonus--ja" : undefined}>
                         {v.bonus > 0 ? kr(v.bonus) : "—"}
