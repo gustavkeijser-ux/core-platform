@@ -1350,3 +1350,9 @@
   .d2d-app .d2dd { max-width: 960px; }
   .d2d-app .d2dd__perioder { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
 }
+
+/* Lägenheter → Importera adresslista (utan projekt) */
+.d2d-totalimport { display: flex; flex-direction: column; gap: var(--sp-2); margin: 0 0 var(--sp-3); }
+.d2d-totalimport__rad { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.d2d-totalimport__hjalp { margin: 0; color: var(--ink-faint); font-size: 13px; max-width: 70ch; }
+.d2d-totalimport__resultat { line-height: 1.5; }
