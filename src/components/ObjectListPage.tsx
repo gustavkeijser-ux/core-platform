@@ -408,6 +408,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   const onDataChangedRef = useRef(onDataChanged);
   onDataChangedRef.current = onDataChanged;
   useEffect(() => {
+    let liveTimer: ReturnType<typeof setTimeout> | null = null;
     const kanal = supabase
       .channel(`records:${objectDef.key}`)
       .on(
@@ -419,14 +420,20 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
           filter: `object_type=eq.${objectDef.key}`,
         },
         () => {
+          // Samla ihop ändringarna: vid massimport kommer tusentals notiser,
+          // och en omladdning per rad överbelastade databasen (13 okt).
           setLiveCount((n) => n + 1);
-          load();
-          onDataChangedRef.current?.();
+          if (liveTimer) clearTimeout(liveTimer);
+          liveTimer = setTimeout(() => {
+            liveTimer = null;
+            load();
+            onDataChangedRef.current?.();
+          }, 4000);
         }
       )
       .subscribe();
 
-    return () => { void supabase.removeChannel(kanal); };
+    return () => { if (liveTimer) clearTimeout(liveTimer); void supabase.removeChannel(kanal); };
     /* eslint-disable-next-line */
   }, [objectDef.key]);
 
