@@ -1236,3 +1236,49 @@
   .d2d-lag-panel--komm .d2d-lag-panel__komm { order: 0; }
   .d2d-lag-panel--komm .d2d-lag-panel__oppna { order: 7; }
 }
+
+/* ── D2D-sälj på dator ───────────────────────────────────────────────────
+   Mobil: bottenmeny som döljs i detaljvyerna (fastighet, lägenhet).
+   Från 1024 px: menyn blir en sidomeny till vänster som alltid syns, och
+   innehållet centreras med en maxbredd så rader och kort inte sträcks ut
+   över hela skärmen. Prefixet .d2d-app ger företräde framför app.css
+   oavsett i vilken ordning filerna laddas. */
+.d2d-app .d2d-bottom-nav--detalj { display: none; }
+@media (min-width: 1024px) {
+  body .d2d-app {
+    display: grid;
+    grid-template-columns: 216px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "head head" "nav main";
+  }
+  .d2d-app .d2d-header { grid-area: head; }
+  .d2d-app .d2d-content { grid-area: main; }
+  .d2d-app .d2d-bottom-nav,
+  .d2d-app .d2d-bottom-nav.d2d-bottom-nav--detalj {
+    grid-area: nav;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--sp-3);
+    border-top: 0;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+  }
+  .d2d-app .d2d-nav-btn {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    padding: 10px var(--sp-3);
+    border-radius: var(--r-md);
+    font-size: var(--text-sm);
+    text-align: left;
+  }
+  .d2d-app .d2d-nav-btn:hover { background: var(--overlay-soft); }
+  .d2d-app .d2d-nav-btn--active { background: color-mix(in srgb, var(--brand) 10%, transparent); }
+  /* :where() = ingen specificitet, så vyer med egen maxbredd behåller den. */
+  :where(.d2d-app .d2d-content) > * { width: 100%; max-width: 1200px; margin-inline: auto; }
+  /* Översikten: bredare än mobilkolumnen, periodknapparna på en rad. */
+  .d2d-app .d2dd { max-width: 960px; }
+  .d2d-app .d2dd__perioder { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+}
