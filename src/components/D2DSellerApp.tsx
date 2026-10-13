@@ -2121,7 +2121,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
   // Projektets fastighetslista behåller bottenmenyn (den är en lista, inte en detaljvy).
 
   return (
-    <div className="d2d-app" style={brandVars as CSSProperties}>
+    <div className={`d2d-app${inDetail ? " d2d-app--detalj" : ""}`} style={brandVars as CSSProperties}>
       <Fyrverkeri />
       {/* Top header */}
       <div className="d2d-header">
@@ -2156,9 +2156,9 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
         {renderContent()}
       </div>
 
-      {/* Bottom nav (döljs i detaljvy) */}
-      {!inDetail && (
-        <nav className="d2d-bottom-nav">
+      {/* Menyn: bottenmeny på mobil (döljs i detaljvy), sidomeny på dator
+          (syns alltid — se styles/d2d.css, "D2D-sälj på dator"). */}
+      <nav className={`d2d-bottom-nav${inDetail ? " d2d-bottom-nav--detalj" : ""}`} aria-label="D2D-meny">
           <button
             className={`d2d-nav-btn${navTab === "oversikt" ? " d2d-nav-btn--active" : ""}`}
             onClick={() => setView({ kind: "oversikt" })}
@@ -2208,7 +2208,6 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
             Feedback
           </button>
         </nav>
-      )}
     </div>
   );
 }
