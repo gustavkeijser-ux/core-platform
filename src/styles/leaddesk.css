@@ -1,0 +1,176 @@
+/* =============================================================================
+   LeadDesk Talk — telefonpanelen (LeadDeskTalk.tsx). Bara tokens, inga hårdkodade färger.
+   ========================================================================== */
+
+/* Knappen ligger ovanför Feedback-knappen nere till höger. */
+.ldt-fab {
+  position: fixed; right: var(--sp-4); bottom: calc(var(--sp-4) + 52px); z-index: 61;
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  padding: 7px 12px 7px 8px; border-radius: var(--r-pill);
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md); cursor: pointer;
+  font-family: var(--font-display); font-weight: 700; font-size: var(--text-sm);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.ldt-fab:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); border-color: var(--brand); }
+.ldt-fab[aria-pressed="true"] { border-color: var(--brand); }
+.ldt-fab__icon {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--brand-tint); color: var(--brand-ink);
+}
+.ldt-fab--samtal .ldt-fab__icon { background: var(--ok-soft); color: var(--ok-ink); animation: ldt-puls 1.6s var(--ease) infinite; }
+.ldt-fab--d2d { bottom: calc(var(--sp-4) + 72px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 1024px) { .ldt-fab--d2d { bottom: var(--sp-4); } }
+@keyframes ldt-puls { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--hue-green) 18%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .ldt-fab--samtal .ldt-fab__icon { animation: none; } }
+
+.ldt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hue-zinc); flex: none; }
+.ldt-fab--redo .ldt-dot, .ldt-dot--redo { background: var(--hue-green); }
+.ldt-fab--samtal .ldt-dot, .ldt-dot--samtal { background: var(--hue-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-green) 20%, transparent); }
+.ldt-fab--ut .ldt-dot, .ldt-dot--ut { background: var(--hue-amber); }
+
+/* Panelen: höger sida. Döljs med visibility så iframen (och samtalet) lever kvar. */
+.ldt-scrim { display: none; }
+.ldt-panel {
+  position: fixed; z-index: 71;
+  right: var(--sp-4); bottom: calc(var(--sp-4) + 100px);
+  width: min(400px, calc(100vw - var(--sp-8)));
+  height: min(720px, calc(100vh - 100px - var(--sp-8)));
+  display: flex; flex-direction: column;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+  opacity: 0; transform: translateY(12px) scale(.98); transform-origin: bottom right;
+  pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur) var(--ease), transform .2s var(--ease), visibility 0s linear .2s;
+}
+.ldt-panel--open {
+  opacity: 1; transform: none; pointer-events: auto; visibility: visible;
+  transition: opacity var(--dur) var(--ease), transform .2s var(--ease), visibility 0s;
+}
+.ldt-panel__head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border);
+}
+.ldt-panel__avatar {
+  width: 34px; height: 34px; border-radius: var(--r-xs); display: grid; place-items: center;
+  background: var(--brand-tint); color: var(--brand-ink); flex: none;
+}
+.ldt-panel__avatar--samtal { background: var(--ok-soft); color: var(--ok-ink); }
+.ldt-panel__titles { flex: 1; min-width: 0; }
+.ldt-panel__title { font-family: var(--font-display); font-weight: 800; font-size: 15px; letter-spacing: var(--tracking-tight); }
+.ldt-panel__sub { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--ink-muted); }
+.ldt-iconbtn {
+  width: 32px; height: 32px; border-radius: var(--r-xs); display: grid; place-items: center;
+  border: 0; background: transparent; color: var(--ink-muted); cursor: pointer;
+}
+.ldt-iconbtn:hover { background: var(--surface-alt); color: var(--ink); }
+.ldt-panel__body {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3);
+}
+
+.ldt-varning, .ldt-info, .ldt-fel {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2);
+  padding: 9px 12px; border-radius: var(--r-box); font-size: var(--text-sm); line-height: var(--leading-body);
+}
+.ldt-varning { background: var(--warn-soft); color: var(--warn-ink); }
+.ldt-info { background: var(--info-soft); color: var(--info-ink); }
+.ldt-fel { background: var(--danger-soft); color: var(--danger-ink); margin-top: var(--sp-2); }
+
+.ldt-lank {
+  border: 0; background: none; padding: 0; cursor: pointer; color: var(--brand-ink);
+  font: inherit; font-size: var(--text-sm); font-weight: 600; text-decoration: none;
+}
+.ldt-lank:hover { text-decoration: underline; }
+
+/* Samtalskortet */
+.ldt-samtal {
+  border: 1px solid var(--border); border-radius: var(--r-row); padding: var(--sp-3);
+  background: var(--surface-sunk); display: flex; flex-direction: column; gap: 6px;
+}
+.ldt-samtal--ringer, .ldt-samtal--kopplat { border-color: color-mix(in srgb, var(--hue-green) 45%, var(--border)); background: var(--ok-soft); }
+.ldt-samtal--fel { border-color: color-mix(in srgb, var(--hue-red) 35%, var(--border)); }
+.ldt-samtal__rad { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-xs); color: var(--ink-muted); }
+.ldt-samtal__riktning { font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-label); font-size: 10.5px; }
+.ldt-samtal__nummer { font-family: var(--font-display); font-weight: 800; font-size: var(--text-xl); letter-spacing: var(--tracking-tight); font-variant-numeric: tabular-nums; }
+.ldt-samtal__post { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-sm); color: var(--ink-soft); }
+.ldt-samtal__hint { font-size: var(--text-sm); color: var(--ink-muted); }
+.ldt-samtal__klar { align-self: flex-end; }
+.ldt-traffar { display: flex; flex-direction: column; gap: 6px; }
+.ldt-traff {
+  display: flex; align-items: center; gap: var(--sp-2); padding: 8px 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm);
+}
+.ldt-traff__text { flex: 1; min-width: 0; }
+.ldt-traff__titel { font-weight: 600; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ldt-traff__meta { font-size: var(--text-xs); color: var(--ink-faint); }
+.ldt-okant { display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; }
+.ldt-okant__form { display: flex; gap: var(--sp-2); width: 100%; }
+.ldt-okant__form .input { flex: 1; min-width: 0; }
+
+/* Talk-iframen */
+.ldt-ram {
+  flex: 1 0 auto; min-height: 460px; display: flex;
+  border: 1px solid var(--border); border-radius: var(--r-row); overflow: hidden; background: var(--surface);
+}
+.ldt-ram__iframe { flex: 1; width: 100%; min-height: 460px; border: 0; background: var(--surface); }
+.ldt-ram__start {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-3);
+  padding: var(--sp-6); text-align: center; color: var(--ink-muted); font-size: var(--text-sm);
+}
+.ldt-ram__start p { margin: 0; max-width: 280px; }
+
+/* Senaste samtal */
+.ldt-senaste { border-top: 1px solid var(--divider); padding-top: var(--sp-2); }
+.ldt-senaste summary { cursor: pointer; font-family: var(--font-display); font-weight: 700; font-size: var(--text-sm); color: var(--ink-soft); padding: 4px 0; }
+.ldt-senaste ul { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: flex; flex-direction: column; }
+.ldt-senaste__rad { padding: 8px 0; border-bottom: 1px solid var(--divider-soft); display: flex; flex-direction: column; gap: 2px; }
+.ldt-senaste__topp { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); }
+.ldt-senaste__nr { font-weight: 600; flex: 1; font-variant-numeric: tabular-nums; }
+.ldt-senaste__tid { font-size: var(--text-xs); color: var(--ink-faint); }
+.ldt-senaste__meta { font-size: var(--text-xs); color: var(--ink-muted); padding-left: 26px; }
+.ldt-senaste__kommentar { font-size: var(--text-xs); color: var(--ink-soft); padding-left: 26px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ldt-senaste__poster { display: flex; flex-wrap: wrap; gap: 4px var(--sp-3); padding-left: 26px; }
+.ldt-senaste__okopplad { font-size: var(--text-xs); color: var(--ink-faint); }
+.ldt-pil {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; flex: none;
+  background: var(--info-soft); color: var(--info-ink);
+}
+.ldt-pil--outbound { background: var(--ok-soft); color: var(--ok-ink); }
+
+/* Ringknappen bredvid telefonfält (fields.tsx) */
+.ldt-falt { display: flex; gap: 6px; align-items: stretch; }
+.ldt-falt > .input { flex: 1; min-width: 0; }
+.ldt-ring {
+  flex: none; width: 38px; border-radius: var(--r-sm); display: grid; place-items: center; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--hue-green) 40%, var(--border-input));
+  background: var(--ok-soft); color: var(--ok-ink);
+  transition: background var(--dur) var(--ease);
+}
+.ldt-ring:hover:not(:disabled) { background: color-mix(in srgb, var(--hue-green) 18%, var(--surface)); }
+.ldt-ring--ut { background: var(--surface); color: var(--ink-muted); border-color: var(--border-input); }
+.ldt-ring:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Inställningar → LeadDesk */
+.ldt-set__ingress { margin: 0 0 var(--sp-3); color: var(--ink-soft); font-size: var(--text-sm); line-height: var(--leading-body); max-width: 640px; }
+.ldt-set .settings-section + .settings-section { margin-top: var(--sp-5); }
+.ldt-set__val { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ldt-set__radio, .ldt-set__check { display: flex; gap: var(--sp-2); align-items: flex-start; font-size: var(--text-sm); color: var(--ink-soft); cursor: pointer; padding: 3px 0; }
+.ldt-set__radio input, .ldt-set__check input { margin-top: 3px; accent-color: var(--brand); }
+.ldt-set__rad { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.ldt-set__fot { display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-3); margin-top: var(--sp-5); }
+.ldt-set__ok { color: var(--ok-ink); font-size: var(--text-sm); font-weight: 600; }
+
+@media (max-width: 860px) {
+  .ldt-scrim { display: block; position: fixed; inset: 0; z-index: 70; background: var(--scrim); }
+  .ldt-panel {
+    left: 0; right: 0; bottom: 0; width: 100%;
+    height: min(92vh, 100dvh - 40px); border-radius: var(--r-xl) var(--r-xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .ldt-fab__text { display: none; }
+  .ldt-fab { padding: 7px; }
+  .ldt-okant__form .input { font-size: 16px; } /* ingen autozoom i iOS */
+  .ldt-set__rad { grid-template-columns: 1fr; }
+}
