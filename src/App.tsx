@@ -11,6 +11,7 @@ import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { DashboardPage } from "@/components/DashboardPage";
 import { AiPanel } from "@/components/AiAssistant";
+import { TalkDock } from "@/components/LeadDeskTalk";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { FeedbackPage } from "@/components/FeedbackPage";
 import { ObjectListPage } from "@/components/ObjectListPage";
@@ -277,9 +278,28 @@ export default function App() {
   // D2D-läge: helt separat vy. Rena dörrsäljare (ingen admin-roll) får
   // ingen väg tillbaka till CRM:et — de ska bara se säljarvyn, temaväxlaren
   // och logga ut, för enkelhetens skull.
+  // LeadDesk Talk (telefonpanelen): samma element på samma plats i båda
+  // grenarna nedan, så att iframen och ett pågående samtal överlever byte
+  // mellan CRM:et och D2D-sälj. Skärmpop öppnar posten som egen sida.
+  const telefon = (
+    <TalkDock
+      key="leaddesk-talk"
+      d2d={view?.kind === "d2d"}
+      currentRecordId={openRecordId}
+      onOpenRecord={(id) => {
+        if (sellerOnly) return; // rena dörrsäljare har ingen postsida
+        if (view?.kind === "d2d") navigate([], { post: id });
+        else setOpenRecordId(id);
+      }}
+    />
+  );
+
   if (view?.kind === "d2d") {
     return (
-      <D2DSellerApp onExitD2D={sellerOnly ? undefined : () => setView({ kind: "dashboard" })} />
+      <>
+        <D2DSellerApp onExitD2D={sellerOnly ? undefined : () => setView({ kind: "dashboard" })} />
+        {telefon}
+      </>
     );
   }
 
@@ -346,6 +366,7 @@ export default function App() {
   const brandVars = branding?.brandColor ? brandCssVars(branding.brandColor, theme === "light") : undefined;
 
   return (
+    <>
     <div className="app-shell" style={brandVars as CSSProperties}>
       <Sidebar
         objects={objects}
@@ -598,5 +619,7 @@ export default function App() {
       />
 
     </div>
+    {telefon}
+    </>
   );
 }
