@@ -28,7 +28,9 @@ type Summa = {
   utanBeteckning: number; fel: string[];
 };
 
-const PARALLELLT = 3;
+/** Rader per anrop och paus mellan fastigheter (håll nere lasten på databasen). */
+const DEL = 40;
+const PAUS_MS = 300;
 
 export function D2DTotalImport() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -71,26 +73,41 @@ export function D2DTotalImport() {
       };
       const lista = Array.from(grupper.values());
       let klara = 0;
-      const kor = async () => {
-        for (;;) {
-          const g = lista.shift();
-          if (!g) return;
+      // En fastighet i taget, i små delar: databasen har 8 s gräns per anrop
+      // och importen ska inte tränga undan säljarna. Importen tål att köras
+      // om — redan inlagda lägenheter uppdateras i stället för att dubbleras.
+      const anropa = async (g: { beteckning: string; ort: string }, rader: Record<string, string>[]) => {
+        for (let forsok = 0; ; forsok++) {
           const { data, error } = await supabase.rpc("d2d_import_fastighet_rader", {
-            p_beteckning: g.beteckning, p_ort: g.ort, p_rows: g.rader,
+            p_beteckning: g.beteckning, p_ort: g.ort, p_rows: rader,
           });
-          klara++;
-          setBusy(`Importerar ${klara} av ${grupper.size} fastigheter…`);
-          if (error) { s.fel.push(`${g.beteckning}: ${error.message}`); continue; }
-          const r = data as Resultat;
-          s.fastigheter++;
-          if (r.ny_fastighet) s.nyaFast++;
-          if (!r.telia_fastighet) s.utanTelia.push(g.beteckning);
-          s.nya += r.imported; s.uppdaterade += r.uppdaterade; s.telia += r.telia_matchade;
-          s.teliaTillagda += r.telia_tillagda; s.statusar += r.statusar_satta;
-          s.okandStatus += r.okanda_status; s.saljareSaknas += r.saljare_saknas;
+          if (!error) return data as Resultat;
+          if (forsok >= 2) throw new Error(error.message);
+          await new Promise((r) => setTimeout(r, 3000 * (forsok + 1)));
         }
       };
-      await Promise.all(Array.from({ length: PARALLELLT }, kor));
+      for (const g of lista) {
+        klara++;
+        setBusy(`Importerar ${klara} av ${grupper.size} fastigheter…`);
+        try {
+          let forsta = true;
+          for (let i = 0; i < g.rader.length; i += DEL) {
+            const r = await anropa(g, g.rader.slice(i, i + DEL));
+            if (forsta) {
+              s.fastigheter++;
+              if (r.ny_fastighet) s.nyaFast++;
+              if (!r.telia_fastighet) s.utanTelia.push(g.beteckning);
+              forsta = false;
+            }
+            s.nya += r.imported; s.uppdaterade += r.uppdaterade; s.telia += r.telia_matchade;
+            s.teliaTillagda += r.telia_tillagda; s.statusar += r.statusar_satta;
+            s.okandStatus += r.okanda_status; s.saljareSaknas += r.saljare_saknas;
+          }
+        } catch (err) {
+          s.fel.push(`${g.beteckning}: ${err instanceof Error ? err.message : "fel"}`);
+        }
+        await new Promise((r) => setTimeout(r, PAUS_MS));
+      }
       setSumma(s);
     } catch (err) {
       setFel(err instanceof Error ? err.message : "Kunde inte läsa filen.");
