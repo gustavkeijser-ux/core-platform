@@ -351,7 +351,7 @@ function LeveransKarta() {
 // Adressradsformulär — matchar exakt fälten som d2d_import_addresses tar emot
 // =============================================================================
 
-type AddrRow = {
+export type AddrRow = {
   lagenhetsnummer: string; postort: string; postnummer: string;
   fastighetsbeteckning: string; portkod: string; gatunamn: string; gatnr: string;
   ingang: string; alias: string; punktid: string; klass: string; cpe_model: string;
@@ -394,7 +394,7 @@ const ADDR_COLUMNS: Array<{ key: keyof AddrRow; label: string }> = [
 
 /** Fritextrubriker i en uppladdad Excel-fil (Falken-formatet m.fl.), normaliserade
  *  till gemener utan omgivande blanksteg, mappade till AddrRow-nycklarna. */
-const EXCEL_RUBRIK_TILL_FALT: Record<string, keyof AddrRow> = {
+export const EXCEL_RUBRIK_TILL_FALT: Record<string, keyof AddrRow> = {
   "lägenhetsnummer": "lagenhetsnummer",
   "gatunamn": "gatunamn",
   "gatnr": "gatnr",
