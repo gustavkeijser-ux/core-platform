@@ -73,9 +73,9 @@ function d2dSegsFromView(v: D2DView): string[] {
   }
 }
 
-type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "inte_saljbar" | "befintlig_telia" | "intresserad" | "sald" | "scrive" | "kall_kund" | "anger";
+export type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "inte_saljbar" | "befintlig_telia" | "intresserad" | "sald" | "scrive" | "kall_kund" | "anger";
 
-const STATUS_CONFIG: Record<KnockStatus, { label: string; color: string; cssClass: string }> = {
+export const STATUS_CONFIG: Record<KnockStatus, { label: string; color: string; cssClass: string }> = {
   ej_knackad:       { label: "Ej knackad",       color: "var(--hue-slate)",  cssClass: "d2d-status--slate" },
   inte_hemma:       { label: "Inte hemma",       color: "var(--hue-blue)",   cssClass: "d2d-status--blue" },
   aterkoppling:     { label: "Återkoppling",     color: "var(--hue-amber)",  cssClass: "d2d-status--amber" },
@@ -127,7 +127,7 @@ const EJ_INTRESSERAD_REASONS: Array<{ key: string; label: string }> = [
  *  överallt en lägenhet visas i säljarvyn så säljaren aldrig behöver gissa
  *  vilken dörr en rad i en lista syftar på. Faller tillbaka till bara
  *  lägenhetsnumret om adressfälten saknas (t.ex. äldre poster). */
-function formatLagenhetAdress(data: Record<string, unknown>, title: string | null | undefined): string {
+export function formatLagenhetAdress(data: Record<string, unknown>, title: string | null | undefined): string {
   const gatuadress = [data.gatunamn, data.gatunummer].filter(Boolean).join(" ");
   const medIngang = data.ingang
     ? `${gatuadress}${gatuadress ? ", " : ""}ingång ${String(data.ingang)}`
@@ -138,7 +138,7 @@ function formatLagenhetAdress(data: Record<string, unknown>, title: string | nul
 /** Sorterar lägenheter i gångordning: gatunamn, gatunummer (1, 2, 3 …),
  *  ingång (A, B, C …) och sist lägenhetsnummer (1001, 1002, 1101 …).
  *  Numerisk jämförelse så 2 < 10 och 1002 < 1101, inte strängordning. */
-function jamforLagenheter(a: RecordRow, b: RecordRow): number {
+export function jamforLagenheter(a: RecordRow, b: RecordRow): number {
   const da = a.data as Record<string, unknown>;
   const db = b.data as Record<string, unknown>;
   const cmp = (x: unknown, y: unknown) =>
@@ -725,7 +725,7 @@ const PROGRESS_ORDNING: KnockStatus[] = [
  *  lägenhet med en annan status än "Ej knackad" är en bit av baren i
  *  statusens färg; Såld = grön. Under baren en förklaring med antal per
  *  status (bara de som finns). */
-function FastighetProgress({ lagenheter }: { lagenheter: RecordRow[] }) {
+export function FastighetProgress({ lagenheter }: { lagenheter: RecordRow[] }) {
   const total = lagenheter.length;
   if (total === 0) return null;
   const antal: Partial<Record<KnockStatus, number>> = {};
@@ -784,7 +784,7 @@ function FastighetProgress({ lagenheter }: { lagenheter: RecordRow[] }) {
  *  Inte hemma och −/+ knackningar. Används både på en fastighet och i
  *  "Alla adresser". Namn/telefon/knackningar sparas direkt härifrån och
  *  speglas i `lagenheter` via `setLagenheter` (progressbaren följer med). */
-function LagenhetTabell({
+export function LagenhetTabell({
   lagenheter,
   setLagenheter,
   isAdmin,
@@ -793,6 +793,7 @@ function LagenhetTabell({
   ready,
   onOpenLagenhet,
   fastighetNamn,
+  medKommentar = false,
 }: {
   lagenheter: RecordRow[];
   setLagenheter: Dispatch<SetStateAction<RecordRow[]>>;
@@ -804,25 +805,33 @@ function LagenhetTabell({
   onOpenLagenhet: (id: string) => void;
   /** Visas som egen rad under adressen (t.ex. fastighet · ort i "Alla adresser"). */
   fastighetNamn?: (lagId: string) => string;
+  /** Visa även ett kommentarsfält i snabbpanelen (CRM:ets Lägenheter). */
+  medKommentar?: boolean;
 }) {
   // Namn och telefon per lägenhet (kund_namn, kund_telefon) — redigeras
   // direkt i kortet. Lokalt värde medan säljaren skriver; sparas när fältet
   // lämnas.
   const [telefoner, setTelefoner] = useState<Record<string, string>>({});
   const [namn, setNamn] = useState<Record<string, string>>({});
-  // Fyll de lokala fälten när listan laddas (nya id:n) — pågående
-  // inmatning i redan kända rader rörs inte.
+  const [kommentarer, setKommentarer] = useState<Record<string, string>>({});
+  // Fyll de lokala fälten när listan laddas (nya id:n) eller när det
+  // sparade värdet ändrats utifrån (t.ex. inne på lägenheten) — pågående
+  // inmatning i rader vars sparade värde är oförändrat rörs inte.
+  const sparatRef = useRef<Record<string, { namn: string; tel: string; komm: string }>>({});
   useEffect(() => {
-    setTelefoner((prev) => {
-      const next = { ...prev };
-      for (const l of lagenheter) if (!(l.id in next)) { const t = (l.data as Record<string, unknown>).kund_telefon; next[l.id] = t ? String(t) : ""; }
-      return next;
-    });
-    setNamn((prev) => {
-      const next = { ...prev };
-      for (const l of lagenheter) if (!(l.id in next)) { const t = (l.data as Record<string, unknown>).kund_namn; next[l.id] = t ? String(t) : ""; }
-      return next;
-    });
+    const nyNamn: Record<string, string> = {}, nyTel: Record<string, string> = {}, nyKomm: Record<string, string> = {};
+    for (const l of lagenheter) {
+      const d = l.data as Record<string, unknown>;
+      const nu = { namn: d.kund_namn ? String(d.kund_namn) : "", tel: d.kund_telefon ? String(d.kund_telefon) : "", komm: d.kommentar ? String(d.kommentar) : "" };
+      const forra = sparatRef.current[l.id];
+      if (!forra || forra.namn !== nu.namn) nyNamn[l.id] = nu.namn;
+      if (!forra || forra.tel !== nu.tel) nyTel[l.id] = nu.tel;
+      if (!forra || forra.komm !== nu.komm) nyKomm[l.id] = nu.komm;
+      sparatRef.current[l.id] = nu;
+    }
+    if (Object.keys(nyNamn).length) setNamn((prev) => ({ ...prev, ...nyNamn }));
+    if (Object.keys(nyTel).length) setTelefoner((prev) => ({ ...prev, ...nyTel }));
+    if (Object.keys(nyKomm).length) setKommentarer((prev) => ({ ...prev, ...nyKomm }));
   }, [lagenheter]);
   const [sparFel, setSparFel] = useState<string | null>(null);
 
@@ -836,7 +845,7 @@ function LagenhetTabell({
     ));
   }, []);
 
-  const sparaText = useCallback(async (lagId: string, key: "kund_telefon" | "kund_namn", varde: string, tidigare: string) => {
+  const sparaText = useCallback(async (lagId: string, key: "kund_telefon" | "kund_namn" | "kommentar", varde: string, tidigare: string) => {
     const nytt = varde.trim();
     if (nytt === tidigare.trim()) return;
     try {
@@ -845,7 +854,7 @@ function LagenhetTabell({
       setSparFel(null);
     } catch (e) {
       // Återställ till det sparade värdet om det inte gick
-      const setter = key === "kund_telefon" ? setTelefoner : setNamn;
+      const setter = key === "kund_telefon" ? setTelefoner : key === "kommentar" ? setKommentarer : setNamn;
       setter((prev) => ({ ...prev, [lagId]: tidigare }));
       setSparFel(e instanceof DataError ? e.message : "Kunde inte spara — kontrollera uppkopplingen.");
     }
@@ -930,6 +939,7 @@ function LagenhetTabell({
                   const sparatNamn = lagData.kund_namn ? String(lagData.kund_namn) : "";
                   const telefon = telefoner[lag.id] ?? sparadTelefon;
                   const namnVarde = namn[lag.id] ?? sparatNamn;
+                  const kommVarde = kommentarer[lag.id] ?? kommentar;
                   const telHref = telefonLank(telefon);
                   const adressText = formatLagenhetAdress(lagData, lag.title);
                   const nKnack = Number(lagData.antal_knackningar);
@@ -1004,7 +1014,7 @@ function LagenhetTabell({
                       )}
                     </div>
 
-                    <div className="d2d-lag-panel">
+                    <div className={`d2d-lag-panel${medKommentar ? " d2d-lag-panel--komm" : ""}`}>
                       <label className="d2d-lag-panel__falt">
                         <span>Namn</span>
                         <input
@@ -1050,6 +1060,19 @@ function LagenhetTabell({
                           <span className="d2d-knack__text">{knack === 1 ? "knackning" : "knackningar"}</span>
                         </div>
                       </div>
+                      {medKommentar && (
+                        <label className="d2d-lag-panel__falt d2d-lag-panel__komm">
+                          <span>Kommentar</span>
+                          <textarea
+                            className="d2d-lag-tel__input d2d-lag-panel__textarea"
+                            rows={2}
+                            value={kommVarde}
+                            placeholder="Kommentar"
+                            onChange={(e) => setKommentarer((prev) => ({ ...prev, [lag.id]: e.target.value }))}
+                            onBlur={(e) => { void sparaText(lag.id, "kommentar", e.target.value, kommentar); }}
+                          />
+                        </label>
+                      )}
                       <button type="button" className="btn btn--ghost btn--sm d2d-lag-panel__oppna" onClick={oppna}>
                         Öppna lägenheten →
                       </button>
@@ -1209,7 +1232,7 @@ function FastighetsDetalj({
 // =============================================================================
 
 /** Ordning i statusfiltret: det som kräver handling först. */
-const ALLA_STATUS_ORDNING: KnockStatus[] = [
+export const ALLA_STATUS_ORDNING: KnockStatus[] = [
   "ej_knackad", "inte_hemma", "aterkoppling", "scrive", "sald", "anger", "intresserad", "befintlig_telia", "kall_kund", "inte_intresserad", "inte_saljbar",
 ];
 
@@ -1407,7 +1430,7 @@ function AllaAdresser({ minId, isAdmin, onBack, onOpenLagenhet }: {
 // Lägenhetformulär (knackvy)
 // =============================================================================
 
-function LagenhetForm({
+export function LagenhetForm({
   lagenhetId,
   fastighetId,
   objectDef,
