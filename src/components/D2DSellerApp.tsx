@@ -1,5 +1,6 @@
 import { VtSaljarPanel } from "./D2DVtBestallningar";
 import { AngerPanel } from "./D2DAnger";
+import { D2DAllaLagenheter } from "./D2DAllaLagenheter";
 import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -528,13 +529,13 @@ function ProjektLista({ onOpen, onAlla }: { onOpen: (id: string) => void; onAlla
 
   return (
     <div className="d2d-list">
-      {/* Alla säljarens adresser i en lista, oavsett projekt — med filter
-          på status, ort och fastighet. Samma kort som på en fastighet. */}
+      {/* Alla lägenheter i en tabell, oavsett projekt — med filter. Klick på en
+          rad fäller ut kortet (namn, telefon, kommentar, status). */}
       <button type="button" className="btn btn--brand d2d-alla__knapp" onClick={onAlla}>
         <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M3 8l7-5 7 5v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M8 17v-5h4v5"/>
         </svg>
-        Alla adresser
+        Alla lägenheter
       </button>
       <div className="d2d-list__header">
         <h2>Välj projekt</h2>
@@ -794,6 +795,8 @@ export function LagenhetTabell({
   onOpenLagenhet,
   fastighetNamn,
   medKommentar = false,
+  expanderbar = false,
+  onSalj,
 }: {
   lagenheter: RecordRow[];
   setLagenheter: Dispatch<SetStateAction<RecordRow[]>>;
@@ -805,9 +808,16 @@ export function LagenhetTabell({
   onOpenLagenhet: (id: string) => void;
   /** Visas som egen rad under adressen (t.ex. fastighet · ort i "Alla adresser"). */
   fastighetNamn?: (lagId: string) => string;
-  /** Visa även ett kommentarsfält i snabbpanelen (CRM:ets Lägenheter). */
+  /** Visa även ett kommentarsfält i snabbpanelen. */
   medKommentar?: boolean;
+  /** Tabell där klick på raden fäller ut kortet (namn, telefon, kommentar,
+   *  status) i stället för att öppna lägenheten — "Alla lägenheter". */
+  expanderbar?: boolean;
+  /** Anropas när status sätts till Såld/Scrive i det utfällda kortet, så
+   *  att tjänster och kunduppgifter kan fyllas i (fönster med lägenheten). */
+  onSalj?: (lagId: string) => void;
 }) {
+  const [utfalld, setUtfalld] = useState<string | null>(null);
   // Namn och telefon per lägenhet (kund_namn, kund_telefon) — redigeras
   // direkt i kortet. Lokalt värde medan säljaren skriver; sparas när fältet
   // lämnas.
@@ -895,6 +905,24 @@ export function LagenhetTabell({
     }
   }, [patchaLokalt]);
 
+  /** Status direkt från det utfällda kortet. Senast kontakt = nu, som inne
+   *  på lägenheten. Såld/Scrive öppnar fönstret för tjänster och kunduppgifter. */
+  const andraStatus = useCallback(async (lag: RecordRow, nyStatus: string) => {
+    if (nyStatus === lag.status) { if (nyStatus === "sald" || nyStatus === "scrive") onSalj?.(lag.id); return; }
+    const d = lag.data as Record<string, unknown>;
+    const patch: Record<string, unknown> = nyStatus === "ej_knackad" ? {} : { senast_kontakt: new Date().toISOString() };
+    const tidigare = lag.status;
+    patchaLokalt(lag.id, patch, nyStatus);
+    try {
+      await updateRecord(lag.id, patch, nyStatus);
+      setSparFel(null);
+      if (nyStatus === "sald" || nyStatus === "scrive") onSalj?.(lag.id);
+    } catch (e) {
+      patchaLokalt(lag.id, { senast_kontakt: d.senast_kontakt ?? null }, tidigare);
+      setSparFel(e instanceof DataError ? e.message : "Kunde inte spara — kontrollera uppkopplingen.");
+    }
+  }, [patchaLokalt, onSalj]);
+
   const returnRow = useReturnToRow(listKey, ready);
 
   return (
@@ -912,7 +940,7 @@ export function LagenhetTabell({
                 det vanligaste. Klick på huvudraden öppnar lägenheten som förut. */}
             {sparFel && <div className="d2d-lag-fel" role="alert">{sparFel}</div>}
             {lagenheter.length > 0 && (
-              <div className={`d2d-lag-table${isAdmin ? " d2d-lag-table--admin" : ""}`}>
+              <div className={`d2d-lag-table${isAdmin ? " d2d-lag-table--admin" : ""}${expanderbar ? " d2d-lag-table--expander" : ""}`}>
                 <div className="d2d-lag-table__head" aria-hidden="true">
                   <span />
                   {isAdmin && <span>Säljare</span>}
@@ -945,19 +973,22 @@ export function LagenhetTabell({
                   const nKnack = Number(lagData.antal_knackningar);
                   const knack = Number.isFinite(nKnack) && nKnack > 0 ? nKnack : 0;
                   const oppna = () => { rememberRow(listKey, lag.id); onOpenLagenhet(lag.id); };
+                  const arUtfalld = !expanderbar || utfalld === lag.id;
+                  const klickRad = expanderbar ? () => { rememberRow(listKey, lag.id); setUtfalld((u) => (u === lag.id ? null : lag.id)); } : oppna;
                   // Raden är en div (inte button) eftersom den innehåller
                   // interaktiva element (ringknappen) — de får inte ligga
                   // inuti en knapp.
                   return (
-                    <div key={lag.id} className={`d2d-lag-kort ${cfg.cssClass}`}>
+                    <div key={lag.id} className={`d2d-lag-kort ${cfg.cssClass}${expanderbar && arUtfalld ? " d2d-lag-kort--utfalld" : ""}`}>
                     <div
                       {...returnRow(lag.id)}
                       role="button"
                       tabIndex={0}
                       className="d2d-lag-row"
-                      onClick={oppna}
-                      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); oppna(); } }}
+                      onClick={klickRad}
+                      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); klickRad(); } }}
                       aria-label={adressText}
+                      aria-expanded={expanderbar ? arUtfalld : undefined}
                     >
                       <span className="d2d-lag-row__icon" style={{ "--st": cfg.color } as CSSProperties} aria-hidden="true">
                         <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -1014,7 +1045,7 @@ export function LagenhetTabell({
                       )}
                     </div>
 
-                    <div className={`d2d-lag-panel${medKommentar ? " d2d-lag-panel--komm" : ""}`}>
+                    {arUtfalld && <div className={`d2d-lag-panel${medKommentar ? " d2d-lag-panel--komm" : ""}`}>
                       <label className="d2d-lag-panel__falt">
                         <span>Namn</span>
                         <input
@@ -1073,10 +1104,26 @@ export function LagenhetTabell({
                           />
                         </label>
                       )}
+                      {/* Utfällt kort: status direkt. Såld/Scrive öppnar fönstret för
+                          tjänster och kunduppgifter. Vid ånger byter bara admin status. */}
+                      {expanderbar && (st !== "anger" || isAdmin) && (
+                        <div className="d2d-status-picker d2d-lag-panel__status" role="group" aria-label="Status">
+                          {(Object.keys(STATUS_CONFIG) as KnockStatus[]).filter((k) => !HIDDEN_STATUS_PICKS.has(k)).map((k) => (
+                            <button key={k} type="button"
+                              className={`d2d-status-btn ${STATUS_CONFIG[k].cssClass}${st === k ? " d2d-status-btn--active" : ""}`}
+                              onClick={() => { void andraStatus(lag, k); }}>
+                              {STATUS_CONFIG[k].label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {expanderbar && st === "anger" && (
+                        <span className="d2d-anger-tag d2d-lag-panel__anger">Kunden har ångrat sig</span>
+                      )}
                       <button type="button" className="btn btn--ghost btn--sm d2d-lag-panel__oppna" onClick={oppna}>
                         Öppna lägenheten →
                       </button>
-                    </div>
+                    </div>}
                     </div>
                   );
                 })}
@@ -1235,196 +1282,6 @@ function FastighetsDetalj({
 export const ALLA_STATUS_ORDNING: KnockStatus[] = [
   "ej_knackad", "inte_hemma", "aterkoppling", "scrive", "sald", "anger", "intresserad", "befintlig_telia", "kall_kund", "inte_intresserad", "inte_saljbar",
 ];
-
-/** Alla adresser som är tilldelade den inloggade säljaren (säljare eller
- *  ägare = jag), oavsett projekt. Uppbyggd som fastighetsvyn — progressbar
- *  och samma lägenhetskort (namn, telefon, Inte hemma, knackningar) — men
- *  med filter på status, ort och fastighet överst. */
-function AllaAdresser({ minId, isAdmin, onBack, onOpenLagenhet }: {
-  minId: string | null;
-  isAdmin: boolean;
-  onBack: () => void;
-  onOpenLagenhet: (id: string) => void;
-}) {
-  const [lagenheter, setLagenheter] = useState<RecordRow[]>([]);
-  const [fastFor, setFastFor] = useState<Map<string, string>>(new Map());
-  const [fastigheter, setFastigheter] = useState<Map<string, RecordRow>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<KnockStatus | "alla">("alla");
-  const [ort, setOrt] = useState("alla");
-  const [fastighet, setFastighet] = useState("alla");
-
-  useEffect(() => {
-    if (!minId) return;
-    (async () => {
-      setLoading(true);
-      try {
-        // Direkt mot records: list_records_filtered kan inte filtrera på
-        // ägare. RLS gör ändå att en ren säljare bara ser sina egna rader;
-        // villkoret här gör att även admin ser just sina.
-        const { data } = await supabase
-          .from("records")
-          .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
-          .eq("object_type", "d2d_lagenhet")
-          .or(`owner_user_id.eq.${minId},data->>saljare.eq.${minId}`)
-          .is("deleted_at", null)
-          .limit(1000);
-        const rader = ((data ?? []) as RecordRow[]).sort(jamforLagenheter);
-        setLagenheter(rader);
-
-        // Lägenhet → fastighet (för filtret och raden under adressen).
-        const ff = new Map<string, string>();
-        for (let i = 0; i < rader.length; i += 200) {
-          const ids = rader.slice(i, i + 200).map((l) => l.id);
-          const { data: rels } = await supabase.from("relationships")
-            .select("from_record_id,to_record_id")
-            .eq("rel_type", "d2d_lag_fastighet").in("from_record_id", ids);
-          for (const r of rels ?? []) ff.set(r.from_record_id as string, r.to_record_id as string);
-        }
-        setFastFor(ff);
-        const fastIds = Array.from(new Set(ff.values()));
-        const fm = new Map<string, RecordRow>();
-        for (let i = 0; i < fastIds.length; i += 200) {
-          const { data: f } = await supabase.from("records")
-            .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
-            .in("id", fastIds.slice(i, i + 200)).is("deleted_at", null);
-          for (const r of (f ?? []) as RecordRow[]) fm.set(r.id, r);
-        }
-        setFastigheter(fm);
-      } catch {
-        // tyst
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [minId]);
-
-  const ortAv = (l: RecordRow) => {
-    const d = l.data as Record<string, unknown>;
-    const f = fastigheter.get(fastFor.get(l.id) ?? "");
-    const fd = (f?.data ?? {}) as Record<string, unknown>;
-    return String(d.postort || fd.ort || fd.postort || "").trim();
-  };
-  const fastNamn = (l: RecordRow) => fastigheter.get(fastFor.get(l.id) ?? "")?.title ?? "";
-  const statusAv = (l: RecordRow): KnockStatus => {
-    const st = (l.status ?? "ej_knackad") as KnockStatus;
-    return STATUS_CONFIG[st] ? st : "ej_knackad";
-  };
-
-  // Alternativ i ort- och fastighetsfiltren (bara de som finns).
-  const orter = useMemo(() => Array.from(new Set(lagenheter.map(ortAv).filter(Boolean))).sort((a, b) => a.localeCompare(b, "sv")),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lagenheter, fastFor, fastigheter]);
-  const fastVal = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const l of lagenheter) {
-      const fid = fastFor.get(l.id);
-      if (fid && (ort === "alla" || ortAv(l) === ort)) m.set(fid, fastigheter.get(fid)?.title ?? "Fastighet");
-    }
-    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1], "sv", { numeric: true }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lagenheter, fastFor, fastigheter, ort]);
-
-  const antal: Partial<Record<KnockStatus, number>> = {};
-  const filtrerade = lagenheter.filter((l) =>
-    (ort === "alla" || ortAv(l) === ort) && (fastighet === "alla" || fastFor.get(l.id) === fastighet));
-  for (const l of filtrerade) { const k = statusAv(l); antal[k] = (antal[k] ?? 0) + 1; }
-  const visade = filtrerade.filter((l) => status === "alla" || statusAv(l) === status);
-  // Filtret på status/ort/fastighet ligger utanför tabellen: tabellen
-  // sparar via setLagenheter på hela listan, så vi mappar tillbaka.
-  const setVisade: Dispatch<SetStateAction<RecordRow[]>> = (upd) => {
-    setLagenheter((prev) => {
-      const sub = typeof upd === "function" ? upd(prev.filter((l) => visade.some((v) => v.id === l.id))) : upd;
-      const byId = new Map(sub.map((l) => [l.id, l]));
-      return prev.map((l) => byId.get(l.id) ?? l);
-    });
-  };
-
-  if (loading) return <div className="d2d-loading">Laddar adresser…</div>;
-
-  return (
-    <div className="d2d-detail">
-      <div className="d2d-topbar">
-        <button className="d2d-back" onClick={onBack} aria-label="Tillbaka till projekt">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4l-6 6 6 6"/></svg>
-        </button>
-        <div className="d2d-topbar__title">
-          <h2>Alla adresser</h2>
-          <span className="d2d-topbar__sub">{lagenheter.length} {lagenheter.length === 1 ? "adress" : "adresser"}</span>
-        </div>
-      </div>
-
-      {/* Filter: status som bubblor (med antal), ort och fastighet som val. */}
-      <div className="d2d-alla__filter">
-        <div className="d2d-alla__val">
-          <label>
-            <span>Ort</span>
-            <select className="input" value={ort} onChange={(e) => { setOrt(e.target.value); setFastighet("alla"); }}>
-              <option value="alla">Alla orter</option>
-              {orter.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-          <label>
-            <span>Fastighet</span>
-            <select className="input" value={fastighet} onChange={(e) => setFastighet(e.target.value)}>
-              <option value="alla">Alla fastigheter</option>
-              {fastVal.map(([id, namn]) => <option key={id} value={id}>{namn}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="d2d-status-picker d2d-alla__status" role="group" aria-label="Filtrera på status">
-          <button
-            type="button"
-            className={`d2d-status-btn${status === "alla" ? " d2d-status-btn--active" : ""}`}
-            onClick={() => setStatus("alla")}
-          >
-            Alla {filtrerade.length}
-          </button>
-          {ALLA_STATUS_ORDNING.filter((k) => (antal[k] ?? 0) > 0).map((k) => (
-            <button
-              key={k}
-              type="button"
-              className={`d2d-status-btn ${STATUS_CONFIG[k].cssClass}${status === k ? " d2d-status-btn--active" : ""}`}
-              onClick={() => setStatus(status === k ? "alla" : k)}
-            >
-              {STATUS_CONFIG[k].label} {antal[k]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="d2d-lag-list">
-        <div className="d2d-lag-list__header">
-          <h3>Lägenheter</h3>
-          <span>{visade.length === filtrerade.length ? `${visade.length} st` : `${visade.length} av ${filtrerade.length} st`}</span>
-        </div>
-
-        <FastighetProgress lagenheter={filtrerade} />
-
-        {lagenheter.length === 0 && (
-          <div className="d2d-empty">Du har inga tilldelade adresser ännu.</div>
-        )}
-        {lagenheter.length > 0 && visade.length === 0 && (
-          <div className="d2d-empty">Inga adresser matchar filtret.</div>
-        )}
-
-        <LagenhetTabell
-          lagenheter={visade}
-          setLagenheter={setVisade}
-          isAdmin={isAdmin}
-          fastData={{}}
-          listKey="alla"
-          ready={!loading}
-          onOpenLagenhet={onOpenLagenhet}
-          fastighetNamn={(id) => {
-            const l = lagenheter.find((x) => x.id === id);
-            return l ? [fastNamn(l), ortAv(l)].filter(Boolean).join(" · ") : "";
-          }}
-        />
-      </div>
-    </div>
-  );
-}
 
 // =============================================================================
 // Lägenhetformulär (knackvy)
@@ -2245,9 +2102,11 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
 
       case "alla":
         return (
-          <AllaAdresser
+          <D2DAllaLagenheter
             minId={minId}
             isAdmin={isAdmin}
+            objectDef={lagDef}
+            onFieldsChanged={loadMetadata}
             onBack={() => goBack(() => setView({ kind: "fastigheter" }))}
             onOpenLagenhet={(id) => setView({ kind: "lagenhet", id, fastighetId: "", from: "alla" })}
           />
