@@ -1,5 +1,7 @@
 import type { FieldDef, FieldType } from "./data";
 import { getUserName, useTenantUsers } from "./users";
+import { readRoute } from "./route";
+import { RingKnapp } from "@/components/LeadDeskTalk";
 
 /**
  * FÄLTREGISTRET
@@ -292,11 +294,24 @@ export function FieldInput({ field, value, onChange, error }: InputProps) {
           />
         );
 
+      case "phone":
+        // Ringknapp (LeadDesk Talk) bredvid fältet — syns bara när Talk är inställt.
+        return (
+          <div className="ldt-falt">
+            <input
+              id={id} className="input" type="tel"
+              value={String(value ?? "")}
+              onChange={(e) => onChange(e.target.value)}
+            />
+            <RingKnapp nummer={value} recordId={readRoute().query.get("post")} />
+          </div>
+        );
+
       default:
         return (
           <input
             id={id} className="input"
-            type={t === "email" ? "email" : t === "url" ? "url" : t === "phone" ? "tel" : "text"}
+            type={t === "email" ? "email" : t === "url" ? "url" : "text"}
             value={String(value ?? "")}
             onChange={(e) => onChange(e.target.value)}
           />
