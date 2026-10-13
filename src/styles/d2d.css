@@ -1105,3 +1105,48 @@
   .utf__attach-tile { padding: var(--sp-2) var(--sp-3); }
   .utf__attach-tile b { font-size: var(--text-xl); }
 }
+
+/* ── Ånger (D2DAnger) ───────────────────────────────────────────────────── */
+.d2d-anger { margin: var(--sp-3) var(--sp-4) 0; }
+.d2d-anger--aktiv {
+  padding: var(--sp-4); border-radius: var(--r-lg); border: 1px solid var(--danger-ink);
+  background: var(--danger-soft); display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start;
+}
+.d2d-anger__head { display: flex; align-items: center; gap: var(--sp-2); color: var(--danger-ink); font-size: var(--text-sm); }
+.d2d-anger__ikon { font-weight: 800; }
+.d2d-anger__datum { margin-left: auto; font-size: var(--text-xs); font-weight: 600; }
+.d2d-anger__text { margin: 0; font-size: var(--text-sm); color: var(--ink); }
+.d2d-anger__hint { margin: 0; font-size: var(--text-xs); color: var(--ink-muted); line-height: 1.45; }
+.d2d-anger__oppna { margin: var(--sp-2) var(--sp-4) 0; font-size: var(--text-sm); }
+.d2d-anger__oppna .linklike { color: var(--danger-ink); }
+.d2d-anger-tag {
+  display: inline-block; margin-left: var(--sp-2); padding: 1px 8px; border-radius: var(--r-pill);
+  font-size: 11px; font-weight: 700; color: var(--danger-ink); background: var(--danger-soft); vertical-align: middle;
+}
+.d2d-card--anger { opacity: .8; }
+.d2d-anger-stat__tal { color: var(--danger-ink); }
+.d2d-anger-stat__lista { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); }
+.d2d-anger-stat__lista li { display: flex; justify-content: space-between; gap: var(--sp-3); padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.d2d-anger-stat__lista li:last-child { border-bottom: none; }
+.d2d-anger-stat__lista--rader li span:last-child { text-align: right; color: var(--ink-muted); font-size: var(--text-xs); white-space: nowrap; }
+.d2d-anger-stat__lista--rader li span:first-child { font-size: var(--text-xs); color: var(--ink-muted); }
+.d2d-anger-stat__lista--rader strong { color: var(--ink); font-size: var(--text-sm); }
+.d2d-anger-stat__visa { margin-top: var(--sp-2); font-size: var(--text-sm); }
+
+.telia-imp { display: flex; flex-direction: column; gap: var(--sp-3); }
+.telia-imp__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-4); }
+.telia-imp__head h2 { margin: 0 0 4px; font-size: var(--text-lg); }
+.telia-imp__summa { font-size: var(--text-sm); color: var(--ink-soft); }
+.telia-imp__crm { display: inline-flex; flex-direction: column; }
+.telia-imp__sub { font-size: var(--text-xs); color: var(--ink-muted); }
+.telia-imp__atg { font-size: var(--text-xs); font-weight: 700; padding: 2px 8px; border-radius: var(--r-pill); white-space: nowrap; }
+.telia-imp__atg--fel { color: var(--danger-ink); background: var(--danger-soft); }
+.telia-imp__atg--ok { color: var(--hue-green); background: var(--surface-sunk); }
+.telia-imp__atg--varn { color: var(--warn-ink); background: var(--warn-soft); }
+.telia-imp__atg--neutral { color: var(--ink-muted); background: var(--surface-sunk); }
+.telia-imp__knappar { display: flex; justify-content: flex-end; gap: var(--sp-2); align-items: center; }
+.telia-imp__klar { font-size: var(--text-sm); font-weight: 600; color: var(--hue-green); }
+@media (max-width: 600px) {
+  .telia-imp__head { flex-direction: column; }
+  .telia-imp__atg { white-space: normal; }
+}
