@@ -10,7 +10,7 @@ import "@/styles/d2d.css";
 
 /* =============================================================================
    D2D-sälj → Projekt → Alla lägenheter.
-   En tabell över lägenheterna (säljaren: sina tilldelade/sålda, admin: alla)
+   En tabell över lägenheterna (alla säljare ser alla)
    med filter på projekt, ort, fastighet, (admin) säljare, status och fritext.
    Klick på en rad fäller ut kortet: namn, telefon och kommentar skrivs direkt,
    Inte hemma/knackningar och status sätts direkt. Väljs Såld eller Signera
@@ -45,7 +45,8 @@ async function allaRader<T>(hamta: (from: number, to: number) => PromiseLike<{ d
   return ut;
 }
 
-/** minId satt = bara lägenheter där jag är tilldelad (ägare) eller sålde. */
+/** minId satt = bara lägenheter där jag är tilldelad (ägare) eller sålde.
+ *  Används inte längre: alla säljare ser alla lägenheter (filtret Säljare finns för alla). */
 async function hamtaUnderlag(minId: string | null): Promise<Underlag> {
   const [lagenheter, lagRels, fast, fastRels, proj] = await Promise.all([
     allaRader<RecordRow>((a, b) => {
@@ -93,7 +94,7 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
   const load = useCallback(async () => {
     if (!minId) return;
     try {
-      setU(await hamtaUnderlag(isAdmin ? null : minId)); setError(null);
+      setU(await hamtaUnderlag(null)); setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kunde inte hämta lägenheterna.");
     }
@@ -212,7 +213,7 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
           <div className="d2d-alla__filter d2d-allalgh__filter">
             <input className="input d2d-allalgh__sok" type="search" value={sok} onChange={(e) => setSok(e.target.value)}
               placeholder="Sök adress, namn, telefon, kommentar…" aria-label="Sök" />
-            <div className={`d2d-alla__val${isAdmin ? " d2d-allalgh__val--admin" : ""}`}>
+            <div className="d2d-alla__val d2d-allalgh__val--admin">
               <label>
                 <span>Projekt</span>
                 <select className="input" value={projekt} onChange={(e) => { setProjekt(e.target.value); setOrt(ALLA); setFastighet(ALLA); }}>
@@ -234,15 +235,13 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
                   {fastVal.map(([id, namn]) => <option key={id} value={id}>{namn}</option>)}
                 </select>
               </label>
-              {isAdmin && (
-                <label>
-                  <span>Säljare</span>
-                  <select className="input" value={saljare} onChange={(e) => setSaljare(e.target.value)}>
-                    <option value={ALLA}>Alla säljare</option>
-                    {saljareVal.map((s) => <option key={s.id} value={s.id}>{s.namn} ({s.n})</option>)}
-                  </select>
-                </label>
-              )}
+              <label>
+                <span>Säljare</span>
+                <select className="input" value={saljare} onChange={(e) => setSaljare(e.target.value)}>
+                  <option value={ALLA}>Alla säljare</option>
+                  {saljareVal.map((s) => <option key={s.id} value={s.id}>{s.namn} ({s.n})</option>)}
+                </select>
+              </label>
             </div>
             <div className="d2d-status-picker d2d-alla__status" role="group" aria-label="Filtrera på status">
               <button type="button" className={`d2d-status-btn${status === ALLA ? " d2d-status-btn--active" : ""}`} onClick={() => setStatus(ALLA)}>
@@ -265,7 +264,7 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
               <span>{visade.length === alla.length ? `${visade.length} st` : `${visade.length} av ${alla.length} st`}</span>
             </div>
             <FastighetProgress lagenheter={filtrerade} />
-            {alla.length === 0 && <div className="d2d-empty">{isAdmin ? "Inga lägenheter än." : "Du har inga tilldelade lägenheter ännu."}</div>}
+            {alla.length === 0 && <div className="d2d-empty">Inga lägenheter än.</div>}
             {alla.length > 0 && visade.length === 0 && <div className="d2d-empty">Inga lägenheter matchar filtret.</div>}
             <p className="d2d-allalgh__hint">Tryck på en lägenhet för att fylla i namn, telefon, kommentar och status.</p>
 
