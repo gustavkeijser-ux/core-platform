@@ -1,33 +1,74 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { ObjectDef, RecordFilter, StatusDef } from "@/lib/data";
+import { getMetadata, type ObjectDef, type RecordRow } from "@/lib/data";
 import { useTenantUsers } from "@/lib/users";
 import { useRoute, navigate } from "@/lib/route";
-import type { StatusCounts } from "@/lib/statusCounts";
 import { ObjectListPage } from "./ObjectListPage";
-import { EmptyState, SkeletonRows, TopbarActions } from "./PageChrome";
+import { EmptyState, SearchField, TopbarActions } from "./PageChrome";
+import {
+  LagenhetTabell, FastighetProgress, LagenhetForm,
+  STATUS_CONFIG, ALLA_STATUS_ORDNING, jamforLagenheter, type KnockStatus,
+} from "./D2DSellerApp";
+import { Fyrverkeri } from "./D2DFyrverkeri";
+import "@/styles/d2d.css";
 
 /* =============================================================================
    Door to door → Lägenheter.
-   Först en översikt: ett kort per projekt med antal lägenheter per status och
-   vilka säljare som har dem. Klick på ett projekt → bara de lägenheterna
-   (vanliga listan, med filter, markera och byt säljare). "Visa alla
-   lägenheter" → alla projekt i samma lista.
+   Uppbyggd som "Alla adresser" i D2D-sälj, men med alla lägenheter i
+   systemet: filter på projekt, ort, fastighet, säljare och status, en
+   progressbar och samma lägenhetskort som säljaren har — namn, telefon och
+   kommentar skrivs direkt i kortet, Inte hemma och −/+ knackningar. Klick
+   på raden (eller "Öppna lägenheten") öppnar säljarens lägenhetsvy här i
+   CRM:et (`?lgh=<id>`), där status sätts och försäljningen fylls i precis
+   som i säljarappen. "Tabellvy" (`?vy=tabell`) är den vanliga listan med
+   markera/byt säljare och CSV-export.
    ========================================================================== */
 
-type Projekt = {
-  id: string | null; title: string; projektStatus: string | null;
-  total: number; fastigheter: number; utanSaljare: number;
-  statusar: Record<string, number>;
-  saljare: Array<{ id: string; antal: number }>;
+const ALLA = "alla";
+const UTAN_PROJEKT = "utan";
+const UTAN_SALJARE = "utan";
+const SIDA = 150;
+
+const SEL = "id,object_type,data,status,owner_user_id,title,created_at,updated_at";
+
+type Underlag = {
+  lagenheter: RecordRow[];
+  fastFor: Map<string, string>;          // lägenhet → fastighet
+  fastigheter: Map<string, RecordRow>;
+  projektFor: Map<string, string>;       // fastighet → projekt
+  projekt: Map<string, RecordRow>;
 };
 
-const ALLA = "alla";
+async function allaRader<T>(hamta: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const PAGE = 1000;
+  const ut: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await hamta(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    ut.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+  }
+  return ut;
+}
 
-const hue = (s?: StatusDef) =>
-  !s?.color ? "var(--ink-faint)" : s.color.startsWith("#") ? s.color : `var(--hue-${s.color})`;
+async function hamtaUnderlag(): Promise<Underlag> {
+  const [lagenheter, lagRels, fast, fastRels, proj] = await Promise.all([
+    allaRader<RecordRow>((a, b) => supabase.from("records").select(SEL).eq("object_type", "d2d_lagenhet").is("deleted_at", null).order("id").range(a, b)),
+    allaRader<{ from_record_id: string; to_record_id: string }>((a, b) => supabase.from("relationships").select("from_record_id,to_record_id").eq("rel_type", "d2d_lag_fastighet").order("from_record_id").range(a, b)),
+    allaRader<RecordRow>((a, b) => supabase.from("records").select(SEL).eq("object_type", "d2d_fastighet").is("deleted_at", null).order("id").range(a, b)),
+    allaRader<{ from_record_id: string; to_record_id: string }>((a, b) => supabase.from("relationships").select("from_record_id,to_record_id").eq("rel_type", "d2d_fast_projekt").order("from_record_id").range(a, b)),
+    allaRader<RecordRow>((a, b) => supabase.from("records").select(SEL).eq("object_type", "d2d_projekt").is("deleted_at", null).order("id").range(a, b)),
+  ]);
+  const fastigheter = new Map(fast.map((f) => [f.id, f]));
+  const projekt = new Map(proj.map((p) => [p.id, p]));
+  const fastFor = new Map<string, string>();
+  for (const r of lagRels) if (fastigheter.has(r.to_record_id)) fastFor.set(r.from_record_id, r.to_record_id);
+  const projektFor = new Map<string, string>();
+  for (const r of fastRels) if (projekt.has(r.to_record_id)) projektFor.set(r.from_record_id, r.to_record_id);
+  return { lagenheter: lagenheter.sort(jamforLagenheter), fastFor, fastigheter, projektFor, projekt };
+}
 
-export function D2DLagenheterPage({ objectDef, projektDef, onOpenRecord, onMetadataChanged, reloadKey }: {
+export function D2DLagenheterPage({ objectDef, onOpenRecord, onMetadataChanged, reloadKey }: {
   objectDef: ObjectDef;
   projektDef?: ObjectDef;
   onOpenRecord: (id: string) => void;
@@ -35,175 +76,293 @@ export function D2DLagenheterPage({ objectDef, projektDef, onOpenRecord, onMetad
   reloadKey?: number;
 }) {
   const route = useRoute();
-  const valt = route.query.get("projekt");
-  const [data, setData] = useState<Projekt[] | null>(null);
+  const lghId = route.query.get("lgh");
+  const tabell = route.query.get("vy") === "tabell";
+
+  const [u, setU] = useState<Underlag | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const users = useTenantUsers();
-  const namn = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users]);
+  const namnFor = useMemo(() => new Map(users.map((x) => [x.id, x.name])), [users]);
+
+  const [sok, setSok] = useState("");
+  const [projekt, setProjekt] = useState(ALLA);
+  const [ort, setOrt] = useState(ALLA);
+  const [fastighet, setFastighet] = useState(ALLA);
+  const [saljare, setSaljare] = useState(ALLA);
+  const [status, setStatus] = useState<KnockStatus | typeof ALLA>(ALLA);
+  const [visaAntal, setVisaAntal] = useState(SIDA);
 
   const load = useCallback(async () => {
-    const { data: d, error: err } = await supabase.rpc("d2d_lagenhet_oversikt");
-    if (err) { setError(err.message); return; }
-    setData((d ?? []) as Projekt[]); setError(null);
+    try {
+      const d = await hamtaUnderlag();
+      setU(d); setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Kunde inte hämta lägenheterna.");
+    }
   }, []);
   useEffect(() => { void load(); }, [load, reloadKey]);
+  useEffect(() => { getMetadata().then((m) => setIsAdmin(!!m.isAdmin)).catch(() => {}); }, []);
 
-  // Ändringar i listan (status, säljare) → räkna om, men högst en gång per sekund.
-  const t = useRef<number | null>(null);
-  const reloadSoon = useCallback(() => {
-    if (t.current) window.clearTimeout(t.current);
-    t.current = window.setTimeout(() => { void load(); }, 800);
-  }, [load]);
-  useEffect(() => () => { if (t.current) window.clearTimeout(t.current); }, []);
+  // Lägenhetsvyn ska börja högst upp (listan kan vara långt nedskrollad);
+  // tillbaka till listan skrollar useReturnToRow till raden igen.
+  useEffect(() => {
+    if (lghId) document.querySelector(".app-shell__content")?.scrollTo({ top: 0 });
+  }, [lghId]);
 
-  const statuses = objectDef.statuses;
-  const statusFor = (k: string) => statuses.find((s) => s.key === k);
-  const order = (rec: Record<string, number>) => [
-    ...statuses.filter((s) => (rec[s.key] ?? 0) > 0).map((s) => ({ key: s.key, n: rec[s.key], def: s as StatusDef | undefined })),
-    ...Object.entries(rec).filter(([k, n]) => n > 0 && !statusFor(k)).map(([k, n]) => ({ key: k, n, def: undefined })),
-  ];
+  // När lägenhetsvyn stängs: hämta om just den posten så status, namn,
+  // kommentar och säljare i kortet stämmer utan att hela listan laddas om.
+  const forraLgh = useRef<string | null>(null);
+  useEffect(() => {
+    const forra = forraLgh.current;
+    forraLgh.current = lghId;
+    if (lghId || !forra) return;
+    void (async () => {
+      const { data } = await supabase.from("records").select(SEL).eq("id", forra).maybeSingle();
+      if (!data) return;
+      setU((prev) => prev ? { ...prev, lagenheter: prev.lagenheter.map((l) => l.id === forra ? (data as RecordRow) : l) } : prev);
+    })();
+  }, [lghId]);
 
-  const summa = useMemo(() => {
-    const byStatus: Record<string, number> = {};
-    let total = 0, utan = 0;
-    for (const p of data ?? []) {
-      total += p.total; utan += p.utanSaljare;
-      for (const [k, n] of Object.entries(p.statusar)) byStatus[k] = (byStatus[k] ?? 0) + n;
-    }
-    return { total, utan, byStatus };
-  }, [data]);
+  const setLagenheter: Dispatch<SetStateAction<RecordRow[]>> = useCallback((upd) => {
+    setU((prev) => {
+      if (!prev) return prev;
+      const next = typeof upd === "function" ? upd(prev.lagenheter) : upd;
+      // Tabellen får bara de visade raderna — mappa tillbaka på hela listan.
+      const byId = new Map(next.map((l) => [l.id, l]));
+      return { ...prev, lagenheter: prev.lagenheter.map((l) => byId.get(l.id) ?? l) };
+    });
+  }, []);
 
-  const open = (id: string) => navigate(["list", objectDef.key], { projekt: id });
-  const back = () => navigate(["list", objectDef.key]);
+  // ── Hjälpare per lägenhet ────────────────────────────────────────────
+  const fastAv = (l: RecordRow) => u?.fastigheter.get(u.fastFor.get(l.id) ?? "");
+  const projektAv = (l: RecordRow) => { const fid = u?.fastFor.get(l.id); return (fid && u?.projektFor.get(fid)) || UTAN_PROJEKT; };
+  const ortAv = (l: RecordRow) => {
+    const d = l.data as Record<string, unknown>;
+    const fd = (fastAv(l)?.data ?? {}) as Record<string, unknown>;
+    return String(d.postort || fd.ort || fd.postort || "").trim();
+  };
+  const saljareAv = (l: RecordRow) => l.owner_user_id || String((l.data as Record<string, unknown>).saljare || "") || UTAN_SALJARE;
+  const statusAv = (l: RecordRow): KnockStatus => {
+    const st = (l.status ?? "ej_knackad") as KnockStatus;
+    return STATUS_CONFIG[st] ? st : "ej_knackad";
+  };
+  const matcharSok = (l: RecordRow, q: string) => {
+    const d = l.data as Record<string, unknown>;
+    const text = [d.gatunamn, d.gatunummer, d.ingang, l.title, d.kund_namn, d.kund_telefon, d.kommentar, fastAv(l)?.title]
+      .filter(Boolean).map(String).join(" ").toLowerCase();
+    return text.includes(q);
+  };
 
-  // ── Lägenheterna i ett projekt (eller alla) ─────────────────────────
-  if (valt) {
-    const p = valt === ALLA ? null : data?.find((x) => x.id === valt);
-    const counts: StatusCounts | null = valt === ALLA
-      ? (data ? { total: summa.total, byStatus: summa.byStatus } : null)
-      : p ? { total: p.total, byStatus: p.statusar } : null;
-    const baseFilters: RecordFilter[] = valt === ALLA ? [] : [{ field: "__related", op: "eq", value: valt }];
+  // ── Filterval (bara det som finns i det som är kvar efter de andra filtren) ──
+  const alla = u?.lagenheter ?? [];
+  const q = sok.trim().toLowerCase();
+  const sokta = q ? alla.filter((l) => matcharSok(l, q)) : alla;
+
+  const projektVal = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of sokta) { const p = projektAv(l); m.set(p, (m.get(p) ?? 0) + 1); }
+    const rader = Array.from(m.entries())
+      .filter(([id]) => id !== UTAN_PROJEKT)
+      .map(([id, n]) => ({ id, namn: u?.projekt.get(id)?.title ?? "Projekt", n }))
+      .sort((a, b) => a.namn.localeCompare(b.namn, "sv", { numeric: true }));
+    if (m.has(UTAN_PROJEKT)) rader.push({ id: UTAN_PROJEKT, namn: "Utan projekt", n: m.get(UTAN_PROJEKT)! });
+    return rader;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [u, sokta]);
+  const iProjekt = sokta.filter((l) => projekt === ALLA || projektAv(l) === projekt);
+
+  const orter = useMemo(() => Array.from(new Set(iProjekt.map(ortAv).filter(Boolean))).sort((a, b) => a.localeCompare(b, "sv")),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [u, iProjekt.length, projekt]);
+  const iOrt = iProjekt.filter((l) => ort === ALLA || ortAv(l) === ort);
+
+  const fastVal = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const l of iOrt) { const f = fastAv(l); if (f) m.set(f.id, f.title ?? "Fastighet"); }
+    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1], "sv", { numeric: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [u, iOrt.length, projekt, ort]);
+  const iFast = iOrt.filter((l) => fastighet === ALLA || u?.fastFor.get(l.id) === fastighet);
+
+  const saljareVal = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of iFast) { const s = saljareAv(l); m.set(s, (m.get(s) ?? 0) + 1); }
+    const rader = Array.from(m.entries()).filter(([id]) => id !== UTAN_SALJARE)
+      .map(([id, n]) => ({ id, namn: namnFor.get(id) ?? "…", n }))
+      .sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
+    if (m.has(UTAN_SALJARE)) rader.push({ id: UTAN_SALJARE, namn: "Utan säljare", n: m.get(UTAN_SALJARE)! });
+    return rader;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [u, iFast.length, projekt, ort, fastighet, namnFor]);
+  const filtrerade = iFast.filter((l) => saljare === ALLA || saljareAv(l) === saljare);
+
+  const antal: Partial<Record<KnockStatus, number>> = {};
+  for (const l of filtrerade) { const k = statusAv(l); antal[k] = (antal[k] ?? 0) + 1; }
+  const visade = filtrerade.filter((l) => status === ALLA || statusAv(l) === status);
+  const synliga = visade.slice(0, visaAntal);
+
+  // Nytt filter → börja om från början av listan.
+  useEffect(() => { setVisaAntal(SIDA); }, [sok, projekt, ort, fastighet, saljare, status]);
+
+  const oppna = (id: string) => navigate(["list", objectDef.key], { lgh: id });
+  const stang = () => navigate(["list", objectDef.key]);
+
+  // ── Tabellvyn (den vanliga listan: markera, byt säljare, CSV) ────────
+  if (tabell) {
     return (
       <ObjectListPage
-        key={valt}
+        key="tabell"
         objectDef={objectDef}
         onOpenRecord={onOpenRecord}
         onMetadataChanged={onMetadataChanged}
         reloadKey={reloadKey}
-        baseFilters={baseFilters}
-        stateKeySuffix={`:${valt}`}
-        countsOverride={counts}
-        onDataChanged={reloadSoon}
+        stateKeySuffix=":tabell"
         banner={
           <div className="d2dov-crumb">
-            <button type="button" className="btn btn--ghost btn--sm" onClick={back}>← Alla projekt</button>
-            <span className="d2dov-crumb__title">
-              {valt === ALLA ? "Alla lägenheter" : p?.title ?? (data ? "Okänt projekt" : "…")}
-            </span>
-            {p && <span className="d2dov-crumb__meta">{p.fastigheter} fastigheter · {p.total} lägenheter
-              {p.utanSaljare > 0 && <> · <span className="d2dov-warn">{p.utanSaljare} utan säljare</span></>}</span>}
+            <button type="button" className="btn btn--ghost btn--sm" onClick={stang}>← Lägenheter</button>
+            <span className="d2dov-crumb__title">Tabellvy</span>
           </div>
         }
       />
     );
   }
 
-  // ── Översikt per projekt ─────────────────────────────────────────────
-  const projektStatus = (k: string | null) => projektDef?.statuses.find((s) => s.key === k);
-  const pos = (k: string) => summa.byStatus[k] ?? 0;
-  const besokta = summa.total - pos("ej_knackad");
+  // ── Lägenheten (säljarens vy med status och försäljning) ─────────────
+  if (lghId) {
+    const fid = u?.fastFor.get(lghId) ?? "";
+    return (
+      <div className="page d2dlag d2dlag--form">
+        <Fyrverkeri />
+        <div className="d2d-detail">
+          <LagenhetForm
+            key={lghId}
+            lagenhetId={lghId}
+            fastighetId={fid}
+            objectDef={objectDef}
+            isAdmin={isAdmin}
+            onFieldsChanged={onMetadataChanged}
+            onBack={stang}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Listan ───────────────────────────────────────────────────────────
+  const rensa = () => { setSok(""); setProjekt(ALLA); setOrt(ALLA); setFastighet(ALLA); setSaljare(ALLA); setStatus(ALLA); };
+  const harFilter = !!q || projekt !== ALLA || ort !== ALLA || fastighet !== ALLA || saljare !== ALLA || status !== ALLA;
 
   return (
-    <div className="page d2dov">
+    <div className="page d2dlag">
+      <Fyrverkeri />
       <TopbarActions>
-        <button type="button" className="btn btn--brand" onClick={() => open(ALLA)} disabled={!data || data.length === 0}>
-          Visa alla lägenheter
+        <SearchField value={sok} onChange={setSok} placeholder="Sök adress, namn, telefon…" />
+        <button type="button" className="btn btn--ghost btn--sm d2dlag__tabell" onClick={() => navigate(["list", objectDef.key], { vy: "tabell" })}>
+          Tabellvy
         </button>
       </TopbarActions>
 
       {error && (
         <div className="card">
-          <EmptyState kind="error" title="Kunde inte hämta översikten" text={error}
+          <EmptyState kind="error" title="Kunde inte hämta lägenheterna" text={error}
             action={<button className="btn btn--danger btn--sm" onClick={() => void load()}>Försök igen</button>} />
         </div>
       )}
 
-      {!error && data == null && <div className="card"><SkeletonRows rows={4} /></div>}
+      {!error && !u && <div className="d2d-loading">Laddar lägenheter…</div>}
 
-      {data && data.length === 0 && (
-        <div className="card">
-          <EmptyState title="Inga lägenheter än" text="Lägenheter dyker upp här när ett D2D-projekt har fått adresser." />
-        </div>
-      )}
-
-      {data && data.length > 0 && (
-        <>
-          <div className="d2dov-kpis">
-            <div className="card d2dov-kpi"><div className="d2dov-kpi__label">Lägenheter</div><div className="d2dov-kpi__value">{summa.total}</div></div>
-            <div className="card d2dov-kpi"><div className="d2dov-kpi__label">Knackade</div><div className="d2dov-kpi__value">{besokta}<small> / {summa.total}</small></div></div>
-            <div className="card d2dov-kpi"><div className="d2dov-kpi__label">Intresserade</div><div className="d2dov-kpi__value" style={{ color: "var(--hue-green)" }}>{pos("intresserad")}</div></div>
-            <div className="card d2dov-kpi"><div className="d2dov-kpi__label">Sålda</div><div className="d2dov-kpi__value" style={{ color: "var(--hue-green)" }}>{pos("sald")}</div></div>
-            <div className="card d2dov-kpi"><div className="d2dov-kpi__label">Utan säljare</div><div className={`d2dov-kpi__value${summa.utan ? " d2dov-warn" : ""}`}>{summa.utan}</div></div>
-          </div>
-
-          <div className="d2dov-head">
-            <h2>Projekt</h2>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => open(ALLA)}>Visa alla lägenheter →</button>
-          </div>
-
-          <div className="d2dov-grid">
-            {data.map((p) => {
-              const st = order(p.statusar);
-              const knackade = p.total - (p.statusar.ej_knackad ?? 0);
-              const ps = projektStatus(p.projektStatus);
-              const clickable = !!p.id;
-              const body = (
-                <>
-                  <div className="d2dov-card__top">
-                    <div className="d2dov-card__title">{p.title}</div>
-                    {ps && <span className="d2dov-chip" style={{ ["--c" as string]: hue(ps) }}>{ps.label}</span>}
-                  </div>
-                  <div className="d2dov-card__meta">
-                    {p.id ? `${p.fastigheter} fastigheter · ` : ""}<strong>{p.total}</strong> lägenheter · {knackade} knackade
-                    {p.total > 0 && <> ({Math.round(knackade * 100 / p.total)} %)</>}
-                  </div>
-
-                  <div className="d2dov-bar" role="img" aria-label={st.map((s) => `${s.def?.label ?? s.key} ${s.n}`).join(", ")}>
-                    {st.map((s) => (
-                      <span key={s.key} style={{ flexGrow: s.n, background: hue(s.def) }} title={`${s.def?.label ?? s.key}: ${s.n}`} />
-                    ))}
-                  </div>
-
-                  <ul className="d2dov-legend">
-                    {st.map((s) => (
-                      <li key={s.key}>
-                        <span className="d2dov-dot" style={{ background: hue(s.def) }} />
-                        <span className="d2dov-legend__label">{s.def?.label ?? s.key}</span>
-                        <span className="d2dov-legend__n">{s.n}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="d2dov-sellers">
-                    {p.saljare.map((s) => (
-                      <span key={s.id} className="d2dov-seller">{namn.get(s.id) ?? "…"} <b>{s.antal}</b></span>
-                    ))}
-                    {p.utanSaljare > 0 && <span className="d2dov-seller d2dov-seller--none">Utan säljare <b>{p.utanSaljare}</b></span>}
-                  </div>
-                  {!clickable && <div className="d2dov-note">Lägenheter som inte hör till något projekt. Finns med under Visa alla lägenheter.</div>}
-                </>
-              );
-              return clickable ? (
-                <button key={p.id} type="button" className="card d2dov-card" onClick={() => open(p.id!)}>
-                  {body}
-                  <span className="d2dov-card__go">Visa lägenheterna →</span>
+      {u && (
+        <div className="d2d-detail">
+          {/* Filter: projekt, ort, fastighet och säljare som val; status som bubblor. */}
+          <div className="d2d-alla__filter d2dlag__filter">
+            <div className="d2d-alla__val">
+              <label>
+                <span>Projekt</span>
+                <select className="input" value={projekt} onChange={(e) => { setProjekt(e.target.value); setOrt(ALLA); setFastighet(ALLA); }}>
+                  <option value={ALLA}>Alla projekt</option>
+                  {projektVal.map((p) => <option key={p.id} value={p.id}>{p.namn} ({p.n})</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Ort</span>
+                <select className="input" value={ort} onChange={(e) => { setOrt(e.target.value); setFastighet(ALLA); }}>
+                  <option value={ALLA}>Alla orter</option>
+                  {orter.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Fastighet</span>
+                <select className="input" value={fastighet} onChange={(e) => setFastighet(e.target.value)}>
+                  <option value={ALLA}>Alla fastigheter</option>
+                  {fastVal.map(([id, namn]) => <option key={id} value={id}>{namn}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Säljare</span>
+                <select className="input" value={saljare} onChange={(e) => setSaljare(e.target.value)}>
+                  <option value={ALLA}>Alla säljare</option>
+                  {saljareVal.map((s) => <option key={s.id} value={s.id}>{s.namn} ({s.n})</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="d2d-status-picker d2d-alla__status" role="group" aria-label="Filtrera på status">
+              <button type="button" className={`d2d-status-btn${status === ALLA ? " d2d-status-btn--active" : ""}`} onClick={() => setStatus(ALLA)}>
+                Alla {filtrerade.length}
+              </button>
+              {ALLA_STATUS_ORDNING.filter((k) => (antal[k] ?? 0) > 0).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={`d2d-status-btn ${STATUS_CONFIG[k].cssClass}${status === k ? " d2d-status-btn--active" : ""}`}
+                  onClick={() => setStatus(status === k ? ALLA : k)}
+                >
+                  {STATUS_CONFIG[k].label} {antal[k]}
                 </button>
-              ) : (
-                <div key="__none" className="card d2dov-card d2dov-card--static">{body}</div>
-              );
-            })}
+              ))}
+              {harFilter && (
+                <button type="button" className="btn btn--ghost btn--sm d2dlag__rensa" onClick={rensa}>Rensa filter</button>
+              )}
+            </div>
           </div>
-        </>
+
+          <div className="d2d-lag-list">
+            <div className="d2d-lag-list__header">
+              <h3>Lägenheter</h3>
+              <span>{visade.length === alla.length ? `${visade.length} st` : `${visade.length} av ${alla.length} st`}</span>
+            </div>
+
+            <FastighetProgress lagenheter={filtrerade} />
+
+            {alla.length === 0 && <div className="d2d-empty">Inga lägenheter än. De dyker upp här när ett D2D-projekt har fått adresser.</div>}
+            {alla.length > 0 && visade.length === 0 && <div className="d2d-empty">Inga lägenheter matchar filtret.</div>}
+
+            <LagenhetTabell
+              lagenheter={synliga}
+              setLagenheter={setLagenheter}
+              isAdmin={isAdmin}
+              fastData={{}}
+              listKey="crm-lagenheter"
+              ready={!!u}
+              onOpenLagenhet={oppna}
+              medKommentar
+              fastighetNamn={(id) => {
+                const l = alla.find((x) => x.id === id);
+                if (!l) return "";
+                const p = projektAv(l);
+                return [fastAv(l)?.title, ortAv(l), p !== UTAN_PROJEKT ? u.projekt.get(p)?.title : null].filter(Boolean).join(" · ");
+              }}
+            />
+
+            {visade.length > synliga.length && (
+              <div className="d2dlag__mer">
+                <button type="button" className="btn btn--ghost" onClick={() => setVisaAntal((n) => n + SIDA)}>
+                  Visa fler ({visade.length - synliga.length} till)
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
