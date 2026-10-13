@@ -33,38 +33,30 @@ type Underlag = {
   projekt: Map<string, RecordRow>;
 };
 
-async function allaRader<T>(hamta: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
-  const PAGE = 1000;
-  const ut: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await hamta(from, from + PAGE - 1);
-    if (error) throw new Error(error.message);
-    ut.push(...(data ?? []));
-    if (!data || data.length < PAGE) break;
-  }
-  return ut;
-}
-
-/** minId satt = bara lägenheter där jag är tilldelad (ägare) eller sålde.
- *  Används inte längre: alla säljare ser alla lägenheter (filtret Säljare finns för alla). */
-async function hamtaUnderlag(minId: string | null): Promise<Underlag> {
-  const [lagenheter, lagRels, fast, fastRels, proj] = await Promise.all([
-    allaRader<RecordRow>((a, b) => {
-      let q = supabase.from("records").select(SEL).eq("object_type", "d2d_lagenhet").is("deleted_at", null);
-      if (minId) q = q.or(`owner_user_id.eq.${minId},data->>saljare.eq.${minId}`);
-      return q.order("id").range(a, b);
-    }),
-    allaRader<{ from_record_id: string; to_record_id: string }>((a, b) => supabase.from("relationships").select("from_record_id,to_record_id").eq("rel_type", "d2d_lag_fastighet").order("from_record_id").range(a, b)),
-    allaRader<RecordRow>((a, b) => supabase.from("records").select(SEL).eq("object_type", "d2d_fastighet").is("deleted_at", null).order("id").range(a, b)),
-    allaRader<{ from_record_id: string; to_record_id: string }>((a, b) => supabase.from("relationships").select("from_record_id,to_record_id").eq("rel_type", "d2d_fast_projekt").order("from_record_id").range(a, b)),
-    allaRader<RecordRow>((a, b) => supabase.from("records").select(SEL).eq("object_type", "d2d_projekt").is("deleted_at", null).order("id").range(a, b)),
-  ]);
-  const fastigheter = new Map(fast.map((f) => [f.id, f]));
-  const projekt = new Map(proj.map((p) => [p.id, p]));
+/** Allt i ett anrop (d2d_alla_lagenheter): lägenheterna med de fält listan
+ *  behöver och fastighets-id, fastigheterna och projekten. Tidigare hämtades
+ *  lägenheter, relationer, fastigheter och projekt sida för sida genom RLS —
+ *  många sekunder med ~10 000 lägenheter. Kortet (Såld/Scrive) hämtar hela
+ *  posten när det öppnas. Återkopplingar som tillhör en annan säljare
+ *  filtreras bort i databasen (admin ser alla). */
+async function hamtaUnderlag(): Promise<Underlag> {
+  const { data, error } = await supabase.rpc("d2d_alla_lagenheter");
+  if (error) throw new Error(error.message);
+  const svar = (data ?? {}) as {
+    lagenheter?: Array<RecordRow & { fastighet_id: string | null }>;
+    fastigheter?: Array<RecordRow & { projekt_id: string | null }>;
+    projekt?: RecordRow[];
+  };
+  const fastigheter = new Map((svar.fastigheter ?? []).map((f) => [f.id, f as RecordRow]));
+  const projekt = new Map((svar.projekt ?? []).map((p) => [p.id, p]));
   const fastFor = new Map<string, string>();
-  for (const r of lagRels) if (fastigheter.has(r.to_record_id)) fastFor.set(r.from_record_id, r.to_record_id);
+  const lagenheter: RecordRow[] = [];
+  for (const l of svar.lagenheter ?? []) {
+    lagenheter.push({ ...l, object_type: "d2d_lagenhet" } as RecordRow);
+    if (l.fastighet_id && fastigheter.has(l.fastighet_id)) fastFor.set(l.id, l.fastighet_id);
+  }
   const projektFor = new Map<string, string>();
-  for (const r of fastRels) if (projekt.has(r.to_record_id)) projektFor.set(r.from_record_id, r.to_record_id);
+  for (const f of svar.fastigheter ?? []) if (f.projekt_id && projekt.has(f.projekt_id)) projektFor.set(f.id, f.projekt_id);
   return { lagenheter: lagenheter.sort(jamforLagenheter), fastFor, fastigheter, projektFor, projekt };
 }
 
@@ -94,7 +86,7 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
   const load = useCallback(async () => {
     if (!minId) return;
     try {
-      setU(await hamtaUnderlag(null)); setError(null);
+      setU(await hamtaUnderlag()); setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kunde inte hämta lägenheterna.");
     }
