@@ -357,7 +357,13 @@ export function LeadDeskSettings() {
     if (!f || urlFel) return;
     setSparar(true); setMsg(null);
     try {
-      const cfg = await sparaTalkConfig({ ...f, loginUrl: url.trim() || null });
+      // Skicka bara det formuläret äger — inte härledda fält som aktiv/origin, som
+      // annars kan följa med som false från när adressen var tom.
+      const cfg = await sparaTalkConfig({
+        loginUrl: url.trim() || null, autocall: f.autocall,
+        skarmpopIn: f.skarmpopIn, skarmpopUt: f.skarmpopUt,
+        standardland: f.standardland, tidszon: f.tidszon,
+      });
       if (cfg) { setF(cfg); setUrl(cfg.loginUrl ?? ""); }
       setMsg({ ok: true, text: "Sparat." });
     } catch (e) {
