@@ -50,8 +50,23 @@ export function TalkDock({ onOpenRecord, currentRecordId, d2d }: {
   const [skapar, setSkapar] = useState(false);
   const [lokaltFel, setLokaltFel] = useState<string | null>(null);
 
-  // Inställningar en gång.
-  useEffect(() => { void laddaTalkConfig(); }, []);
+  // Inställningar vid start, och igen när fliken blir synlig/får fokus (högst var 30:e s),
+  // så att en ändring under Inställningar → LeadDesk syns utan omladdning.
+  useEffect(() => {
+    let senast = Date.now();
+    void laddaTalkConfig();
+    const omLadda = () => {
+      if (document.visibilityState !== "visible" || Date.now() - senast < 30_000) return;
+      senast = Date.now();
+      void laddaTalkConfig();
+    };
+    window.addEventListener("focus", omLadda);
+    document.addEventListener("visibilitychange", omLadda);
+    return () => {
+      window.removeEventListener("focus", omLadda);
+      document.removeEventListener("visibilitychange", omLadda);
+    };
+  }, []);
 
   // Navigering för skärmpop — senaste värdena via ref.
   const navRef = useRef({ onOpenRecord, currentRecordId });
