@@ -76,25 +76,29 @@ function d2dSegsFromView(v: D2DView): string[] {
 
 export type KnockStatus = "ej_knackad" | "inte_hemma" | "aterkoppling" | "inte_intresserad" | "inte_saljbar" | "befintlig_telia" | "intresserad" | "sald" | "scrive" | "kall_kund" | "anger";
 
+/** Statusfärgerna ligger som egna variabler `--d2d-st-<status>` i
+ *  `styles/d2d.css` (Gustavs färgval okt 2026) och varje status har sin
+ *  egen klass `d2d-status--<status>` som sätter `--lag-st`. Samma hexfärger
+ *  ligger i `status_definitions.color` så CRM:ets statuspiller matchar. */
 export const STATUS_CONFIG: Record<KnockStatus, { label: string; color: string; cssClass: string }> = {
-  ej_knackad:       { label: "Ej knackad",       color: "var(--hue-slate)",  cssClass: "d2d-status--slate" },
-  inte_hemma:       { label: "Inte hemma",       color: "var(--hue-blue)",   cssClass: "d2d-status--blue" },
-  aterkoppling:     { label: "Återkoppling",     color: "var(--hue-amber)",  cssClass: "d2d-status--amber" },
-  inte_intresserad: { label: "Inte intresserad", color: "var(--hue-red)",    cssClass: "d2d-status--red" },
+  ej_knackad:       { label: "Ej knackad",       color: "var(--d2d-st-ej_knackad)",       cssClass: "d2d-status--ej_knackad" },
+  inte_hemma:       { label: "Inte hemma",       color: "var(--d2d-st-inte_hemma)",       cssClass: "d2d-status--inte_hemma" },
+  aterkoppling:     { label: "Återkoppling",     color: "var(--d2d-st-aterkoppling)",     cssClass: "d2d-status--aterkoppling" },
+  inte_intresserad: { label: "Inte intresserad", color: "var(--d2d-st-inte_intresserad)", cssClass: "d2d-status--inte_intresserad" },
   // Dörren går inte att sälja på (tom lägenhet, lokal, …). Räknas som en
   // öppnad dörr utan sälj i Utfall, precis som Inte intresserad.
-  inte_saljbar:     { label: "Inte säljbar",     color: "var(--hue-zinc)",   cssClass: "d2d-status--zinc" },
-  befintlig_telia:  { label: "Befintlig Telia-kund", color: "var(--hue-sky)", cssClass: "d2d-status--sky" },
-  intresserad:      { label: "Intresserad",      color: "var(--hue-green)",  cssClass: "d2d-status--green" },
-  sald:             { label: "Såld",             color: "var(--hue-green)",  cssClass: "d2d-status--green-solid" },
+  inte_saljbar:     { label: "Inte säljbar",     color: "var(--d2d-st-inte_saljbar)",     cssClass: "d2d-status--inte_saljbar" },
+  befintlig_telia:  { label: "Befintlig Telia-kund", color: "var(--d2d-st-befintlig_telia)", cssClass: "d2d-status--befintlig_telia" },
+  intresserad:      { label: "Intresserad",      color: "var(--d2d-st-intresserad)",      cssClass: "d2d-status--intresserad" },
+  sald:             { label: "Såld",             color: "var(--d2d-st-sald)",             cssClass: "d2d-status--sald" },
   // Som "Såld" men utan att registrera ett sälj: kunden signerar ett avtalsförslag
   // med Scrive (inte ett bindande avtal). Räknas inte som sålt i statistiken.
-  scrive:           { label: "Signera med Scrive", color: "var(--hue-violet)", cssClass: "d2d-status--violet" },
+  scrive:           { label: "Signera med Scrive", color: "var(--d2d-st-scrive)",         cssClass: "d2d-status--scrive" },
   // Ersätter "Övrigt" (borttagen 2026-10, befintliga flyttades hit).
-  kall_kund:        { label: "Kall kund",        color: "var(--hue-zinc)",   cssClass: "d2d-status--zinc" },
+  kall_kund:        { label: "Kall kund",        color: "var(--d2d-st-kall_kund)",        cssClass: "d2d-status--kall_kund" },
   // Kunden har ångrat sig efter Såld/Scrive. Markeras via "Kunden har ångrat sig…" (D2DAnger.tsx),
   // inte som vanlig statusbubbla. Tjänsterna ligger kvar för statistiken.
-  anger:            { label: "Ånger",            color: "var(--hue-red)",    cssClass: "d2d-status--red" },
+  anger:            { label: "Ånger",            color: "var(--d2d-st-anger)",            cssClass: "d2d-status--anger" },
 };
 
 const SECTION_LABELS: Record<string, string> = {
