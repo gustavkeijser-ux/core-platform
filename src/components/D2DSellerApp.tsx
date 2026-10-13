@@ -140,6 +140,16 @@ export function formatLagenhetAdress(data: Record<string, unknown>, title: strin
   return medIngang ? `${medIngang}, lgh ${title ?? "—"}` : `Lgh ${title ?? "—"}`;
 }
 
+/** Återkopplingar som är kopplade till en säljare (tilldelad eller säljare)
+ *  visas bara för den säljaren och för administratörer. Samma regel som
+ *  d2d_alla_lagenheter i databasen. */
+export function doldAterkoppling(l: RecordRow, minId: string | null | undefined, isAdmin: boolean): boolean {
+  if (isAdmin || l.status !== "aterkoppling") return false;
+  const saljare = String((l.data as Record<string, unknown>).saljare ?? "");
+  if (!l.owner_user_id && !saljare) return false;
+  return !minId || (l.owner_user_id !== minId && saljare !== minId);
+}
+
 /** Sorterar lägenheter i gångordning: gatunamn, gatunummer (1, 2, 3 …),
  *  ingång (A, B, C …) och sist lägenhetsnummer (1001, 1002, 1101 …).
  *  Numerisk jämförelse så 2 < 10 och 1002 < 1101, inte strängordning. */
@@ -1137,7 +1147,11 @@ function FastighetsDetalj({
           .select("id,object_type,data,status,owner_user_id,title,created_at,updated_at")
           .in("id", lagIds)
           .order("title");
-        setLagenheter(((lagData ?? []) as RecordRow[]).sort(jamforLagenheter));
+        const { data: session } = await supabase.auth.getSession();
+        const minId = session.session?.user.id ?? null;
+        setLagenheter(((lagData ?? []) as RecordRow[])
+          .filter((l) => !doldAterkoppling(l, minId, isAdmin))
+          .sort(jamforLagenheter));
       } else {
         setLagenheter([]);
       }
@@ -1146,7 +1160,7 @@ function FastighetsDetalj({
     } finally {
       setLoading(false);
     }
-  }, [fastighetId]);
+  }, [fastighetId, isAdmin]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
