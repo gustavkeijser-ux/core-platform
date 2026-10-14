@@ -9,18 +9,19 @@
    exakt samma färg. Används av STATUS_CONFIG i D2DSellerApp.tsx, av
    projektbyggarens staplar (statusFarg) och av klasserna d2d-status--<status>.
    --d2d-st-<status>-ink är textfärgen på helfärgad bakgrund: ljusa färger
-   får mörk text, mörka får vit. Statusar utan eget val (Inte säljbar,
-   Intresserad, Ånger) behåller systemets färgtoner. */
+   får mörk text, mörka får vit. Intresserad och Ånger behåller systemets
+   färgtoner. 14 okt (Lukas): Inte hemma grå, Scrive grönare, Kall kund
+   blåare; Inte säljbar tog över den röda när Inte intresserad togs bort. */
 :root {
   --d2d-st-sald:             #6EC475;
-  --d2d-st-scrive:           #B2BEB5;
+  --d2d-st-scrive:           #8FD694;
   --d2d-st-aterkoppling:     #F39A3D;
   --d2d-st-befintlig_telia:  #714693;
-  --d2d-st-inte_hemma:       #C4756E;
-  --d2d-st-kall_kund:        #756EC4;
+  --d2d-st-inte_hemma:       #9AA0A6;
+  --d2d-st-kall_kund:        #4F7BD9;
   --d2d-st-inte_intresserad: #FF0800;
   --d2d-st-ej_knackad:       #414A4C;
-  --d2d-st-inte_saljbar:     var(--hue-zinc);
+  --d2d-st-inte_saljbar:     #FF0800;
   --d2d-st-intresserad:      var(--hue-green);
   --d2d-st-anger:            var(--hue-red);
 
@@ -28,11 +29,11 @@
   --d2d-st-scrive-ink:           #14213D;
   --d2d-st-aterkoppling-ink:     #14213D;
   --d2d-st-befintlig_telia-ink:  #fff;
-  --d2d-st-inte_hemma-ink:       #fff;
+  --d2d-st-inte_hemma-ink:       #14213D;
   --d2d-st-kall_kund-ink:        #fff;
   --d2d-st-inte_intresserad-ink: #fff;
   --d2d-st-ej_knackad-ink:       #fff;
-  --d2d-st-inte_saljbar-ink:     #14213D;
+  --d2d-st-inte_saljbar-ink:     #fff;
   --d2d-st-intresserad-ink:      #fff;
   --d2d-st-anger-ink:            #fff;
 }
@@ -1365,3 +1366,28 @@
   background: color-mix(in srgb, var(--hue-green) 14%, transparent); color: var(--hue-green);
 }
 .nb-kalla--scrive { background: color-mix(in srgb, var(--hue-violet) 14%, transparent); color: var(--hue-violet); }
+
+/* ── Nummerbyten: skapa/ändra (NummerbyteForm) ─────────────────────────── */
+.nb-form { width: min(640px, calc(100vw - 32px)); }
+.nb-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.nb-form__falt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.nb-form__falt > span, .nb-form__rubrik {
+  font-size: var(--text-xs); font-weight: 700; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.nb-form__falt--bred { grid-column: 1 / -1; }
+.nb-form__falt .input { width: 100%; }
+.nb-form__nummer { display: flex; flex-direction: column; gap: var(--sp-2); }
+.nb-form__rad { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--sp-2); align-items: center; }
+.nb-form__lagg { align-self: flex-start; }
+.nb-form__fel { margin: 0; font-size: var(--text-sm); color: var(--danger-ink); }
+.nb-actions { gap: var(--sp-2); }
+@media (max-width: 640px) {
+  .nb-form__grid { grid-template-columns: 1fr; }
+  .nb-form__rad { grid-template-columns: minmax(0, 1fr) auto; }
+  .nb-form__rad .input:not(select) { grid-column: 1 / -1; }
+  .nb-form__rad .btn { grid-column: 2; grid-row: 1; }
+  .nb-form__rad { padding-bottom: var(--sp-2); border-bottom: 1px solid var(--border); }
+  .nb-form .input { font-size: 16px; }
+  .nb-ny { width: 100%; min-height: 44px; }
+}
