@@ -112,7 +112,8 @@ const SECTION_LABELS: Record<string, string> = {
 // "Intresserad" är för löst definierat för att vara en egen slutstatus
 // (jfr "Såld"), så den plockas bort ur väljaren men finns kvar i
 // STATUS_CONFIG eftersom befintliga poster kan ha statusen satt sedan innan.
-const HIDDEN_STATUS_PICKS = new Set<KnockStatus>(["intresserad", "anger"]);
+// "Inte intresserad" togs bort 14 okt 2026 (alla blev Inte säljbar); typen finns kvar för historiken.
+const HIDDEN_STATUS_PICKS = new Set<KnockStatus>(["intresserad", "anger", "inte_intresserad"]);
 
 // Anledningar säljaren kan välja mellan när en lägenhet markeras
 // "Inte intresserad" — låter statistiken brytas ner senare i CRM:et.
@@ -1667,9 +1668,9 @@ export function LagenhetForm({
         );
       })()}
 
-      {/* Anledning — visas så fort statusen är "Inte intresserad", så
+      {/* Anledning — visas så fort statusen är "Inte säljbar" (eller äldre "Inte intresserad"), så
           säljaren måste (eller i alla fall enkelt kan) ange varför. */}
-      {status === "inte_intresserad" && (
+      {(status === "inte_intresserad" || status === "inte_saljbar") && (
         <div className="d2d-reason-panel">
           <span className="label">Anledning</span>
           <div className="d2d-reason-panel__chips">
