@@ -422,7 +422,7 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         </section>
 
         <section className="card utf__sek">
-          <h2>Inte intresserade</h2>
+          <h2>Inte säljbara – anledning</h2>
           <Staplar ton="warn" rader={sortera(u.ejIntresserad, EJ_INTR)} tom="Inga i urvalet." />
         </section>
 
