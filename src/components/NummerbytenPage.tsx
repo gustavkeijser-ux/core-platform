@@ -183,6 +183,14 @@ export function NummerbytenPage() {
                     <div>
                       <h3 className="nb-card__kund">{str(d(r, "kund")) || "—"}</h3>
                       <div className="nb-card__adress">{str(d(r, "adress")) || "—"}</div>
+                      <div className="nb-card__tjanst">
+                        {str(d(r, "kalla")) && (
+                          <span className={`nb-kalla nb-kalla--${str(d(r, "kalla"))}`}>
+                            {str(d(r, "kalla")) === "scrive" ? "Signerad med Scrive" : "Såld"}
+                          </span>
+                        )}
+                        <span>{str(d(r, "mobiltjanst")) || "Mobiltjänst ej angiven"}</span>
+                      </div>
                     </div>
                   </div>
                   <div className="nb-card__status">
