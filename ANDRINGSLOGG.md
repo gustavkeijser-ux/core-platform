@@ -6,6 +6,9 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## Öppna punkter
 
+- [Master] Gustav: gör GitHub-kodförrådet `core-platform` privat (Settings → General → Danger Zone → Change visibility). Det är publikt; inga hemligheter finns i historiken men schema, kod och tenant-id i AGENTS.md syns.
+- [Master] Gustav: Supabase → Authentication: slå på Leaked password protection; stäng av "Allow new users to sign up" om användare bara bjuds in.
+- [Master] Övervägs: internhjälpare med SECURITY DEFINER utan egen behörighetskontroll (t.ex. `projektplan_rad_for`, `d2d_lonemodell_for`, `affar_sald`, `projektplan_varningar`) kan fortfarande anropas av inloggade via API:t — flytta till eget schema eller ta bort EXECUTE för authenticated där appen inte anropar dem.
 - [D2D] Gustav: ladda upp "Total Final - import.xlsx" i Door to door → Lägenheter → Importera adresslista (Excel). D2D-agenten verifierar antalen efteråt.
 - [Master] LeadDesk: bifoga `CTI_Demo.html` så att ringsekvensen stäms av mot den, och kör acceptanstesterna med ett Talk-konto. Kontrollera särskilt att `completed` skickar samtalet som `call`-objekt (eller platt; båda hanteras) och att LeadDesks tider är svensk tid.
 - [Master] LeadDesk, beslut som återstår: vem som får se inspelningar (nu bara admin), lagringstid och samtycke för inspelning/transkribering (call-id sparas för senare hämtning; inget hämtas från LeadDesks API än).
@@ -22,6 +25,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav (valfritt): lägg till ett textfält "Antal extraanvändare" i Scrive-mallen om antalet ska stå separat i avtalet (fylls i automatiskt).
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
+
+## 2026-10-14
+
+- [Master] **Databasen stängd för icke-inloggade (anon).** Anon kunde köra 103 SECURITY DEFINER-funktioner (bl.a. `projektplan_rad_for` och `d2d_lonemodell_for` som läser data med bara tenant-id, utan inloggning) och läsa/skriva `geokod_cache` (saknar RLS). Nu: EXECUTE borttaget från PUBLIC/anon på alla egna funktioner i public (uttryckligen beviljat authenticated och service_role), all tabell- och sekvensrätt borttagen för anon, och standardrättigheter så nya funktioner/tabeller inte blir öppna för anon. Tilläggsfunktioner (citext, pg_trgm) orörda. Verifierat: anon når inte längre lönemodell, projektplan eller geokod_cache; authenticated har kvar åtkomst. Inloggningssidan läser inget ur databasen och edge functions använder service-nyckeln eller användarens token, så inget i appen påverkas. Bakgrund samma dag: Supabase hade en störning från ca 06:15 (statement timeouts i hela databasen); projektet flyttat till nytt konto och uppgraderat till Pro (dagliga backuper). Filer: `supabase/migrations/20261014_0900_master_stang_anon.sql`. DB: körd.
 
 ## 2026-10-13
 
