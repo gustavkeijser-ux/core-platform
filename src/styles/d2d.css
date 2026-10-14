@@ -1356,3 +1356,12 @@
 .d2d-totalimport__rad { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .d2d-totalimport__hjalp { margin: 0; color: var(--ink-faint); font-size: 13px; max-width: 70ch; }
 .d2d-totalimport__resultat { line-height: 1.5; }
+
+/* Nummerbyten: såld mobiltjänst + Såld/Scrive-bricka under adressen */
+.nb-card__tjanst { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); font-size: var(--text-sm); color: var(--ink); }
+.nb-kalla {
+  display: inline-block; padding: 1px var(--sp-2); border-radius: var(--r-pill);
+  font-size: var(--text-xs); font-weight: 700; white-space: nowrap;
+  background: color-mix(in srgb, var(--hue-green) 14%, transparent); color: var(--hue-green);
+}
+.nb-kalla--scrive { background: color-mix(in srgb, var(--hue-violet) 14%, transparent); color: var(--hue-violet); }
