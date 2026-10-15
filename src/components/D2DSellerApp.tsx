@@ -1,6 +1,6 @@
 import { VtSaljarPanel } from "./D2DVtBestallningar";
 import { AngerPanel } from "./D2DAnger";
-import { KundtjanstPanel, KundtjanstMina, arKundtjanstNu } from "./D2DKundtjanst";
+import { KundtjanstPanel, KundtjanstSaljKnapp, KundtjanstSaljSida, arKundtjanstNu } from "./D2DKundtjanst";
 import { D2DAllaLagenheter } from "./D2DAllaLagenheter";
 import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -44,8 +44,9 @@ type D2DView =
   | { kind: "aterkopplingar" }
   | { kind: "feedback" }
   | { kind: "alla" }
+  | { kind: "kundtjanst" }
   | { kind: "fastighet"; id: string }
-  | { kind: "lagenhet"; id: string; fastighetId: string; from?: "signerade" | "avtal" | "aterkopplingar" | "alla" };
+  | { kind: "lagenhet"; id: string; fastighetId: string; from?: "signerade" | "avtal" | "aterkopplingar" | "alla" | "kundtjanst" };
 
 /** URL (#/d2d/…) ↔ vy, så en omladdning stannar på samma fastighet/adress. */
 function d2dViewFromSegs(segs: string[]): D2DView {
@@ -56,11 +57,12 @@ function d2dViewFromSegs(segs: string[]): D2DView {
   if (kind === "aterkopplingar") return { kind: "aterkopplingar" };
   if (kind === "feedback") return { kind: "feedback" };
   if (kind === "alla") return { kind: "alla" };
+  if (kind === "kundtjanst") return { kind: "kundtjanst" };
   if (kind === "projekt" && id) return { kind: "projekt", id };
   if (kind === "fastighet" && id) return { kind: "fastighet", id };
   if (kind === "lagenhet" && id) {
     // from = listan man öppnade adressen från, så Tillbaka går dit igen.
-    const src = from === "signerade" || from === "avtal" || from === "aterkopplingar" || from === "alla" ? from : undefined;
+    const src = from === "signerade" || from === "avtal" || from === "aterkopplingar" || from === "alla" || from === "kundtjanst" ? from : undefined;
     return { kind: "lagenhet", id, fastighetId: extra && extra !== "-" ? extra : "", from: src };
   }
   // Startsidan när man klickar på Door to Door: dashboarden.
@@ -492,7 +494,7 @@ function hamtaUrval(): Promise<D2DUrval> {
 // Projektval — första steget: välj projekt, sedan fastigheterna i det
 // =============================================================================
 
-function ProjektLista({ onOpen, onAlla }: { onOpen: (id: string) => void; onAlla: () => void }) {
+function ProjektLista({ onOpen, onAlla, onKundtjanst }: { onOpen: (id: string) => void; onAlla: () => void; onKundtjanst: () => void }) {
   const [urval, setUrval] = useState<D2DUrval | null>(null);
   const [error, setError] = useState(false);
 
@@ -522,6 +524,8 @@ function ProjektLista({ onOpen, onAlla }: { onOpen: (id: string) => void; onAlla
         </svg>
         Alla lägenheter
       </button>
+      {/* Sälj från kundtjänst: affärer kundtjänst lämnat till en säljare, med antal nya. */}
+      <KundtjanstSaljKnapp onOpen={onKundtjanst} />
       <div className="d2d-list__header">
         <h2>Välj projekt</h2>
         <span className="d2d-list__count">{rader.length} st</span>
@@ -2037,10 +2041,8 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
 
       case "fastigheter":
         return (
-          <>
-            <KundtjanstMina />
-            <ProjektLista onOpen={(id) => setView({ kind: "projekt", id })} onAlla={() => setView({ kind: "alla" })} />
-          </>
+          <ProjektLista onOpen={(id) => setView({ kind: "projekt", id })} onAlla={() => setView({ kind: "alla" })}
+            onKundtjanst={() => setView({ kind: "kundtjanst" })} />
         );
 
       case "projekt":
@@ -2111,6 +2113,14 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
       case "feedback":
         // Säljarens feedback → Lukas granskar i CRM:et (D2DFeedback.tsx).
         return <D2DFeedbackFlik />;
+
+      case "kundtjanst":
+        return (
+          <KundtjanstSaljSida
+            onBack={() => goBack(() => setView({ kind: "fastigheter" }))}
+            onOpenLagenhet={(id) => setView({ kind: "lagenhet", id, fastighetId: "", from: "kundtjanst" })}
+          />
+        );
 
       case "alla":
         return (
