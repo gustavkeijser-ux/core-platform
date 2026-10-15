@@ -15,6 +15,7 @@ import { brandCssVars } from "@/lib/color";
 import { FieldConfigPanel } from "./FieldConfigPanel";
 import { MobilNummerPanel } from "./MobilNummer";
 import { AvtalsSammanfattning } from "./D2DAvtal";
+import { D2DAvtalPage } from "./D2DAvtalPage";
 import { ScriveSignering } from "./D2DScrive";
 import { BindningPanel, EjMerPanel } from "./D2DBindning";
 import { UTAN_NETFLIX_FALT, SPORT_MED_NETFLIX, EXTRA_ANTAL_FALT, EXTRA_VAL, antalExtra } from "@/lib/d2dPris";
@@ -39,17 +40,19 @@ type D2DView =
   | { kind: "fastigheter" }
   | { kind: "projekt"; id: string }
   | { kind: "signerade" }
+  | { kind: "avtal" }
   | { kind: "aterkopplingar" }
   | { kind: "feedback" }
   | { kind: "alla" }
   | { kind: "fastighet"; id: string }
-  | { kind: "lagenhet"; id: string; fastighetId: string; from?: "signerade" | "aterkopplingar" | "alla" };
+  | { kind: "lagenhet"; id: string; fastighetId: string; from?: "signerade" | "avtal" | "aterkopplingar" | "alla" };
 
 /** URL (#/d2d/…) ↔ vy, så en omladdning stannar på samma fastighet/adress. */
 function d2dViewFromSegs(segs: string[]): D2DView {
   const [kind, id, extra, from] = segs;
   if (kind === "fastigheter") return { kind: "fastigheter" };
   if (kind === "signerade") return { kind: "signerade" };
+  if (kind === "avtal") return { kind: "avtal" };
   if (kind === "aterkopplingar") return { kind: "aterkopplingar" };
   if (kind === "feedback") return { kind: "feedback" };
   if (kind === "alla") return { kind: "alla" };
@@ -57,7 +60,7 @@ function d2dViewFromSegs(segs: string[]): D2DView {
   if (kind === "fastighet" && id) return { kind: "fastighet", id };
   if (kind === "lagenhet" && id) {
     // from = listan man öppnade adressen från, så Tillbaka går dit igen.
-    const src = from === "signerade" || from === "aterkopplingar" || from === "alla" ? from : undefined;
+    const src = from === "signerade" || from === "avtal" || from === "aterkopplingar" || from === "alla" ? from : undefined;
     return { kind: "lagenhet", id, fastighetId: extra && extra !== "-" ? extra : "", from: src };
   }
   // Startsidan när man klickar på Door to Door: dashboarden.
@@ -2024,7 +2027,7 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
   const lagDef = objects.find((o) => o.key === "d2d_lagenhet");
 
   // ── Navigering
-  const navTab = view.kind === "signerade" ? "signerade" : view.kind === "aterkopplingar" ? "aterkopplingar"
+  const navTab = view.kind === "signerade" ? "signerade" : view.kind === "avtal" ? "avtal" : view.kind === "aterkopplingar" ? "aterkopplingar"
     : view.kind === "feedback" ? "feedback" : view.kind === "oversikt" ? "oversikt" : "fastigheter";
 
   function renderContent() {
@@ -2085,6 +2088,16 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
         return (
           <SigneradeLista
             onOpenLagenhet={(id, fId) => setView({ kind: "lagenhet", id, fastighetId: fId, from: "signerade" })}
+          />
+        );
+
+      case "avtal":
+        // Samma vy som Door to door → Avtal i CRM:et, men bara säljarens egna avtal.
+        return (
+          <D2DAvtalPage
+            saljarvy
+            lagFields={lagDef?.fields ?? []}
+            onOpenRecord={(id) => setView({ kind: "lagenhet", id, fastighetId: "", from: "avtal" })}
           />
         );
 
@@ -2186,6 +2199,16 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
               <path d="M5 10l3 3 7-7"/>
             </svg>
             Signerade
+          </button>
+          <button
+            className={`d2d-nav-btn${navTab === "avtal" ? " d2d-nav-btn--active" : ""}`}
+            onClick={() => setView({ kind: "avtal" })}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 2h7l4 4v12H5z"/>
+              <path d="M12 2v4h4M8 10h5M8 13h5"/>
+            </svg>
+            Avtal
           </button>
           <button
             className={`d2d-nav-btn${navTab === "aterkopplingar" ? " d2d-nav-btn--active" : ""}`}
