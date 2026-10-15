@@ -27,6 +27,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
+## 2026-10-15
+
+- [D2D] **Akut CSS-fel rättat igen (15 okt):** CRM:et visades utan stil. Commit "D2D: kundtjänst – stilar" la in nya regler mitt i det sista `@media (max-width: 640px) {`-blocket i `styles/d2d.css` (nummerbyteformuläret) så att dess slutklammer försvann; i den hopbuntade CSS:en hamnade då resten av all CSS inuti media-frågan. Klammern återställd; live 2 699 regler. **Alla agenter: lägg ny CSS efter sista `}` i filen och kontrollera klammerbalansen (`python3 -c` som räknar `{`/`}` utan kommentarer) innan push.** Filer: `src/styles/d2d.css`.
+
 ## 2026-10-14
 
 - [Master] **Akut: säljarna såg inga lägenheter inne i projekten.** Dörrsäljarrollen läser `d2d_fastighet` med scope `tilldelad`; RLS (`records_read` → `d2d_kan_lasa`) förstår det men `get_record_with_relations` kontrollerade med `can_row`, som bara känner tenant/own/department, så fastigheten kom tillbaka som null och lägenhetslistan blev tom. Nu använder `get_record_with_relations` `d2d_kan_lasa` för posten och de relaterade posterna (oförändrat för andra objekttyper). Verifierat för alla 6 dörrsäljare: 0 ej läsbara fastigheter (t.ex. Leo 13 fastigheter/219 lägenheter, Sebastian 37/555). Obs: scope `tilldelad` och `d2d_kan_lasa` finns i databasen men inte i någon migrationsfil. Filer: `supabase/migrations/20261014_1900_master_get_record_tilldelad.sql`. DB: körd.
