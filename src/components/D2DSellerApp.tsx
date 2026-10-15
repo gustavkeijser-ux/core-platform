@@ -1,5 +1,6 @@
 import { VtSaljarPanel } from "./D2DVtBestallningar";
 import { AngerPanel } from "./D2DAnger";
+import { KundtjanstPanel, KundtjanstMina, arKundtjanstNu } from "./D2DKundtjanst";
 import { D2DAllaLagenheter } from "./D2DAllaLagenheter";
 import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -142,7 +143,8 @@ export function formatLagenhetAdress(data: Record<string, unknown>, title: strin
 }
 
 /** Återkopplingar som är kopplade till en säljare (tilldelad eller säljare)
- *  visas bara för den säljaren och för administratörer. Samma regel som
+ *  visas bara för den säljaren, kundtjänst och administratörer (isAdmin = true
+ *  för admin och kundtjänst). Samma regel som
  *  d2d_alla_lagenheter i databasen. */
 export function doldAterkoppling(l: RecordRow, minId: string | null | undefined, isAdmin: boolean): boolean {
   if (isAdmin || l.status !== "aterkoppling") return false;
@@ -1150,8 +1152,10 @@ function FastighetsDetalj({
           .order("title");
         const { data: session } = await supabase.auth.getSession();
         const minId = session.session?.user.id ?? null;
+        // Kundtjänst ser alla adresser, även andras återkopplingar (som admin).
+        const allaAterkopplingar = isAdmin || await arKundtjanstNu();
         setLagenheter(((lagData ?? []) as RecordRow[])
-          .filter((l) => !doldAterkoppling(l, minId, isAdmin))
+          .filter((l) => !doldAterkoppling(l, minId, allaAterkopplingar))
           .sort(jamforLagenheter));
       } else {
         setLagenheter([]);
@@ -1808,6 +1812,12 @@ export function LagenhetForm({
         </div>
       )}
 
+      {/* Kundtjänst: lämna affären till en säljare / banner om att den kom via kundtjänst. */}
+      {record && (
+        <KundtjanstPanel lagenhetId={record.id} status={status} data={data} sparaForst={flush}
+          onLamnad={() => onBack()} />
+      )}
+
       {/* Ånger: markera (på Såld/Scrive) eller visa (status Ånger). */}
       {record && !!status && (
         <AngerPanel lagenhetId={record.id} status={status} data={data} isAdmin={isAdmin} sparaForst={flush}
@@ -2023,7 +2033,12 @@ export function D2DSellerApp({ onExitD2D }: { onExitD2D?: () => void }) {
         return <D2DDashboard minId={minId} />;
 
       case "fastigheter":
-        return <ProjektLista onOpen={(id) => setView({ kind: "projekt", id })} onAlla={() => setView({ kind: "alla" })} />;
+        return (
+          <>
+            <KundtjanstMina />
+            <ProjektLista onOpen={(id) => setView({ kind: "projekt", id })} onAlla={() => setView({ kind: "alla" })} />
+          </>
+        );
 
       case "projekt":
         return (
