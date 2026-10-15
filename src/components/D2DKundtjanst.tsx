@@ -122,7 +122,7 @@ export function KundtjanstPanel({ lagenhetId, status, data, sparaForst, onLamnad
       </div>
       <p className="d2d-kt__hint">
         Fyll i kundens uppgifter och tjänsterna nedan först. Säljaren får adressen som Återkoppling och validerar
-        och signerar kunden. Pinnarna räknas den månad kunden signerar.
+        och signerar kunden, och får ett mejl med länk till kundkortet. Pinnarna räknas den månad kunden signerar.
       </p>
       <label className="d2d-kt__falt">Säljare
         <select className="input input--sm" value={saljare} onChange={(e) => { setSaljare(e.target.value); setFel(null); }} disabled={busy}>
