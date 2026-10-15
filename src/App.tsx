@@ -222,14 +222,16 @@ export default function App() {
   useEffect(() => {
     if (!metaReady || !isAdmin) return;
     let on = true;
+    // Ett gemensamt anrop (cachat 30 s i statusCounts) i stället för två
+    // tvingade sammanställningar per minut och vid varje sidbyte.
     const tick = () => {
-      getStatusCounts("nummerbyte", true).then((c) => { if (on) setNummerbytenOppna(c?.byStatus.oppen ?? 0); });
-      getStatusCounts("vt_bestallning", true).then((c) => { if (on) setVtOppna(c?.byStatus.oppen ?? 0); });
+      getStatusCounts("nummerbyte").then((c) => { if (on) setNummerbytenOppna(c?.byStatus.oppen ?? 0); });
+      getStatusCounts("vt_bestallning").then((c) => { if (on) setVtOppna(c?.byStatus.oppen ?? 0); });
     };
     tick();
-    const t = window.setInterval(tick, 60_000);
+    const t = window.setInterval(tick, 120_000);
     return () => { on = false; window.clearInterval(t); };
-  }, [metaReady, isAdmin, route.segs[0]]);
+  }, [metaReady, isAdmin]);
 
   /** Ladda om metadata (t.ex. efter fältändringar eller ändrad branding).
    *  OBS: måste ligga före alla villkorliga return-satser — hooks får
