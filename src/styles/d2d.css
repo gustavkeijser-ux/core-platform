@@ -1448,3 +1448,16 @@
 @media (max-width: 1023px) {
   .d2d-app .d2d-bottom-nav .d2d-nav-btn { min-width: 0; font-size: 10.5px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* Sälj från kundtjänst (D2DKundtjanst.tsx) */
+.d2d-ktsalj__knapp { margin-top: var(--sp-2); color: var(--info-ink); border-color: var(--info-ink); }
+.d2d-ktsalj__badge { margin-left: var(--sp-1); padding: 1px 8px; border-radius: 999px; background: var(--info-ink); color: var(--surface);
+  font-size: var(--text-xs); font-weight: 700; }
+.d2d-ktsalj__intro { margin: var(--sp-3) var(--sp-4) 0; font-size: var(--text-sm); color: var(--ink-muted); line-height: 1.45; }
+.d2d-ktsalj__saljare { margin: var(--sp-3) var(--sp-4) 0; flex-wrap: wrap; align-items: center; }
+.d2d-ktsalj__nya { font-size: var(--text-xs); color: var(--ink-muted); font-weight: 500; }
+.d2d-ktsalj__nya--har { color: var(--info-ink); font-weight: 700; }
+.d2d-ktsalj__bara { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--ink-muted); margin-left: auto; }
+.d2d-ktsalj__rad--ny { border-left: 3px solid var(--info-ink); }
+.d2d-ktsalj__ny { display: inline-block; margin-right: var(--sp-2); padding: 0 6px; border-radius: var(--r-sm);
+  background: var(--info-soft); color: var(--info-ink); font-size: var(--text-xs); font-weight: 700; vertical-align: 1px; }
