@@ -1439,3 +1439,12 @@
   .d2d-loner__lon { white-space: nowrap; }
   .d2d-loner__lon .d2d-loner__fast { display: none; }   /* står i underlaget */
 }
+
+/* D2D-sälj → Avtal (säljarens egna avtal, samma sida som Door to door → Avtal).
+   Sex knappar i bottenmenyn: tätare text så "Återkoppling" får plats i 390 px. */
+.d2davt--saljare { padding-top: var(--sp-4); }
+.d2davt--saljare .d2davt__rubrik { padding: 0 0 var(--sp-2); }
+.d2davt .d2d-scrive__status { white-space: nowrap; }
+@media (max-width: 1023px) {
+  .d2d-app .d2d-bottom-nav .d2d-nav-btn { min-width: 0; font-size: 10.5px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
