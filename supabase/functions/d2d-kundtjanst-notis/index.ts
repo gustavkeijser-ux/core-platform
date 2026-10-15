@@ -1,5 +1,11 @@
 // =====================================================================
-//  D2D-KUNDTJANST-NOTIS — mejl till säljaren när kundtjänst lämnar en affär.
+//  D2D-KUNDTJANST-NOTIS — mejl om affärer från kundtjänst.
+//    typ "saljare":     till säljaren när kundtjänst lämnar en affär (länk till kundkortet).
+//    typ "bekraftelse": till ärendebrevlådan (hyresgast@) när säljaren signerat — Såld eller
+//                       Signerad med Scrive. Skickas FRÅN säljarens brevlåda så att mail-sync
+//                       tar in det som inkommande och skapar ett ärende (ett mejl från brevlådan
+//                       till sig själv räknas som utgående och blir inget ärende). Nekar Microsoft
+//                       det läggs mejlet in direkt i ärendebrevlådan via mail_ingest_message.
 //
 //  Anropas direkt av d2d_kundtjanst_lamna (pg_net) och som reserv av pg_cron
 //  var 5:e minut. Databasen avgör vad som ska skickas (d2d_kundtjanst_notis_underlag:
@@ -24,7 +30,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 type Rad = {
-  id: string; tenantId: string; lagenhetId: string;
+  id: string; typ: "saljare" | "bekraftelse"; status: string | null; tenantId: string; lagenhetId: string;
   saljare: string | null; saljareEpost: string | null; kundtjanst: string | null; meddelande: string | null;
   kund: string | null; telefon: string | null; epost: string | null; adress: string | null; lgh: string | null;
   pinnar: number | null; lamnad: string;
@@ -60,6 +66,24 @@ function mejl(r: Rad) {
   };
 }
 
+function bekraftelse(r: Rad) {
+  const lank = `${APP_URL}/#/d2d/lagenhet/${encodeURIComponent(r.lagenhetId)}/-/kundtjanst`;
+  const adress = [r.adress, r.lgh ? `lgh ${r.lgh}` : null].filter(Boolean).join(", ");
+  const hur = r.status === "scrive" ? "Signerad med Scrive" : "Såld";
+  const pinnar = r.pinnar != null ? String(r.pinnar).replace(".", ",") : null;
+  return {
+    amne: `Bekräftelse kundtjänstaffär: ${hur} – ${r.kund || adress || "kund"}`,
+    html: `<div style="${STIL}">
+      <p>Affären som ${esc(r.kundtjanst ?? "kundtjänst")} lämnade till <strong>${esc(r.saljare ?? "säljaren")}</strong> är nu <strong>${esc(hur.toLowerCase())}</strong>.</p>
+      ${fakta([
+        ["Status", `<strong>${esc(hur)}</strong>`], ["Kund", esc(r.kund)], ["Telefon", esc(r.telefon)], ["E-post", esc(r.epost)],
+        ["Adress", esc(adress)], ["Säljare", esc(r.saljare)], ["Kundtjänst", esc(r.kundtjanst)], ["Pinnar", esc(pinnar)],
+      ])}
+      <p>${knapp(lank, "Öppna kundkortet")}</p>
+      <p style="color:#64748B;font-size:12px">Automatisk bekräftelse från D2D-sälj (Sälj från kundtjänst).</p></div>`,
+  };
+}
+
 async function skicka(mailbox: string, till: string, m: { amne: string; html: string }) {
   const res = await graph(`/users/${encodeURIComponent(mailbox)}/sendMail`, {
     method: "POST",
@@ -88,21 +112,41 @@ Deno.serve(async (req: Request) => {
   const { data, error } = await db.rpc("d2d_kundtjanst_notis_underlag");
   if (error) return json({ error: error.message }, 500);
   const lista = (data ?? []) as Rad[];
-  if (torr) return json({ ok: true, torr: true, utskick: lista.map((r) => ({ id: r.id, till: r.saljareEpost, amne: mejl(r).amne })) });
+  if (torr) return json({ ok: true, torr: true, utskick: lista.map((r) => ({ id: r.id, typ: r.typ,
+    till: r.typ === "bekraftelse" ? "ärendebrevlådan" : r.saljareEpost, amne: (r.typ === "bekraftelse" ? bekraftelse(r) : mejl(r)).amne })) });
   if (!lista.length) return json({ ok: true, skickade: 0 });
 
-  const brevlador = new Map<string, string | null>();
+  const brevlador = new Map<string, { id: string; mailbox: string } | null>();
   const klara: Array<{ id: string; fel?: string }> = [];
   for (const r of lista) {
     try {
-      if (!r.saljareEpost) throw new Error("säljaren saknar e-post");
       if (!brevlador.has(r.tenantId)) {
-        const { data: acc } = await db.from("mail_accounts").select("mailbox").eq("tenant_id", r.tenantId).eq("is_active", true).limit(1).maybeSingle();
-        brevlador.set(r.tenantId, acc?.mailbox ?? null);
+        const { data: acc } = await db.from("mail_accounts").select("id, mailbox").eq("tenant_id", r.tenantId).eq("is_active", true).limit(1).maybeSingle();
+        brevlador.set(r.tenantId, acc?.mailbox ? { id: acc.id, mailbox: acc.mailbox } : null);
       }
-      const mailbox = brevlador.get(r.tenantId);
-      if (!mailbox) throw new Error("ingen aktiv brevlåda");
-      await skicka(mailbox, r.saljareEpost, mejl(r));
+      const acc = brevlador.get(r.tenantId);
+      if (!acc) throw new Error("ingen aktiv brevlåda");
+      if (r.typ === "bekraftelse") {
+        const m = bekraftelse(r);
+        try {
+          // Från säljarens brevlåda → inkommande i ärendebrevlådan → ärende via mail-sync.
+          if (!r.saljareEpost || r.saljareEpost.toLowerCase() === acc.mailbox.toLowerCase()) throw new Error("ingen egen avsändare");
+          await skicka(r.saljareEpost, acc.mailbox, m);
+        } catch (e) {
+          // Reserv: lägg in mejlet direkt i ärendebrevlådan (blir ärende på samma sätt).
+          const { error: ie } = await db.rpc("mail_ingest_message", { p_account: acc.id, p_msg: {
+            id: `d2d-bekraftelse-${r.id}`, folder: "inbox", isRead: false, subject: m.amne,
+            from: r.saljareEpost && r.saljareEpost.toLowerCase() !== acc.mailbox.toLowerCase() ? r.saljareEpost : "d2d@connectestate.se",
+            to: [acc.mailbox], bodyHtml: m.html, bodyText: m.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
+            receivedAt: new Date().toISOString(), internetMessageId: `<d2d-bekraftelse-${r.id}@crm.connectestate.se>`,
+          } });
+          if (ie) throw new Error(`skicka: ${String(e).slice(0, 150)}; reserv: ${ie.message}`);
+          console.warn("d2d-kundtjanst-notis: bekräftelse via reserv", r.id, String(e).slice(0, 200));
+        }
+      } else {
+        if (!r.saljareEpost) throw new Error("säljaren saknar e-post");
+        await skicka(acc.mailbox, r.saljareEpost, mejl(r));
+      }
       klara.push({ id: r.id });
     } catch (e) {
       klara.push({ id: r.id, fel: String(e).slice(0, 300) });
