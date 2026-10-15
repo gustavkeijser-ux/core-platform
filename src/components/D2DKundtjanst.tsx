@@ -168,3 +168,122 @@ export function KundtjanstMina() {
     </section>
   );
 }
+
+/* ── Sidan "Sälj från kundtjänst" (under Alla lägenheter) ─────────────── */
+
+type Salj = {
+  alla: boolean;
+  minaNya: number;
+  saljare: Array<{ id: string; namn: string; nya: number; totalt: number }>;
+  affarer: Array<{ id: string; status: string | null; ny: boolean; lgh: string | null; adress: string;
+                   kund: string | null; telefon: string | null; saljareId: string | null; saljare: string | null;
+                   kundtjanst: string | null; lamnad: string | null; pinnar: number }>;
+};
+
+/** Hämtar sidans data. DB: d2d_kundtjanst_salj (säljaren ser sina, admin/kundtjänst alla). */
+function useKundtjanstSalj(): { data: Salj | null; fel: boolean } {
+  const [data, setData] = useState<Salj | null>(null);
+  const [fel, setFel] = useState(false);
+  useEffect(() => {
+    let on = true;
+    Promise.resolve(supabase.rpc("d2d_kundtjanst_salj"))
+      .then(({ data: d, error }) => { if (!on) return; if (error) setFel(true); else setData(d as Salj); })
+      .catch(() => { if (on) setFel(true); });
+    return () => { on = false; };
+  }, []);
+  return { data, fel };
+}
+
+/** Knappen under "Alla lägenheter" i projektlistan, med antal nya (mina nya för säljaren, alla nya för admin/kundtjänst). */
+export function KundtjanstSaljKnapp({ onOpen }: { onOpen: () => void }) {
+  const { data } = useKundtjanstSalj();
+  if (!data || (!data.alla && data.affarer.length === 0)) return null;
+  const nya = data.alla ? data.saljare.reduce((s, x) => s + x.nya, 0) : data.minaNya;
+  return (
+    <button type="button" className="btn btn--ghost d2d-alla__knapp d2d-ktsalj__knapp" onClick={onOpen}>
+      <span aria-hidden>☎</span> Sälj från kundtjänst
+      {nya > 0 && <span className="d2d-ktsalj__badge" aria-label={`${nya} nya`}>{nya} {nya === 1 ? "ny" : "nya"}</span>}
+    </button>
+  );
+}
+
+export function KundtjanstSaljSida({ onBack, onOpenLagenhet }: {
+  onBack: () => void;
+  onOpenLagenhet: (id: string) => void;
+}) {
+  const { data, fel } = useKundtjanstSalj();
+  const [saljare, setSaljare] = useState<string | null>(null);
+  const [baraNya, setBaraNya] = useState(false);
+
+  const rader = (data?.affarer ?? []).filter((a) => (!saljare || a.saljareId === saljare) && (!baraNya || a.ny));
+  const nyaTotalt = (data?.saljare ?? []).reduce((s, x) => s + x.nya, 0);
+
+  return (
+    <div className="d2d-detail d2d-ktsalj">
+      <div className="d2d-topbar">
+        <button className="d2d-back" onClick={onBack} aria-label="Tillbaka till projekt">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4l-6 6 6 6"/></svg>
+        </button>
+        <div className="d2d-topbar__title">
+          <h2>Sälj från kundtjänst</h2>
+          <span className="d2d-topbar__sub">{data ? `${data.affarer.length} st · ${nyaTotalt} ${nyaTotalt === 1 ? "ny" : "nya"}` : "Laddar…"}</span>
+        </div>
+      </div>
+
+      {fel && <div className="d2d-empty">Kunde inte hämta kundtjänstens sälj. Försök igen.</div>}
+      {!fel && !data && <div className="d2d-loading">Laddar…</div>}
+
+      {data && (
+        <>
+          <p className="d2d-ktsalj__intro">
+            Affärer som kundtjänst tagit emot och lämnat till en säljare. <strong>Ny</strong> = väntar på säljaren:
+            ring kunden, validera tjänsterna och signera (Såld eller Scrive).{data.alla ? "" : " Du ser affärerna som lämnats till dig."}
+          </p>
+
+          {/* Antal nya per tilldelad säljare — klicka för att filtrera. */}
+          <div className="d2d-status-picker d2d-ktsalj__saljare" role="group" aria-label="Filtrera på säljare">
+            {data.alla && (
+              <button type="button" className={`d2d-status-btn${!saljare ? " d2d-status-btn--active" : ""}`} onClick={() => setSaljare(null)}>
+                Alla <span className="d2d-ktsalj__nya">{nyaTotalt} nya</span>
+              </button>
+            )}
+            {data.saljare.map((s) => (
+              <button key={s.id} type="button"
+                className={`d2d-status-btn${saljare === s.id ? " d2d-status-btn--active" : ""}`}
+                onClick={() => setSaljare(saljare === s.id ? null : s.id)}
+                title={`${s.nya} nya av ${s.totalt}`}>
+                {s.namn} <span className={`d2d-ktsalj__nya${s.nya > 0 ? " d2d-ktsalj__nya--har" : ""}`}>{s.nya} {s.nya === 1 ? "ny" : "nya"}</span>
+              </button>
+            ))}
+            <label className="d2d-ktsalj__bara">
+              <input type="checkbox" checked={baraNya} onChange={(e) => setBaraNya(e.target.checked)} /> Bara nya
+            </label>
+          </div>
+
+          {rader.length === 0 && <div className="d2d-empty">{data.affarer.length === 0 ? "Inga affärer från kundtjänst ännu." : "Inga affärer med det urvalet."}</div>}
+
+          <div className="d2d-list">
+            {rader.map((a) => (
+              <button key={a.id} type="button" className={`d2d-card d2d-ktsalj__rad${a.ny ? " d2d-ktsalj__rad--ny" : ""}`} onClick={() => onOpenLagenhet(a.id)}>
+                <div className="d2d-card__main">
+                  <span className="d2d-card__title">
+                    {a.ny && <span className="d2d-ktsalj__ny">Ny</span>}
+                    {a.adress || "—"}{a.lgh ? `, lgh ${a.lgh}` : ""}
+                  </span>
+                  <span className="d2d-card__sub">
+                    {[a.kund, a.telefon, data.alla && a.saljare ? `→ ${a.saljare}` : null,
+                      a.kundtjanst ? `från ${a.kundtjanst}` : null, datum(a.lamnad)].filter(Boolean).join(" · ")}
+                  </span>
+                </div>
+                <span className={`d2d-kt-mina__status d2d-kt-mina__status--${a.status ?? "x"}`}>
+                  {a.ny ? "Väntar" : STATUS[a.status ?? ""] ?? a.status ?? "—"}
+                  {a.pinnar > 0 && <small> {a.pinnar.toLocaleString("sv-SE", { maximumFractionDigits: 1 })} p</small>}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
