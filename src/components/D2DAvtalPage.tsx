@@ -13,6 +13,10 @@ import { ScriveOkopplade } from "./D2DScriveImport";
      • Totalt — sålda och signerade Scrive-avtal tillsammans: antal och
        summor per månad, totalt och per säljare.
    Period och projekt gäller för alla flikar.
+
+   Säljarvyn (D2D-sälj → Avtal) använder samma sida med `saljarvy`: bara
+   säljarens egna avtal (databasen filtrerar), utan säljarkolumn och utan
+   okopplade Scrive-avtal, och Totalt visas per månad i stället för per säljare.
    ========================================================================== */
 
 type Avtal = {
@@ -49,7 +53,9 @@ function periodFran(p: Period): string | null {
   return null;
 }
 
-export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (id: string) => void; lagFields?: FieldDef[] }) {
+export function D2DAvtalPage({ onOpenRecord, lagFields = [], saljarvy = false }: {
+  onOpenRecord: (id: string) => void; lagFields?: FieldDef[]; saljarvy?: boolean;
+}) {
   const [flik, setFlik] = useState<Flik>("scrive");
   const [avtal, setAvtal] = useState<Avtal[] | null>(null);
   const [salda, setSalda] = useState<Sald[] | null>(null);
@@ -133,6 +139,24 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
     return [...m.values()].sort((a, b) => (b.salda + b.scrive) - (a.salda + a.scrive) || a.saljare.localeCompare(b.saljare, "sv"));
   }, [saldUrval, signerade]);
 
+  // Säljarvyn: Totalt per månad (signeringsdatum för Scrive, säljdatum för Sålda).
+  const perManad = useMemo(() => {
+    const m = new Map<string, { manad: string; salda: number; saldKr: number; scrive: number; scriveKr: number }>();
+    const rad = (d: string | null) => {
+      const k = (d ?? "").slice(0, 7) || "okänt";
+      if (!m.has(k)) m.set(k, { manad: k, salda: 0, saldKr: 0, scrive: 0, scriveKr: 0 });
+      return m.get(k)!;
+    };
+    for (const s of saldUrval) { const r = rad(s.datum); r.salda++; r.saldKr += s.manadSumma; }
+    for (const a of signerade) { const r = rad(a.signerad ?? a.skapad); r.scrive++; r.scriveKr += a.manadSumma ?? 0; }
+    return [...m.values()].sort((a, b) => b.manad.localeCompare(a.manad));
+  }, [saldUrval, signerade]);
+  const manadNamn = (k: string) => {
+    if (k === "okänt") return "Okänt datum";
+    const t = new Date(`${k}-01T12:00:00`).toLocaleDateString("sv-SE", { month: "long", year: "numeric" });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+
   async function oppnaPdf(a: Avtal) {
     setPdfFel(null);
     const flikFonster = window.open("", "_blank");   // öppnas direkt vid klicket (popup-skydd på mobilen)
@@ -150,7 +174,12 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
   ];
 
   return (
-    <div className="page utf d2davt">
+    <div className={`page utf d2davt${saljarvy ? " d2davt--saljare" : ""}`}>
+      {saljarvy && (
+        <div className="d2d-list__header d2davt__rubrik">
+          <h2>Mina avtal</h2>
+        </div>
+      )}
       <div className="tab-bar d2davt__flikar" role="tablist">
         {flikar.map(([k, label, n]) => (
           <button key={k} role="tab" aria-selected={flik === k} className={`tab-bar__tab${flik === k ? " tab-bar__tab--active" : ""}`}
@@ -173,7 +202,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
           </select>
         )}
         {flik !== "totalt" && (
-          <input className="input input--sm d2davt__sok" placeholder="Sök kund, adress, säljare…" value={fritext} onChange={(e) => setFritext(e.target.value)} />
+          <input className="input input--sm d2davt__sok" placeholder={saljarvy ? "Sök kund, adress…" : "Sök kund, adress, säljare…"} value={fritext} onChange={(e) => setFritext(e.target.value)} />
         )}
       </div>
 
@@ -187,9 +216,11 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
           <div className="card"><b>{kr(scriveManad)}</b><span>per månad, signerade</span></div>
         </div>
 
-        <section className="card utf__sek d2davt__okop">
-          <ScriveOkopplade onKopplad={() => { void ladda(); }} />
-        </section>
+        {!saljarvy && (
+          <section className="card utf__sek d2davt__okop">
+            <ScriveOkopplade onKopplad={() => { void ladda(); }} />
+          </section>
+        )}
 
         <section className="card utf__sek">
           <div className="utf__sekhuvud">
@@ -216,7 +247,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
             <div className="rtable-scroll">
               <table className="rtable utf__tabell">
                 <thead>
-                  <tr><th>Kund</th><th>Adress</th><th>Tjänster</th><th>Per månad</th><th>Säljare</th><th>Status</th><th /></tr>
+                  <tr><th>Kund</th><th>Adress</th><th>Tjänster</th><th>Per månad</th>{!saljarvy && <th>Säljare</th>}<th>Status</th><th /></tr>
                 </thead>
                 <tbody>
                   {avtalLista.map((a) => (
@@ -230,7 +261,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
                       </td>
                       <td data-label="Tjänster"><span>{a.tjanster.join(", ") || "–"}</span></td>
                       <td data-label="Per månad" className="utf__num">{kr(a.manadSumma)}</td>
-                      <td data-label="Säljare">{a.saljare ?? "–"}</td>
+                      {!saljarvy && <td data-label="Säljare">{a.saljare ?? "–"}</td>}
                       <td data-label="Status">
                         <span className={`d2d-scrive__status d2d-scrive__status--${a.status}`}>{STATUS[a.status]}</span>
                         {a.leverans === "skickat" && a.status === "vantar" && <small className="utf__sub"> skickat till kunden</small>}
@@ -268,7 +299,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
             <div className="rtable-scroll">
               <table className="rtable utf__tabell">
                 <thead>
-                  <tr><th>Kund</th><th>Adress</th><th>Tjänster</th><th>Per månad</th><th>Säljare</th></tr>
+                  <tr><th>Kund</th><th>Adress</th><th>Tjänster</th><th>Per månad</th>{!saljarvy && <th>Säljare</th>}</tr>
                 </thead>
                 <tbody>
                   {saldUrval.map((s) => (
@@ -282,7 +313,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
                       </td>
                       <td data-label="Tjänster"><span>{s.tjanster.join(", ") || "Ingen tjänst ifylld"}</span></td>
                       <td data-label="Per månad" className="utf__num">{s.tjanster.length ? kr(s.manadSumma) : "–"}</td>
-                      <td data-label="Säljare">{s.saljare ?? "–"}</td>
+                      {!saljarvy && <td data-label="Säljare">{s.saljare ?? "–"}</td>}
                     </tr>
                   ))}
                 </tbody>
@@ -300,7 +331,36 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
           <div className="card"><b>{signerade.length}</b><span>Scrive signerade · {kr(scriveManad)}/mån</span></div>
         </div>
 
-        <section className="card utf__sek">
+        {saljarvy && (
+          <section className="card utf__sek">
+            <div className="utf__sekhuvud"><h2>Per månad</h2></div>
+            <p className="utf__ingress">Dina sålda och signerade Scrive-avtal. Summorna är kampanjpris per månad enligt prislistan.{antal.vantar > 0 ? ` ${antal.vantar} Scrive-avtal väntar fortfarande på signatur och räknas inte.` : ""}</p>
+            {perManad.length === 0 ? (
+              <p className="formfield__help">Inget i det här urvalet.</p>
+            ) : (
+              <div className="rtable-scroll">
+                <table className="rtable utf__tabell">
+                  <thead>
+                    <tr><th>Månad</th><th>Sålda</th><th>Scrive</th><th>Totalt</th><th>Per månad</th></tr>
+                  </thead>
+                  <tbody>
+                    {perManad.map((r) => (
+                      <tr key={r.manad} className="rtable__row">
+                        <td data-label="Månad" className="rtable__title">{manadNamn(r.manad)}</td>
+                        <td data-label="Sålda" className="utf__num">{r.salda}<small className="utf__sub"> {kr(r.saldKr)}</small></td>
+                        <td data-label="Scrive" className="utf__num">{r.scrive}<small className="utf__sub"> {kr(r.scriveKr)}</small></td>
+                        <td data-label="Totalt" className="utf__num"><b>{r.salda + r.scrive}</b></td>
+                        <td data-label="Per månad" className="utf__num"><b>{kr(r.saldKr + r.scriveKr)}</b></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {!saljarvy && <section className="card utf__sek">
           <div className="utf__sekhuvud"><h2>Per säljare</h2></div>
           <p className="utf__ingress">Sålda i D2D och signerade Scrive-avtal. Summorna är kampanjpris per månad enligt prislistan.{antal.vantar > 0 ? ` ${antal.vantar} Scrive-avtal väntar fortfarande på signatur och räknas inte.` : ""}</p>
           {perSaljare.length === 0 ? (
@@ -332,7 +392,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [] }: { onOpenRecord: (
               </table>
             </div>
           )}
-        </section>
+        </section>}
       </>)}
     </div>
   );
