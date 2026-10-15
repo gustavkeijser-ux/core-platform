@@ -33,8 +33,12 @@ type Lonemodell = {
   startdatum?: string | null;
   /** Sista dagen i första löneperioden. Första perioden 26 september–31 oktober 2026, sedan kalendermånader. */
   forstaPeriodTill?: string | null;
+  /** Kundtjänst-affärer (andelar 0–1). Kundtjänst: kr/pinne och trappa × andel, plus fast lön.
+   *  Säljaren som signerar: pinnar × saljarAndel (räknas mot provision och bonus). */
+  kundtjanst?: Kundtjanstmodell;
   updatedAt?: string | null;
 };
+type Kundtjanstmodell = { andel?: number; saljarAndel?: number; fastLon?: number; semesterersattning?: number };
 
 type Niva = {
   niva: number | null; bonus: number; nastaNiva: number | null; nastaBonus: number | null; kvar: number | null;
@@ -43,7 +47,12 @@ type Justering = { id: string; belopp: number; kommentar: string; skapadAt: stri
 /** Riktig lön räknas bara på Såld. "vantar" = Scrive-signerade som ännu inte är Sålda:
  *  visas inom parentes och ingår bara i den potentiella lönen (…InklVantar). */
 type SaljareRad = Niva & {
-  id: string; namn: string; pinnar: number; vantar: number; affarer: number; affarerVantar: number;
+  id: string; namn: string;
+  /** "kundtjanst" = kundtjänstens rad med egen modell (kr/pinne, trappa, fast lön). */
+  roll?: "saljare" | "kundtjanst";
+  affarerKundtjanst?: number; affarerKundtjanstVantar?: number;
+  krPerPinne?: number; trappa?: Trappsteg[]; fastLon?: number;
+  semesterersattning?: number; semesterersattningInklVantar?: number; pinnar: number; vantar: number; affarer: number; affarerVantar: number;
   bonusInklVantar: number;
   /** Ånger registrerade i perioden för affärer som löneräknats i en tidigare period (dras av i pinnar). */
   anger?: number; angerPinnar?: number;
@@ -174,6 +183,26 @@ export function LonemodellEditor({ fields }: { fields: FieldDef[] }) {
     setBas(m); setUtkast(JSON.parse(JSON.stringify(m))); setSparat(true);
   }
 
+  function sattKt(k: keyof Kundtjanstmodell, raw: string, procent: boolean) {
+    setSparat(false);
+    setUtkast((u) => {
+      if (!u) return u;
+      const n = tal(raw);
+      const kt = { ...(u.kundtjanst ?? {}) };
+      if (n == null) delete kt[k]; else kt[k] = procent ? Math.round(n * 100) / 10000 : n;
+      return { ...u, kundtjanst: kt };
+    });
+  }
+  const procentText = (n: number | undefined) => (n == null ? "" : String(Math.round(n * 10000) / 100).replace(".", ","));
+  // Det användaren skriver behålls som text (så att t.ex. "12," går att skriva); värdet sparas som andel 0–1.
+  const [ktRaw, setKtRaw] = useState<Partial<Record<keyof Kundtjanstmodell, string>>>({});
+  useEffect(() => { setKtRaw({}); }, [bas]);
+  const ktVarde = (k: keyof Kundtjanstmodell, procent: boolean) =>
+    ktRaw[k] ?? (procent ? procentText(utkast?.kundtjanst?.[k]) : String(utkast?.kundtjanst?.[k] ?? ""));
+  const ktAndra = (k: keyof Kundtjanstmodell, procent: boolean) => (e: { target: { value: string } }) => {
+    setKtRaw((r) => ({ ...r, [k]: e.target.value })); sattKt(k, e.target.value, procent);
+  };
+
   if (fel && !utkast) return <div className="formfield__error">Kunde inte hämta lönemodellen: {fel}</div>;
   if (!utkast) return <p className="formfield__help">Hämtar lönemodellen…</p>;
 
@@ -206,6 +235,44 @@ export function LonemodellEditor({ fields }: { fields: FieldDef[] }) {
             onChange={(e) => { setSparat(false); setUtkast((u) => u && ({ ...u, utbetalningManaderEfter: tal(e.target.value) ?? undefined })); }} />
         </label>
       </div>
+
+      <section className="d2d-lon-editor__kt">
+        <h3>Kundtjänst</h3>
+        <p className="field-config__hint">
+          Affärer som kundtjänst tar emot och lämnar till en säljare (D2D-sälj → adressen → Lämna till säljare). Kundtjänst får alla pinnar
+          med sin andel av kr per pinne och av bonustrappan, plus fast lön. Säljaren som validerar och signerar får säljarandelen av pinnarna,
+          som räknas mot både provision och bonus. Säljarens del betalas utöver kundtjänstens.
+        </p>
+        <div className="d2d-lon-editor__villkor">
+          <label>Kundtjänstens andel, %
+            <input className="input input--sm" inputMode="decimal" value={ktVarde("andel", true)}
+              onChange={ktAndra("andel", true)} />
+          </label>
+          <label>Säljarens andel, %
+            <input className="input input--sm" inputMode="decimal" value={ktVarde("saljarAndel", true)}
+              onChange={ktAndra("saljarAndel", true)} />
+          </label>
+          <label>Fast lön, kr/månad
+            <input className="input input--sm" inputMode="numeric" value={ktVarde("fastLon", false)}
+              onChange={ktAndra("fastLon", false)} />
+          </label>
+          <label>Semesterersättning, %
+            <input className="input input--sm" inputMode="decimal" value={ktVarde("semesterersattning", true)}
+              onChange={ktAndra("semesterersattning", true)} />
+          </label>
+        </div>
+        {(() => {
+          const a = utkast.kundtjanst?.andel ?? 0.8;
+          const t = [...utkast.trappa].filter((x) => x.pinnar > 0).sort((x, y) => x.pinnar - y.pinnar);
+          return (
+            <p className="d2d-lon-editor__kt-utfall">
+              Ger kundtjänst <strong>{kr((utkast.krPerPinne ?? 0) * a)} per pinne</strong>
+              {t.length > 0 && <> och bonus {t.map((x) => `${x.pinnar} → ${kr(Math.round(x.bonus * a))}`).join(" · ")}</>}.
+              Säljaren får {pn((utkast.kundtjanst?.saljarAndel ?? 0.2) * 1)} pinne per kundtjänstpinne.
+            </p>
+          );
+        })()}
+      </section>
 
       <div className="d2d-lon-editor__kolumner">
         <section>
@@ -395,18 +462,23 @@ function nivaFor(pinnar: number, trappa: Trappsteg[]): Niva {
 type VyRad = Niva & {
   affarer: number; affarerP: number; pinnar: number; pinnarP: number;
   provision: number; justeringar: number; lon: number; lonP: number | null;
+  /** Kundtjänst: fast lön (ingår i lon) och semesterersättning (sparas, ingår inte). */
+  fast: number; semester: number | null;
   produkter: Array<{ nyckel: string; antal: number; antalP: number; pinnar: number; pinnarP: number }>;
 };
 
 /** En säljares siffror i valt urval. Scrive räknas som om bara de signerade avtalen fanns (utan justeringar). */
-function vy(s: SaljareRad, urval: Urval, trappa: Trappsteg[], krPinne: number): VyRad {
+function vy(s: SaljareRad, urval: Urval, trappaStd: Trappsteg[], krPinneStd: number): VyRad {
   const prod = s.produkter ?? [];
+  // Kundtjänstens rader har egen modell (andel av kr/pinne och trappa).
+  const trappa = s.trappa ?? trappaStd;
+  const krPinne = s.krPerPinne ?? krPinneStd;
   if (urval === "scrive") {
     const n = nivaFor(s.vantar, trappa);
     const provision = Math.round(s.vantar * krPinne);
     return {
       ...n, affarer: s.affarerVantar, affarerP: 0, pinnar: s.vantar, pinnarP: 0,
-      provision, justeringar: 0, lon: provision + n.bonus, lonP: null,
+      provision, justeringar: 0, fast: 0, semester: null, lon: provision + n.bonus, lonP: null,
       produkter: prod.filter((p) => (p.antalScrive ?? 0) > 0)
         .map((p) => ({ nyckel: p.nyckel, antal: p.antalScrive ?? 0, antalP: 0, pinnar: p.pinnarScrive ?? 0, pinnarP: 0 })),
     };
@@ -416,6 +488,7 @@ function vy(s: SaljareRad, urval: Urval, trappa: Trappsteg[], krPinne: number): 
     niva: s.niva, bonus: s.bonus, nastaNiva: s.nastaNiva, nastaBonus: s.nastaBonus, kvar: s.kvar,
     affarer: s.affarer, affarerP: medP ? s.affarerVantar : 0, pinnar: s.pinnar, pinnarP: medP ? s.vantar : 0,
     provision: s.provision ?? 0, justeringar: s.justeringar ?? 0, lon: s.lon ?? 0,
+    fast: s.fastLon ?? 0, semester: s.roll === "kundtjanst" ? s.semesterersattning ?? 0 : null,
     lonP: medP && (s.lonInklVantar ?? 0) > (s.lon ?? 0) ? s.lonInklVantar ?? null : null,
     produkter: prod.filter((p) => medP || p.antal > 0)
       .map((p) => ({ nyckel: p.nyckel, antal: p.antal, antalP: medP ? p.antalScrive ?? 0 : 0, pinnar: p.pinnar, pinnarP: medP ? p.pinnarScrive ?? 0 : 0 })),
@@ -487,7 +560,9 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
           med status <strong>Såld</strong>, den löneperiod de blev sålda; lönen betalas ut {data.modell.utbetalningManaderEfter ?? 1} månad{(data.modell.utbetalningManaderEfter ?? 1) === 1 ? "" : "er"} efter.
           Scrive-signerade som ännu inte är Sålda står inom parentes och ingår bara i den potentiella lönen. Välj <strong>Sålda</strong> för bara den
           riktiga lönen eller <strong>Scrive</strong> för vad de signerade avtalen ger när de blir Sålda. Klicka på en säljare för underlag och justeringar.
-          <strong>Ånger:</strong> ångras en affär i samma löneperiod räknas den inte alls; ångras den efter att perioden gått dras pinnarna av i den period ångern registrerades.
+          {" "}<strong>Ånger:</strong> ångras en affär i samma löneperiod räknas den inte alls; ångras den efter att perioden gått dras pinnarna av i den period ångern registrerades.
+          {" "}<strong>Kundtjänst:</strong> affärer som kundtjänst lämnat till en säljare ger kundtjänst alla pinnar (egen kr/pinne och trappa, plus fast lön)
+          och säljaren säljarandelen av pinnarna ("varav … kt").
           Modellen ändras under Inställningar → Priser.
         </p>
         <div className="d2dd__chips d2d-loner__urval" role="group" aria-label="Vilka affärer som räknas">
@@ -521,7 +596,7 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
               <div className="d2d-loner__summa">
                 <span className="d2d-loner__summa-tal">{kr(lon)}</span>
                 <span className="d2d-loner__summa-text">
-                  {urval === "scrive" ? "om Scrive-signerade blir Sålda" : "att betala ut"} · provision {kr(sum(m, (v) => v.provision))} · bonus {kr(sum(m, (v) => v.bonus))}
+                  {urval === "scrive" ? "om Scrive-signerade blir Sålda" : "att betala ut"}{sum(m, (v) => v.fast) > 0 ? ` · fast lön ${kr(sum(m, (v) => v.fast))}` : ""} · provision {kr(sum(m, (v) => v.provision))} · bonus {kr(sum(m, (v) => v.bonus))}
                   {sum(m, (v) => v.justeringar) !== 0 ? ` · justeringar ${kr(sum(m, (v) => v.justeringar))}` : ""}
                   {lonInkl > lon ? ` · potentiellt ${kr(lonInkl)} inkl. Scrive` : ""}
                 </span>
@@ -530,16 +605,18 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
 
             <div className="d2d-loner__tabell" role="table">
               <div className="d2d-loner__tr d2d-loner__tr--head" role="row">
-                <span>Säljare</span><span>Affärer</span><span>Pinnar</span><span>Provision</span><span>Bonus</span><span>Justeringar</span><span>Lön</span>
+                <span>Person</span><span>Affärer</span><span>Pinnar</span><span>Provision</span><span>Bonus</span><span>Justeringar</span><span>Lön</span>
               </div>
               {rader(m).map(({ s, v }) => {
-                const key = `${m.manad}|${s.id}`;
+                const key = `${m.manad}|${s.id}|${s.roll ?? "saljare"}`;
+                const arKt = s.roll === "kundtjanst";
                 const open = oppen === key;
                 return (
-                  <div key={s.id} className={`d2d-loner__rad${open ? " d2d-loner__rad--open" : ""}`}>
+                  <div key={key} className={`d2d-loner__rad${open ? " d2d-loner__rad--open" : ""}`}>
                     <button type="button" className="d2d-loner__tr" role="row" aria-expanded={open} onClick={() => oppna(key)}>
-                      <span className="d2d-loner__namn">{s.namn}</span>
-                      <span>{v.affarer}<Paren n={v.affarerP} /></span>
+                      <span className="d2d-loner__namn">{s.namn}{arKt && <span className="d2d-loner__roll">Kundtjänst</span>}</span>
+                      <span>{v.affarer}<Paren n={v.affarerP} />
+                        {!arKt && !!s.affarerKundtjanst && urval !== "scrive" && <small className="d2d-loner__via" title="Affärer från kundtjänst — säljaren får säljarandelen av pinnarna"> varav {s.affarerKundtjanst} kt</small>}</span>
                       <span className="d2d-loner__pinnar">{pn(v.pinnar)}<Paren n={v.pinnarP} f={pn} />
                         {!!s.anger && <small className="d2d-loner__neg" title={`${s.anger} ånger från tidigare period dras av`}> −{pn(s.angerPinnar ?? 0)} ånger</small>}</span>
                       <span>{kr(v.provision)}</span>
@@ -550,6 +627,7 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
                       <span className={v.justeringar ? (v.justeringar < 0 ? "d2d-loner__neg" : "d2d-loner__pos") : undefined}>{v.justeringar ? kr(v.justeringar) : "—"}</span>
                       <span className="d2d-loner__lon">
                         {kr(v.lon)}{v.lonP != null ? <small className="d2d-lon__scrive" title="Potentiell lön inkl. Scrive-signerade"> ({kr(v.lonP)})</small> : null}
+                        {v.fast > 0 && <small className="d2d-loner__fast" title="Fast lön ingår i lönen"> varav fast {kr(v.fast)}</small>}
                       </span>
                     </button>
                     {open && (
@@ -570,11 +648,21 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
                                 </div>
                               ))}
                               <div className="d2d-loner__produkt d2d-loner__produkt--summa">
-                                <span>{pn(v.pinnar)} pinnar × {kr(krPinne)}</span><span /><span>{kr(v.provision)}</span>
+                                <span>{pn(v.pinnar)} pinnar × {kr(s.krPerPinne ?? krPinne)}</span><span /><span>{kr(v.provision)}</span>
                               </div>
                               {v.bonus > 0 && (
                                 <div className="d2d-loner__produkt d2d-loner__produkt--summa">
                                   <span>Bonus, nivå {v.niva}</span><span /><span>{kr(v.bonus)}</span>
+                                </div>
+                              )}
+                              {v.fast > 0 && (
+                                <div className="d2d-loner__produkt d2d-loner__produkt--summa">
+                                  <span>Fast lön</span><span /><span>{kr(v.fast)}</span>
+                                </div>
+                              )}
+                              {v.semester != null && (
+                                <div className="d2d-loner__produkt d2d-loner__produkt--summa d2d-loner__produkt--sparas">
+                                  <span>Semesterersättning (sparas till semestern)</span><span /><span>+ {kr(v.semester)}</span>
                                 </div>
                               )}
                             </div>
