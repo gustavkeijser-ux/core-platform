@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { mobilEnheter, antalExtra, EXTRA_VAL } from "@/lib/d2dPris";
 
 /**
  * Mobilabonnemang i D2D-vyn: hur kundens nummer ska hanteras.
@@ -14,9 +15,14 @@ import { useEffect, useState } from "react";
  * fältet finns kvar i datan för äldre poster). När allt är ifyllt skapar servern automatiskt ett
  * nummerbytesärende + en admin-uppgift (se migration 0029). Startdatum
  * låses för säljaren när ärendet finns — bara admin kan ändra det.
+ *
+ * Flera abonnemang (t.ex. 2 × 10 GB, okt 2026): en huvudrad per abonnemang
+ * (typ "huvud", abonnemang = sorten), så att varje abonnemang får sitt eget
+ * nummer att flytta. Raderna följer antalet under Mobil; ifyllda rader tas
+ * aldrig bort automatiskt.
  */
 
-export type NummerRad = { typ: "huvud" | "extra"; tillfalligt?: string; riktigt: string; agare: string };
+export type NummerRad = { typ: "huvud" | "extra"; tillfalligt?: string; riktigt: string; agare: string; abonnemang?: string };
 
 type Props = {
   lagenhetId: string;
@@ -24,6 +30,8 @@ type Props = {
   isAdmin: boolean;
   /** Spara ändringar (patch av lägenhetens fält). delayMs = debounce vid inmatning. */
   onPatch: (patch: Record<string, unknown>, delayMs: number) => void;
+  /** Visningsnamn för ett abonnemang ("10_gb" → "10 GB"). */
+  planLabel?: (key: string) => string;
 };
 
 const TOM_RAD = (typ: NummerRad["typ"]): NummerRad => ({ typ, riktigt: "", agare: "" });
@@ -31,8 +39,25 @@ const TOM_RAD = (typ: NummerRad["typ"]): NummerRad => ({ typ, riktigt: "", agare
 function rader(data: Record<string, unknown>): NummerRad[] {
   const v = data.mobil_nummer as { rows?: unknown } | null | undefined;
   const rows = Array.isArray(v?.rows) ? (v!.rows as NummerRad[]) : [];
-  const huvud = rows.find((r) => r.typ === "huvud") ?? TOM_RAD("huvud");
-  return [huvud, ...rows.filter((r) => r.typ === "extra")];
+  return [...rows.filter((r) => r.typ === "huvud"), ...rows.filter((r) => r.typ === "extra")];
+}
+
+const ifylld = (r: NummerRad) => !!(r.riktigt?.trim() || r.agare?.trim());
+
+/** En huvudrad per sålt abonnemang (minst en) + extrarader. Ifyllda rader
+ *  utöver antalet abonnemang ligger kvar tills säljaren tar bort dem. */
+function justera(rows: NummerRad[], enheter: string[], antalExtraRader: number): NummerRad[] {
+  const huvud = rows.filter((r) => r.typ === "huvud");
+  const extra = [...rows.filter((r) => r.typ === "extra")];
+  while (extra.length < antalExtraRader) extra.push(TOM_RAD("extra"));
+  const n = Math.max(1, enheter.length);
+  const ut: NummerRad[] = [];
+  for (let i = 0; i < Math.max(n, huvud.length); i++) {
+    const r = huvud[i] ?? TOM_RAD("huvud");
+    if (i >= n && !ifylld(r)) continue;
+    ut.push({ ...r, typ: "huvud", ...(enheter[i] ? { abonnemang: enheter[i] } : {}) });
+  }
+  return [...ut, ...extra];
 }
 
 /** Dagar från idag till ett datum (ÅÅÅÅ-MM-DD). */
@@ -65,14 +90,19 @@ export function StartdatumVarning({ datum }: { datum: string }) {
   );
 }
 
-export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch }: Props) {
+export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel = (k) => k }: Props) {
   const val = (data.mobil_nummerval as string | null) ?? "";
   const [slumpat, setSlumpat] = useState(val === "tillfalligt" || val === "nytt_nummer");
   useEffect(() => { if (val === "tillfalligt" || val === "nytt_nummer") setSlumpat(true); }, [val]);
 
-  const [rows, setRows] = useState<NummerRad[]>(() => rader(data));
+  const [sparade, setRows] = useState<NummerRad[]>(() => rader(data));
   // Ny lägenhet → läs om raderna.
   useEffect(() => { setRows(rader(data)); /* eslint-disable-next-line */ }, [lagenhetId]);
+  const enheter = mobilEnheter(data);
+  const valdaMobil = Array.isArray(data.salt_mobil) ? (data.salt_mobil as unknown[]).map(String) : [];
+  const rows = justera(sparade, enheter, valdaMobil.includes(EXTRA_VAL) ? antalExtra(data) : 0);
+  const antalAbb = Math.max(1, enheter.length);
+  const huvudRader = rows.filter((r) => r.typ === "huvud").length;
 
   const registrerat = !!data.mobil_nummerbyte_id;
   const startLast = registrerat && !isAdmin;
@@ -93,6 +123,15 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch }: Props) 
     const angivet = Number(data.mobil_extra_antal) || 0;
     if (extra > angivet) patch.mobil_extra_antal = extra;
     onPatch(patch, delay);
+  };
+  /** Ta bort en extraanvändare: antalet extraanvändare minskar (sista bort = valet bort). */
+  const taBortExtra = (i: number) => {
+    const next = rows.filter((_, j) => j !== i);
+    const kvar = next.filter((r) => r.typ === "extra").length;
+    setRows(next);
+    const patch: Record<string, unknown> = { mobil_nummer: { rows: next }, mobil_extra_antal: kvar || null };
+    if (!kvar) { const m = valdaMobil.filter((v) => v !== EXTRA_VAL); patch.salt_mobil = m.length ? m : null; }
+    onPatch(patch, 0);
   };
   const setCell = (i: number, key: "riktigt" | "agare", v: string) =>
     saveRows(rows.map((r, j) => (j === i ? { ...r, [key]: v } : r)));
@@ -179,10 +218,13 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch }: Props) 
           {rows.map((r, i) => (
             <fieldset key={i} className={`mnr-card${r.typ === "huvud" ? " mnr-card--huvud" : ""}`}>
               <legend className="mnr-card__title">
-                {r.typ === "huvud" ? <><span className="mnr-badge">Huvudnummer</span></> : <>Extraanvändare {i}</>}
+                {r.typ === "extra" ? <>Extraanvändare {i - huvudRader + 1}</>
+                  : huvudRader === 1 ? <><span className="mnr-badge">Huvudnummer</span>{r.abonnemang && enheter.length > 0 ? ` ${planLabel(r.abonnemang)}` : ""}</>
+                  : <><span className="mnr-badge">Abonnemang {i + 1}</span>{r.abonnemang ? ` ${planLabel(r.abonnemang)}` : ""}</>}
               </legend>
               <label className="mnr-field">
-                <span className="label">{r.typ === "huvud" ? "Kundens befintliga nummer (porteras in) *" : "Extraanvändarens befintliga nummer (porteras in) *"}</span>
+                <span className="label">{r.typ === "extra" ? "Extraanvändarens befintliga nummer (porteras in) *"
+                  : huvudRader === 1 ? "Kundens befintliga nummer (porteras in) *" : `Befintligt nummer för abonnemang ${i + 1} (porteras in) *`}</span>
                 <input className={`input${saknas(r.riktigt) ? " mnr-input--missing" : ""}`} type="tel" inputMode="tel"
                   placeholder="073-331 71 42" value={r.riktigt} onChange={(e) => setCell(i, "riktigt", e.target.value)} />
               </label>
@@ -193,8 +235,14 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch }: Props) 
               </label>
               {r.typ === "extra" && (
                 <button type="button" className="btn btn--ghost btn--sm mnr-remove"
-                  onClick={() => saveRows(rows.filter((_, j) => j !== i), 0)}>
+                  onClick={() => taBortExtra(i)}>
                   Ta bort extraanvändare
+                </button>
+              )}
+              {r.typ === "huvud" && i >= antalAbb && (
+                <button type="button" className="btn btn--ghost btn--sm mnr-remove"
+                  onClick={() => saveRows(rows.filter((_, j) => j !== i), 0)}>
+                  Ta bort nummer (fler nummer än abonnemang)
                 </button>
               )}
             </fieldset>
