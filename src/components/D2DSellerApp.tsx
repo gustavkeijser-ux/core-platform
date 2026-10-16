@@ -18,7 +18,7 @@ import { AvtalsSammanfattning } from "./D2DAvtal";
 import { D2DAvtalPage } from "./D2DAvtalPage";
 import { ScriveSignering } from "./D2DScrive";
 import { BindningPanel, EjMerPanel } from "./D2DBindning";
-import { UTAN_NETFLIX_FALT, SPORT_MED_NETFLIX, EXTRA_ANTAL_FALT, EXTRA_VAL, antalExtra } from "@/lib/d2dPris";
+import { UTAN_NETFLIX_FALT, SPORT_MED_NETFLIX, EXTRA_ANTAL_FALT, EXTRA_VAL, antalExtra, MOBIL_ANTAL_FALT, antalAbonnemang } from "@/lib/d2dPris";
 import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
 
@@ -1538,6 +1538,17 @@ export function LagenhetForm({
         queueSave(patch, null, 0);
         return;
       }
+      if (f.key === "salt_mobil" && !next.includes(choice)) {
+        // Avmarkerat abonnemang: dess antal (2 × 10 GB …) tas bort.
+        const m = { ...((data[MOBIL_ANTAL_FALT] as Record<string, unknown> | null) ?? {}) };
+        if (choice in m) {
+          delete m[choice];
+          const patch = { [f.key]: next.length ? next : null, [MOBIL_ANTAL_FALT]: Object.keys(m).length ? m : null };
+          setData((d) => ({ ...d, ...patch }));
+          queueSave(patch, null, 0);
+          return;
+        }
+      }
       set(f.key, 0)(next.length ? next : null);
     } else {
       // Tryck igen på valt alternativ = avmarkera.
@@ -1769,6 +1780,7 @@ export function LagenhetForm({
                   lagenhetId={record.id}
                   data={data}
                   isAdmin={isAdmin}
+                  planLabel={(k) => f.options.choices?.find((c) => c.key === k)?.label ?? k}
                   onPatch={(patch, delay) => { setData((d) => ({ ...d, ...patch })); queueSave(patch, null, delay); }}
                 />
               )}
@@ -1788,6 +1800,30 @@ export function LagenhetForm({
                   </button>
                 ))}
               </div>
+              {/* Flera av samma abonnemang (t.ex. 2 × 10 GB) — varje abonnemang får eget nummer nedan. */}
+              {f.key === "salt_mobil" && (f.options.choices ?? []).filter((c) => c.key !== EXTRA_VAL && isPicked(f, c.key)).map((c) => {
+                const antal = antalAbonnemang(data, c.key);
+                const satt = (n: number) => {
+                  const v = Math.max(1, Math.min(20, Math.floor(n) || 1));
+                  const m = { ...((data[MOBIL_ANTAL_FALT] as Record<string, unknown> | null) ?? {}) };
+                  if (v > 1) m[c.key] = v; else delete m[c.key];
+                  set(MOBIL_ANTAL_FALT, 0)(Object.keys(m).length ? m : null);
+                };
+                return (
+                  <div key={c.key} className="d2d-extra">
+                    <span className="d2d-sold-panel__hint">Antal {c.label}</span>
+                    <div className="d2d-knack__rad">
+                      <button type="button" className="d2d-knack__btn" aria-label="En färre" disabled={antal <= 1}
+                        onClick={() => satt(antal - 1)}>−</button>
+                      <input className="input d2d-knack__input" type="number" inputMode="numeric" min={1} max={20}
+                        aria-label={`Antal ${c.label}`} value={antal}
+                        onChange={(e) => { if (e.target.value !== "") satt(Number(e.target.value)); }} />
+                      <button type="button" className="d2d-knack__btn" aria-label="En till" onClick={() => satt(antal + 1)}>+</button>
+                      <span className="d2d-knack__text">st</span>
+                    </div>
+                  </div>
+                );
+              })}
               {f.key === "salt_mobil" && isPicked(f, EXTRA_VAL) && (() => {
                 const antal = antalExtra(data);
                 const satt = (n: number) => set(EXTRA_ANTAL_FALT, 0)(Math.max(1, Math.min(20, Math.floor(n) || 1)));
