@@ -14,9 +14,11 @@ import { ProfilRad, SaljarProfil, Fyrverkeri, manadsPlacering } from "./D2DProfi
 // den sattes till Såld, eller en Scrive-signering: status "Signera med Scrive"
 // med signerat avtal, s = true). Scrive-signeringar räknas med i alla siffror
 // och visas dessutom inom parentes: "15 (3)" = 15 totalt varav 3 Scrive.
+// En affär från kundtjänst ger +1 på säljaren och en extra rad på kundtjänst
+// (k = true); k-raderna räknas inte i teamets totalsiffror (affären en gång).
 // =============================================================================
 
-type Salj = { t: string; u: string; p: string | null; s?: boolean };
+type Salj = { t: string; u: string; p: string | null; s?: boolean; k?: boolean };
 type Saljare = { id: string; namn: string };
 type Data = { salj: Salj[]; saljare: Saljare[]; utanTid: number; utanSaljare?: number };
 
@@ -160,6 +162,7 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
     const dag = dagNyckel(nu), man = manadNyckel(nu), ar = nu.getFullYear();
     let d = 0, m = 0, a = 0, ds = 0, ms = 0, as = 0;
     for (const s of salj) {
+      if (s.k) continue;                                // kundtjänstens extra rad — affären räknas redan på säljaren
       if (dagNyckel(s.d) === dag) { d++; if (s.s) ds++; }
       if (manadNyckel(s.d) === man) { m++; if (s.s) ms++; }
       if (s.d.getFullYear() === ar) { a++; if (s.s) as++; }
@@ -171,12 +174,14 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
   const topplista = useMemo(() => {
     const [fran, till] = periodIntervall(period, egenFran, egenTill);
     const r = new Map<string, number>(), sc = new Map<string, number>();
+    let totalt = 0, totaltScrive = 0;                   // affären en gång (kundtjänstens extra rad räknas inte)
     for (const s of salj) if (s.d >= fran && s.d < till) {
       r.set(s.u, (r.get(s.u) ?? 0) + 1);
       if (s.s) sc.set(s.u, (sc.get(s.u) ?? 0) + 1);
+      if (!s.k) { totalt++; if (s.s) totaltScrive++; }
     }
     const rader = [...r.entries()].sort((a, b) => b[1] - a[1] || namnPa(a[0]).localeCompare(namnPa(b[0]), "sv"));
-    return { rader, scrive: sc, totalt: rader.reduce((s, [, n]) => s + n, 0), totaltScrive: [...sc.values()].reduce((s, n) => s + n, 0) };
+    return { rader, scrive: sc, totalt, totaltScrive };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [salj, period, egenFran, egenTill, namn]);
 
@@ -390,7 +395,7 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
             {aktivitet.map((s, i) => (
               <li key={i}>
                 <span className={`d2dd__plus${s.s ? " d2dd__plus--scrive" : ""}`}>+1</span>
-                <span className="d2dd__akt-namn">{namnPa(s.u)}{s.s && <span className="d2dd__akt-scrive">Scrive</span>}{s.p && <span className="d2dd__akt-projekt">{s.p}</span>}</span>
+                <span className="d2dd__akt-namn">{namnPa(s.u)}{s.s && <span className="d2dd__akt-scrive">Scrive</span>}{s.k && <span className="d2dd__akt-scrive">via kundtjänst</span>}{s.p && <span className="d2dd__akt-projekt">{s.p}</span>}</span>
                 <span className="d2dd__akt-tid" title={s.d.toLocaleString("sv-SE")}>{relTid(s.d)}</span>
               </li>
             ))}
@@ -435,7 +440,7 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
               </div>
             )}
             <p className="d2dd__fot">
-              Scrive-signeringar räknas som sälj. Snitt per arbetsdag från första säljet. Streak = vardagar i rad med minst ett sälj; helger bryter inte, och sälj på en helgdag räknas som +1.
+              Scrive-signeringar räknas som sälj. Affärer från kundtjänst räknas både på säljaren och på kundtjänst. Snitt per arbetsdag från första säljet. Streak = vardagar i rad med minst ett sälj; helger bryter inte, och sälj på en helgdag räknas som +1.
             </p>
           </div>
         )}
