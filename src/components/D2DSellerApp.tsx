@@ -866,8 +866,11 @@ export function LagenhetTabell({
     const nytt = varde.trim();
     if (nytt === tidigare.trim()) return;
     try {
-      await updateRecord(lagId, { [key]: nytt || null });
-      patchaLokalt(lagId, { [key]: nytt || null });
+      const rad = await updateRecord(lagId, { [key]: nytt || null });
+      // Ett telefonnummer i kommentaren fyller ett tomt telefonfält i
+      // databasen (trg_d2d_telefon_fran_kommentar) — visa det direkt.
+      const tel = (rad?.data as Record<string, unknown> | undefined)?.kund_telefon;
+      patchaLokalt(lagId, key === "kommentar" && tel ? { [key]: nytt || null, kund_telefon: tel } : { [key]: nytt || null });
       setSparFel(null);
     } catch (e) {
       // Återställ till det sparade värdet om det inte gick
