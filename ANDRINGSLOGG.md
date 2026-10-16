@@ -30,6 +30,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## 2026-10-16
 
+- [D2D] Alla lägenheter: säljarna ser samtliga lägenheter, inte bara sina egna (Leo såg 228 av 11 903). `d2d_alla_lagenheter` filtrerar inte längre på lässcope; ny `kan_andra` per lägenhet. Andras lägenheter visas skrivskyddade (tilldelad säljare, knackningar, kommentar) och säljarkolumnen visas för alla. Kundens namn och telefon skickas bara för lägenheter man får ändra. Andras återkopplingar döljs som förut. RLS oförändrad. Filer: supabase/migrations/20261016_1000_d2d_alla_lagenheter_alla_saljare.sql (körd), src/components/D2DSellerApp.tsx, src/components/D2DAllaLagenheter.tsx, src/styles/d2d.css.
 - [Master/D2D] Batteri i säljarnas telefoner: bakgrundshämtningar pausas när fliken är dold eller skärmen låst och hämtar direkt när appen syns igen (ny `startaSynligPoll`). Gäller menysiffrorna i App (ärenden, feedback, Blitz-feedback, nummerbyten/VT), topplistan i säljaröversikten (60 s → 3 min) och pinnöversikten (5 min). `background-attachment: fixed` på `.d2d-app` borttagen (gav omritning vid skroll på mobil, ingen synlig skillnad). Scrive-väntan pausade redan när dold. Filer: src/lib/synligPoll.ts (ny), src/App.tsx, src/app.css, src/components/D2DDashboard.tsx, src/components/D2DLon.tsx.
 
 ## 2026-10-15
