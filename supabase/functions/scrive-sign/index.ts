@@ -52,6 +52,11 @@ function antalExtra(data: Record<string, any>): number {
   const rader = Array.isArray(data.mobil_nummer?.rows) ? data.mobil_nummer.rows.filter((r: any) => r?.typ === "extra").length : 0;
   return Math.max(angivet, rader);
 }
+/** Antal av ett mobilabonnemang (mobil_antal, t.ex. 2 × 10 GB). Samma regel som d2d_mobil_antal i databasen. */
+function antalAbonnemang(data: Record<string, any>, val: string): number {
+  const n = Number(data.mobil_antal?.[val]);
+  return Number.isFinite(n) && n >= 1 ? Math.min(20, Math.floor(n)) : 1;
+}
 // Telias egna sportpaket ingår Netflix (kan väljas "utan Netflix"); TV4/Viaplay-paketen gör det inte.
 const SPORT_MED_NETFLIX = new Set(["lilla_sportpaketet", "stora_sportpaketet", "storsta_sportpaketet"]);
 const tal = (v: unknown): number | null =>
@@ -92,8 +97,8 @@ function berakna(data: Record<string, any>, fields: Field[], lista: any) {
       if (f.key === "salt_tv" && !bb) k = o;
       if (f.key === "salt_trygghet" && !bb && tal(p.kampanjUtanBredband) != null) k = tal(p.kampanjUtanBredband);
       if (f.key === "salt_streaming_sport" && utanNetflix && SPORT_MED_NETFLIX.has(val) && tal(p.kampanjUtanNetflix) != null) k = tal(p.kampanjUtanNetflix);
-      // Extraanvändare: priset gäller per användare.
-      const st = f.key === "salt_mobil" && val === "extra_anvandare" ? antalExtra(data) : 1;
+      // Extraanvändare och flera abonnemang av samma sort: priset gäller per styck.
+      const st = f.key !== "salt_mobil" ? 1 : val === "extra_anvandare" ? antalExtra(data) : antalAbonnemang(data, val);
       const ggr = (x: number | null) => (x == null ? null : x * st);
       manad.push({ falt: f.key, val, label: st > 1 ? `${label} × ${st}` : label, kampanj: ggr(k ?? o), ordinarie: ggr(o ?? k), antal: st });
     }
