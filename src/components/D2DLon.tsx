@@ -405,6 +405,14 @@ export function PinnKort({ s, trappa, jag, lon, onOpen }: {
 
 // ─── Blitz → Översikt: pinnar den här månaden ───────────────────────────────
 
+/** Kundtjänstens rader: namnet märks, egen trappa (andel av säljarnas) och egen lön. */
+export const ktNamn = (namn: string) => (/kundtjänst/i.test(namn) ? namn : `${namn} · kundtjänst`);
+export const sorteradTrappa = (t?: Trappsteg[]) => [...(t ?? [])].sort((a, b) => a.pinnar - b.pinnar);
+export const ktLon = (kt: SaljareRad): MinLon => ({
+  provision: kt.provision ?? 0, bonus: kt.bonus ?? 0, justeringar: kt.justeringar ?? 0, lon: kt.lon ?? 0,
+  lonInklVantar: kt.lonInklVantar ?? 0, krPerPinne: kt.krPerPinne ?? 0, fastLon: kt.fastLon, semesterersattning: kt.semesterersattning,
+});
+
 export function BlitzPinnar({ minId, data, onOpenProfil }: {
   minId: string | null; data: PinnOversikt | null; onOpenProfil?: (id: string) => void;
 }) {
@@ -415,7 +423,10 @@ export function BlitzPinnar({ minId, data, onOpenProfil }: {
   // säljarraden visas då bara om personen också har egna säljarpinnar.
   const kt = data.kundtjanst ?? null;
   const ktTrappa = [...(kt?.trappa ?? [])].sort((a, b) => a.pinnar - b.pinnar);
-  const rader = data.saljare.filter((s) => s.pinnar + s.vantar > 0 || (s.id === jag && !kt));
+  // Kundtjänstrader (roll "kundtjanst") visas för alla med egen trappa; den egna står överst.
+  const rader = data.saljare.filter((s) => s.roll === "kundtjanst"
+    ? s.id !== jag && s.pinnar + s.vantar > 0
+    : s.pinnar + s.vantar > 0 || (s.id === jag && !kt));
 
   return (
     <section className="d2dd__section d2d-pinnar">
@@ -425,9 +436,7 @@ export function BlitzPinnar({ minId, data, onOpenProfil }: {
       </h2>
       {kt && (
         <div className="d2d-pinnar__kort-lista d2d-pinnar__kt">
-          <PinnKort s={{ ...kt, namn: /kundtjänst/i.test(kt.namn) ? kt.namn : `${kt.namn} · kundtjänst` }} trappa={ktTrappa} jag
-            lon={{ provision: kt.provision ?? 0, bonus: kt.bonus ?? 0, justeringar: kt.justeringar ?? 0, lon: kt.lon ?? 0, lonInklVantar: kt.lonInklVantar ?? 0,
-                   krPerPinne: kt.krPerPinne ?? 0, fastLon: kt.fastLon, semesterersattning: kt.semesterersattning }} />
+          <PinnKort s={{ ...kt, namn: ktNamn(kt.namn) }} trappa={ktTrappa} jag lon={ktLon(kt)} />
           <p className="d2d-pinnar__trappa">
             Dina pinnar från affärer du lämnat till en säljare, räknade när kunden signerat (Såld; Scrive inom parentes).
             {ktTrappa.length > 0 && <><br />Din trappa: {ktTrappa.map((t) => `${t.pinnar} → ${kr(t.bonus)}`).join(" · ")}</>}
@@ -439,8 +448,10 @@ export function BlitzPinnar({ minId, data, onOpenProfil }: {
       ) : (
         <div className="d2d-pinnar__kort-lista">
           {rader.map((s) => (
-            <PinnKort key={s.id} s={s} trappa={trappa} jag={s.id === jag}
-              lon={s.id === jag ? data.minLon : undefined}
+            <PinnKort key={`${s.id}|${s.roll ?? "saljare"}`}
+              s={s.roll === "kundtjanst" ? { ...s, namn: ktNamn(s.namn) } : s}
+              trappa={s.roll === "kundtjanst" ? sorteradTrappa(s.trappa) : trappa} jag={s.id === jag}
+              lon={s.id === jag && s.roll !== "kundtjanst" ? data.minLon : undefined}
               onOpen={onOpenProfil ? () => onOpenProfil(s.id) : undefined} />
           ))}
         </div>
