@@ -109,6 +109,22 @@ export function antalExtra(data: Record<string, unknown>): number {
   return Math.max(angivet, rader);
 }
 
+/** Antal per mobilabonnemang (t.ex. {"10_gb": 2}); saknas = 1. */
+export const MOBIL_ANTAL_FALT = "mobil_antal";
+
+/** Antal av ett mobilabonnemang (2 × 10 GB osv.). Samma regel som d2d_mobil_antal i databasen. */
+export function antalAbonnemang(data: Record<string, unknown>, val: string): number {
+  const m = data[MOBIL_ANTAL_FALT];
+  const n = m && typeof m === "object" ? Number((m as Record<string, unknown>)[val]) : NaN;
+  return Number.isFinite(n) && n >= 1 ? Math.min(20, Math.floor(n)) : 1;
+}
+
+/** Ett värde per sålt mobilabonnemang i valordning (extraanvändare ingår inte): ["10_gb", "10_gb", "obegransad"]. */
+export function mobilEnheter(data: Record<string, unknown>): string[] {
+  const valda = Array.isArray(data.salt_mobil) ? (data.salt_mobil as unknown[]).map(String) : [];
+  return valda.filter((v) => v && v !== EXTRA_VAL).flatMap((v) => Array.from({ length: antalAbonnemang(data, v) }, () => v));
+}
+
 const tal = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 
@@ -187,8 +203,8 @@ export function beraknaAvtal(data: Record<string, unknown>, soldFields: FieldDef
       if (f.key === "salt_trygghet" && !harBredband && tal(p.kampanjUtanBredband) != null) { kampanj = tal(p.kampanjUtanBredband); not = "utan bredband"; }
       if (f.key === "salt_trygghet" && harBredband) not = "första månaden gratis";
       if (f.key === "salt_streaming_sport" && utanNetflix && SPORT_MED_NETFLIX.has(val) && tal(p.kampanjUtanNetflix) != null) { kampanj = tal(p.kampanjUtanNetflix); not = "utan Netflix"; }
-      // Extraanvändare: priset gäller per användare.
-      const st = f.key === "salt_mobil" && val === EXTRA_VAL ? antalExtra(data) : 1;
+      // Extraanvändare och flera abonnemang av samma sort: priset gäller per styck.
+      const st = f.key !== "salt_mobil" ? 1 : val === EXTRA_VAL ? antalExtra(data) : antalAbonnemang(data, val);
       if (f.key === "salt_mobil") antalMobil += st;
       if (kampanj == null && ordinarie == null) saknas.push(label);
       const ggr = (x: number | null) => (x == null ? null : x * st);
