@@ -18,7 +18,7 @@ import { ProfilRad, SaljarProfil, Fyrverkeri, manadsPlacering } from "./D2DProfi
 
 type Salj = { t: string; u: string; p: string | null; s?: boolean };
 type Saljare = { id: string; namn: string };
-type Data = { salj: Salj[]; saljare: Saljare[]; utanTid: number };
+type Data = { salj: Salj[]; saljare: Saljare[]; utanTid: number; utanSaljare?: number };
 
 type PeriodKey = "idag" | "igar" | "vecka" | "forraVecka" | "manad" | "forraManad" | "ar" | "allt" | "egen";
 
@@ -342,13 +342,13 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
               <span className="d2dd__namn">Totalt</span>
               <span className="d2dd__antal">{topplista.totalt}<Scrive n={topplista.totaltScrive} /></span>
             </div>
-            {topplista.rader.map(([u, n], i) => {
+            {topplista.rader.map(([u, n]) => {
               const plats = topplista.rader.findIndex(([, m]) => m === n); // lika antal = delad placering
               const klass = plats === 0 ? "guld" : plats === 1 ? "silver" : plats === 2 ? "brons" : "";
               return (
                 <button type="button" key={u} onClick={() => setProfil(u)} title={`Öppna ${namnPa(u)}s profil`}
                   className={`d2dd__rad d2dd__rad--klick${klass ? ` d2dd__rad--${klass}` : ""}${u === minId ? " d2dd__rad--jag" : ""}`}>
-                  <span className="d2dd__plats">{plats === 0 ? <Krona /> : plats <= 2 ? <Medalj /> : i + 1}</span>
+                  <span className="d2dd__plats">{plats === 0 ? <Krona /> : plats <= 2 ? <Medalj /> : plats + 1}</span>
                   <span className="d2dd__namn">{namnPa(u)}{u === minId && <span className="d2dd__du">du</span>}</span>
                   <span className="d2dd__antal">{n}<Scrive n={topplista.scrive.get(u) ?? 0} /></span>
                 </button>
@@ -421,7 +421,7 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
                 <span />
                 {statistik.map((s) => <span key={s.u} className="d2dd__stat-person">{namnPa(s.u)}</span>)}
                 {([
-                  ["Snitt / dag", (s: typeof statistik[number]) => <strong>{s.snitt.toFixed(2).replace(".", ",")}</strong>],
+                  ["Snitt / arbetsdag", (s: typeof statistik[number]) => <strong>{s.snitt.toFixed(2).replace(".", ",")}</strong>],
                   ["Längsta streak", (s: typeof statistik[number]) => <strong>{s.streak} d</strong>],
                   ["PB dag", (s: typeof statistik[number]) => s.pbDag ? <><strong>{s.pbDag.v}</strong><small>{s.pbDag.etikett}</small></> : "—"],
                   ["PB vecka", (s: typeof statistik[number]) => s.pbVecka ? <><strong>{s.pbVecka.v}</strong><small>{s.pbVecka.etikett}</small></> : "—"],
@@ -441,9 +441,13 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
         )}
       </section>
 
-      {data.utanTid > 0 && (
+      {(data.utanTid > 0 || (data.utanSaljare ?? 0) > 0) && (
         <p className="d2dd__fot d2dd__fot--sist">
-          {data.utanTid} adresser importerades som redan sålda utan säljdatum och ingår inte i topplistorna.
+          Ingår inte i topplistorna:
+          {(data.utanSaljare ?? 0) > 0 && ` ${data.utanSaljare} sålda adresser utan registrerad säljare`}
+          {(data.utanSaljare ?? 0) > 0 && data.utanTid > 0 && " och"}
+          {data.utanTid > 0 && ` ${data.utanTid} sålda adresser utan säljdatum`}
+          {" "}(importerade).
         </p>
       )}
     </div>
