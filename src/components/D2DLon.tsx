@@ -329,8 +329,13 @@ export type PinnOversikt = Manad & {
   trappa: Trappsteg[];
   jag: string | null;
   /** Den inloggades egen lön (servern skickar aldrig andras). */
-  minLon?: { provision: number; bonus: number; justeringar: number; lon: number; lonInklVantar: number; krPerPinne: number } | null;
+  minLon?: MinLon | null;
+  /** Den inloggades egen kundtjänstrad (egen kr/pinne och trappa, fast lön). Bara för kundtjänst. */
+  kundtjanst?: SaljareRad | null;
 };
+type MinLon = { provision: number; bonus: number; justeringar: number; lon: number; lonInklVantar: number; krPerPinne: number;
+  /** Kundtjänst: fast lön (ingår i lon) och semesterersättning (sparas, ingår inte). */
+  fastLon?: number; semesterersattning?: number };
 export type PinnSaljare = SaljareRad;
 
 /** Hämtar innevarande månads pinnar (alla säljare) + egen lön. Uppdateras var 5:e minut när appen syns. */
@@ -387,9 +392,10 @@ export function PinnKort({ s, trappa, jag, lon, onOpen }: {
           <span>Din lön hittills</span>
           <strong>{kr(lon.lon)}</strong>
           <small>
-            {pn(s.pinnar)} × {kr(lon.krPerPinne)}{lon.bonus > 0 ? ` + bonus ${kr(lon.bonus)}` : ""}
+            {lon.fastLon ? `fast ${kr(lon.fastLon)} + ` : ""}{pn(s.pinnar)} × {kr(lon.krPerPinne)}{lon.bonus > 0 ? ` + bonus ${kr(lon.bonus)}` : ""}
             {lon.justeringar ? ` ${lon.justeringar > 0 ? "+" : "−"} ${kr(Math.abs(lon.justeringar))}` : ""}
             {lon.lonInklVantar > lon.lon ? ` · potentiellt ${kr(lon.lonInklVantar)} inkl. Scrive` : ""}
+            {lon.semesterersattning ? ` · semesterersättning ${kr(lon.semesterersattning)} sparas` : ""}
           </small>
         </div>
       )}
@@ -405,7 +411,11 @@ export function BlitzPinnar({ minId, data, onOpenProfil }: {
   if (!data) return null;                    // tyst — översikten fungerar utan
   const trappa = [...(data.trappa ?? [])].sort((a, b) => a.pinnar - b.pinnar);
   const jag = minId ?? data.jag;
-  const rader = data.saljare.filter((s) => s.pinnar + s.vantar > 0 || s.id === jag);
+  // Kundtjänst: eget kort med kundtjänstens pinnar (egen kr/pinne och trappa). Den egna
+  // säljarraden visas då bara om personen också har egna säljarpinnar.
+  const kt = data.kundtjanst ?? null;
+  const ktTrappa = [...(kt?.trappa ?? [])].sort((a, b) => a.pinnar - b.pinnar);
+  const rader = data.saljare.filter((s) => s.pinnar + s.vantar > 0 || (s.id === jag && !kt));
 
   return (
     <section className="d2dd__section d2d-pinnar">
@@ -413,6 +423,17 @@ export function BlitzPinnar({ minId, data, onOpenProfil }: {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M4 20V10M10 20V4M16 20v-8M22 20H2" /></svg>
         Pinnar — {periodNamn(data)}
       </h2>
+      {kt && (
+        <div className="d2d-pinnar__kort-lista d2d-pinnar__kt">
+          <PinnKort s={{ ...kt, namn: /kundtjänst/i.test(kt.namn) ? kt.namn : `${kt.namn} · kundtjänst` }} trappa={ktTrappa} jag
+            lon={{ provision: kt.provision ?? 0, bonus: kt.bonus ?? 0, justeringar: kt.justeringar ?? 0, lon: kt.lon ?? 0, lonInklVantar: kt.lonInklVantar ?? 0,
+                   krPerPinne: kt.krPerPinne ?? 0, fastLon: kt.fastLon, semesterersattning: kt.semesterersattning }} />
+          <p className="d2d-pinnar__trappa">
+            Dina pinnar från affärer du lämnat till en säljare, räknade när kunden signerat (Såld; Scrive inom parentes).
+            {ktTrappa.length > 0 && <><br />Din trappa: {ktTrappa.map((t) => `${t.pinnar} → ${kr(t.bonus)}`).join(" · ")}</>}
+          </p>
+        </div>
+      )}
       {rader.length === 0 ? (
         <div className="d2dd__tom">Inga pinnar ännu den här löneperioden</div>
       ) : (
