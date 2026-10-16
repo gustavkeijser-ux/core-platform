@@ -28,6 +28,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
+## 2026-10-16
+
+- [Master/D2D] Batteri i säljarnas telefoner: bakgrundshämtningar pausas när fliken är dold eller skärmen låst och hämtar direkt när appen syns igen (ny `startaSynligPoll`). Gäller menysiffrorna i App (ärenden, feedback, Blitz-feedback, nummerbyten/VT), topplistan i säljaröversikten (60 s → 3 min) och pinnöversikten (5 min). `background-attachment: fixed` på `.d2d-app` borttagen (gav omritning vid skroll på mobil, ingen synlig skillnad). Scrive-väntan pausade redan när dold. Filer: src/lib/synligPoll.ts (ny), src/App.tsx, src/app.css, src/components/D2DDashboard.tsx, src/components/D2DLon.tsx.
+
 ## 2026-10-15
 
 - [D2D] **Bekräftelse till hyresgast@ när en kundtjänstaffär signeras.** När en adress från kundtjänst blir Såld eller Signerad med Scrive (första gången, en per adress) skickas "Bekräftelse kundtjänstaffär: Såld/Signerad med Scrive – kund" med status, kund, telefon, e-post, adress, säljare, kundtjänst, pinnar och länk till kundkortet. Mejlet skickas från säljarens brevlåda till ärendebrevlådan så att mail-sync gör ett ärende av det (från brevlådan till sig själv blir inget ärende); nekar Microsoft det läggs mejlet in direkt via `mail_ingest_message`. Trigger `d2d_kundtjanst_bekraftelse` på records → kön `d2d_kundtjanst_notis` (typ `bekraftelse`). Filer: `supabase/functions/d2d-kundtjanst-notis/index.ts` (v2, driftsatt). DB: `20261015_1100_d2d_kundtjanst_bekraftelse.sql` — körd. Väntar: första riktiga bekräftelsen visar om Microsoft tillåter att skicka från säljarnas brevlådor (annars reservvägen, ärendet skapas ändå).
