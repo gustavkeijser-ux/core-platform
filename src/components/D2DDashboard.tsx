@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { startaSynligPoll } from "@/lib/synligPoll";
 import "@/styles/d2d.css";
 import { BlitzPinnar, usePinnOversikt } from "./D2DLon";
 import { MinaAnger } from "./D2DAnger";
@@ -138,10 +139,11 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
       if (error) { setFel("Kunde inte hämta säljstatistiken."); return; }
       setData(d as Data);
     };
-    void hamta();
-    // Uppdatera var 60:e sekund så topplistan lever under dagen.
-    const t = window.setInterval(() => void hamta(), 60_000);
-    return () => { avbruten = true; window.clearInterval(t); };
+    // Uppdatera var 3:e minut så topplistan lever under dagen — men bara när
+    // appen syns (sparar batteri i säljarnas telefoner). Eget sälj syns direkt
+    // ändå, och när appen öppnas igen hämtas färskt.
+    const stopp = startaSynligPoll(hamta, 3 * 60_000);
+    return () => { avbruten = true; stopp(); };
   }, []);
 
   const salj = useMemo(() => (data?.salj ?? []).map((s) => ({ ...s, d: new Date(s.t) })), [data]);
