@@ -17,7 +17,7 @@ import "@/styles/d2d.css";
    All statistik räknas i klienten från d2d_saljstatistik (samma som översikten).
    ========================================================================== */
 
-export type ProfilSalj = { d: Date; u: string; p: string | null; s?: boolean };
+export type ProfilSalj = { d: Date; u: string; p: string | null; s?: boolean; k?: boolean };
 
 const MANADER = ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"];
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -303,7 +303,7 @@ export function SaljarProfil({ id, namn, minId, salj, namnPa, pinnar, onClose, o
               {egna.slice(0, 10).map((s, i) => (
                 <li key={i}>
                   <span className={`d2dd__plus${s.s ? " d2dd__plus--scrive" : ""}`}>+1</span>
-                  <span className="d2dd__akt-namn">{s.s && <span className="d2dd__akt-scrive">Scrive</span>}{s.p ? <span className="d2dd__akt-projekt">{s.p}</span> : "Sälj"}</span>
+                  <span className="d2dd__akt-namn">{s.s && <span className="d2dd__akt-scrive">Scrive</span>}{s.k && <span className="d2dd__akt-scrive">via kundtjänst</span>}{s.p ? <span className="d2dd__akt-projekt">{s.p}</span> : "Sälj"}</span>
                   <span className="d2dd__akt-tid" title={s.d.toLocaleString("sv-SE")}>{relTid(s.d)}</span>
                 </li>
               ))}
