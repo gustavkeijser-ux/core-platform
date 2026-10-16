@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { startaSynligPoll } from "@/lib/synligPoll";
 import type { FieldDef } from "@/lib/data";
 import { prisKategorier } from "./D2DAvtal";
 import "@/styles/d2d.css";
@@ -332,15 +333,14 @@ export type PinnOversikt = Manad & {
 };
 export type PinnSaljare = SaljareRad;
 
-/** Hämtar innevarande månads pinnar (alla säljare) + egen lön. Uppdateras var 5:e minut. */
+/** Hämtar innevarande månads pinnar (alla säljare) + egen lön. Uppdateras var 5:e minut när appen syns. */
 export function usePinnOversikt(): PinnOversikt | null {
   const [data, setData] = useState<PinnOversikt | null>(null);
   useEffect(() => {
     let on = true;
     const ladda = () => supabase.rpc("d2d_pinnar_oversikt").then(({ data, error }) => { if (on && !error) setData(data as PinnOversikt); });
-    ladda();
-    const t = window.setInterval(ladda, 5 * 60_000);
-    return () => { on = false; window.clearInterval(t); };
+    const stopp = startaSynligPoll(ladda, 5 * 60_000);
+    return () => { on = false; stopp(); };
   }, []);
   return data;
 }
