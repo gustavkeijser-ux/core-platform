@@ -12,6 +12,7 @@ import { brandCssVars } from "@/lib/color";
 import { DashboardPage } from "@/components/DashboardPage";
 import { AiPanel } from "@/components/AiAssistant";
 import { TalkDock } from "@/components/LeadDeskTalk";
+import { startaSynligPoll } from "@/lib/synligPoll";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { FeedbackPage } from "@/components/FeedbackPage";
 import { ObjectListPage } from "@/components/ObjectListPage";
@@ -170,14 +171,14 @@ export default function App() {
   }, [session]);
 
   // Antal per färdig ärendevy i menyn (Mina, Nya, Försenade …) — uppdateras
-  // varje minut och när man byter sida.
+  // varje minut och när man byter sida. Menysiffrorna pausas när fliken är
+  // dold (startaSynligPoll) så telefoner inte väcks i onödan.
   useEffect(() => {
     if (!metaReady || !objects?.some((o) => o.key === "case")) return;
     let on = true;
     const tick = () => listArenden("open", "", {}, 1, 0).then((r) => { if (on) setCaseCounts(r.counts ?? {}); }).catch(() => {});
-    tick();
-    const t = window.setInterval(tick, 60_000);
-    return () => { on = false; window.clearInterval(t); };
+    const stopp = startaSynligPoll(tick, 60_000);
+    return () => { on = false; stopp(); };
   }, [metaReady, objects, route.segs[0]]);
 
   // Antal nya feedback (siffran vid Övrigt → Feedback, bara för administratörer).
@@ -186,9 +187,8 @@ export default function App() {
     let on = true;
     const tick = () => supabase.from("feedback").select("id", { count: "exact", head: true }).eq("status", "new")
       .then(({ count }) => { if (on) setNewFeedback(count ?? 0); });
-    tick();
-    const t = window.setInterval(tick, 60_000);
-    return () => { on = false; window.clearInterval(t); };
+    const stopp = startaSynligPoll(tick, 60_000);
+    return () => { on = false; stopp(); };
   }, [metaReady, isAdmin, route.segs[0]]);
 
   // Säljarfeedback från Blitz: bara granskaren (Lukas, d2d_feedback_granskare)
@@ -215,9 +215,8 @@ export default function App() {
     if (!metaReady || !d2dGranskare) return;
     let on = true;
     const tick = () => d2dFeedbackAntalVantar().then((n) => { if (on) setD2dFeedbackVantar(n); });
-    tick();
-    const t = window.setInterval(tick, 60_000);
-    return () => { on = false; window.clearInterval(t); };
+    const stopp = startaSynligPoll(tick, 60_000);
+    return () => { on = false; stopp(); };
   }, [metaReady, d2dGranskare, route.segs[0]]);
   useEffect(() => {
     if (!metaReady || !isAdmin) return;
@@ -228,9 +227,8 @@ export default function App() {
       getStatusCounts("nummerbyte").then((c) => { if (on) setNummerbytenOppna(c?.byStatus.oppen ?? 0); });
       getStatusCounts("vt_bestallning").then((c) => { if (on) setVtOppna(c?.byStatus.oppen ?? 0); });
     };
-    tick();
-    const t = window.setInterval(tick, 120_000);
-    return () => { on = false; window.clearInterval(t); };
+    const stopp = startaSynligPoll(tick, 120_000);
+    return () => { on = false; stopp(); };
   }, [metaReady, isAdmin]);
 
   /** Ladda om metadata (t.ex. efter fältändringar eller ändrad branding).
