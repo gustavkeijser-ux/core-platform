@@ -657,6 +657,16 @@ function FastighetsLista({
 /** Namnet på säljaren som fått adressen tilldelad (eller "—"). Är adressen
  *  såld/signerad av en annan säljare än den som har den nu (säljaren byttes
  *  på fastigheten efteråt) visas även "såld av …". */
+/** Skrivskyddat kort: vems lägenheten är. */
+function SaljareInfo({ id }: { id: string | null }) {
+  const name = useUserName(id);
+  return (
+    <span className="d2d-lag-panel__info">
+      {id ? <>Tilldelad <strong>{name}</strong> – du kan se men inte ändra den.</> : "Ingen säljare tilldelad – du kan se men inte ändra den."}
+    </span>
+  );
+}
+
 function SaljareCell({ id, saldAv, signerad }: { id: string | null; saldAv?: string | null; signerad?: boolean }) {
   const name = useUserName(id);
   const saldAvNamn = useUserName(saldAv ?? null);
@@ -786,6 +796,8 @@ export function LagenhetTabell({
   medKommentar = false,
   expanderbar = false,
   onSalj,
+  kanAndra,
+  visaSaljare = false,
 }: {
   lagenheter: RecordRow[];
   setLagenheter: Dispatch<SetStateAction<RecordRow[]>>;
@@ -805,7 +817,13 @@ export function LagenhetTabell({
   /** Anropas när status sätts till Såld/Scrive i det utfällda kortet, så
    *  att tjänster och kunduppgifter kan fyllas i (fönster med lägenheten). */
   onSalj?: (lagId: string) => void;
+  /** Får användaren ändra lägenheten? Nej → det utfällda kortet visas
+   *  skrivskyddat (andra säljares lägenheter i "Alla lägenheter"). */
+  kanAndra?: (lag: RecordRow) => boolean;
+  /** Visa säljarkolumnen även för säljare (när listan har andras lägenheter). */
+  visaSaljare?: boolean;
 }) {
+  const medSaljare = isAdmin || visaSaljare;
   const [utfalld, setUtfalld] = useState<string | null>(null);
   // Namn och telefon per lägenhet (kund_namn, kund_telefon) — redigeras
   // direkt i kortet. Lokalt värde medan säljaren skriver; sparas när fältet
@@ -929,10 +947,10 @@ export function LagenhetTabell({
                 det vanligaste. Klick på huvudraden öppnar lägenheten som förut. */}
             {sparFel && <div className="d2d-lag-fel" role="alert">{sparFel}</div>}
             {lagenheter.length > 0 && (
-              <div className={`d2d-lag-table${isAdmin ? " d2d-lag-table--admin" : ""}${expanderbar ? " d2d-lag-table--expander" : ""}`}>
+              <div className={`d2d-lag-table${medSaljare ? " d2d-lag-table--admin" : ""}${expanderbar ? " d2d-lag-table--expander" : ""}`}>
                 <div className="d2d-lag-table__head" aria-hidden="true">
                   <span />
-                  {isAdmin && <span>Säljare</span>}
+                  {medSaljare && <span>Säljare</span>}
                   <span>Adress</span>
                   <span>Ingång</span>
                   <span>Lgh</span>
@@ -963,6 +981,7 @@ export function LagenhetTabell({
                   const knack = Number.isFinite(nKnack) && nKnack > 0 ? nKnack : 0;
                   const oppna = () => { rememberRow(listKey, lag.id); onOpenLagenhet(lag.id); };
                   const arUtfalld = !expanderbar || utfalld === lag.id;
+                  const skrivbar = !kanAndra || kanAndra(lag);
                   const klickRad = expanderbar ? () => { rememberRow(listKey, lag.id); setUtfalld((u) => (u === lag.id ? null : lag.id)); } : oppna;
                   // Raden är en div (inte button) eftersom den innehåller
                   // interaktiva element (ringknappen) — de får inte ligga
@@ -985,7 +1004,7 @@ export function LagenhetTabell({
                           <circle cx="12" cy="10.5" r=".9" fill="currentColor" stroke="none" />
                         </svg>
                       </span>
-                      {isAdmin && <SaljareCell id={saljareId} saldAv={saldAv} signerad={st === "scrive"} />}
+                      {medSaljare && <SaljareCell id={saljareId} saldAv={saldAv} signerad={st === "scrive"} />}
                       <span className="d2d-lag-row__cell d2d-lag-row__cell--addr">{gatuadress || "—"}</span>
                       <span className="d2d-lag-row__cell">{lagData.ingang ? String(lagData.ingang) : "—"}</span>
                       <span className="d2d-lag-row__cell d2d-lag-row__cell--lgh">
@@ -1034,7 +1053,14 @@ export function LagenhetTabell({
                       )}
                     </div>
 
-                    {arUtfalld && <div className={`d2d-lag-panel${medKommentar ? " d2d-lag-panel--komm" : ""}`}>
+                    {arUtfalld && !skrivbar && (
+                      <div className="d2d-lag-panel d2d-lag-panel--las">
+                        <SaljareInfo id={saljareId} />
+                        {knack > 0 && <span className="d2d-lag-panel__info">Knackat {knack} {knack === 1 ? "gång" : "gånger"}</span>}
+                        {!!kommentar && <span className="d2d-lag-panel__info d2d-lag-panel__info--komm">{kommentar}</span>}
+                      </div>
+                    )}
+                    {arUtfalld && skrivbar && <div className={`d2d-lag-panel${medKommentar ? " d2d-lag-panel--komm" : ""}`}>
                       <label className="d2d-lag-panel__falt">
                         <span>Namn</span>
                         <input
