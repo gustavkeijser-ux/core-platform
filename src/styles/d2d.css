@@ -1291,6 +1291,12 @@
   .d2d-allalgh__val--admin { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
 }
 
+/* Skrivskyddat kort (en annan säljares lägenhet i Alla lägenheter). */
+.d2d-lag-panel--las { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
+.d2d-lag-panel__info { font-size: var(--text-sm); color: var(--ink-muted); }
+.d2d-lag-panel__info strong { color: var(--ink); }
+.d2d-lag-panel__info--komm { color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* Kommentar i snabbpanelen: en egen rad över hela bredden, under namn/telefon. */
 .d2d-lag-panel--komm { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; }
 .d2d-lag-panel--komm .d2d-lag-panel__komm { grid-column: 1 / -1; order: 5; }
