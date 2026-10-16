@@ -1461,3 +1461,7 @@
 .d2d-ktsalj__rad--ny { border-left: 3px solid var(--info-ink); }
 .d2d-ktsalj__ny { display: inline-block; margin-right: var(--sp-2); padding: 0 6px; border-radius: var(--r-sm);
   background: var(--info-soft); color: var(--info-ink); font-size: var(--text-xs); font-weight: 700; vertical-align: 1px; }
+
+/* Blitz: kundtjänstens eget pinnkort */
+.d2d-pinnar__kt { margin-bottom: var(--sp-3); }
+.d2d-pinnar__kt .d2d-pinnar__trappa { margin-top: var(--sp-1); }
