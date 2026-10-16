@@ -271,6 +271,8 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
               medKommentar
               expanderbar
               onSalj={setSalj}
+              visaSaljare
+              kanAndra={(l) => isAdmin || (l as RecordRow & { kan_andra?: boolean }).kan_andra !== false}
               fastighetNamn={(id) => {
                 const l = alla.find((x) => x.id === id);
                 if (!l) return "";
