@@ -2149,7 +2149,6 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
   flex-direction: column;
   height: 100dvh;
   background: var(--canvas);
-  background-attachment: fixed;
 }
 
 .d2d-header {
