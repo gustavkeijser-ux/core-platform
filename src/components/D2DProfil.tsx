@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PinnKort, type PinnOversikt } from "./D2DLon";
+import { PinnKort, ktLon, ktNamn, sorteradTrappa, type PinnOversikt } from "./D2DLon";
 import "@/styles/d2d.css";
 
 /* =============================================================================
@@ -203,7 +203,13 @@ export function SaljarProfil({ id, namn, minId, salj, namnPa, pinnar, onClose, o
   // Fyrverkeri direkt när man öppnar sin egen profil och leder.
   useEffect(() => { if (arJag && leder) onFira(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  const pinnRad = pinnar?.saljare.find((s) => s.id === id);
+  // Personen kan ha en säljarrad och en kundtjänstrad (affärer lämnade via kundtjänst).
+  // Visa de rader som har pinnar; annars säljarraden (eller den egna kundtjänstraden).
+  const egnaRader = (pinnar?.saljare ?? []).filter((s) => s.id === id);
+  const ktRad = egnaRader.find((s) => s.roll === "kundtjanst") ?? (arJag ? pinnar?.kundtjanst ?? undefined : undefined);
+  const saljRad = egnaRader.find((s) => s.roll !== "kundtjanst");
+  const pinnRad = saljRad && (saljRad.pinnar + saljRad.vantar > 0 || !ktRad) ? saljRad : undefined;
+  const tjanstRad = pinnRad ?? ktRad;
   const trappa = useMemo(() => [...(pinnar?.trappa ?? [])].sort((a, b) => a.pinnar - b.pinnar), [pinnar]);
   const idag = nu.getDate();
 
@@ -237,18 +243,20 @@ export function SaljarProfil({ id, namn, minId, salj, namnPa, pinnar, onClose, o
           ))}
         </div>
 
-        {pinnRad && (
+        {(pinnRad || ktRad) && (
           <section className="d2dd__section">
             <h3 className="d2dp-h3">Pinnar — {MANADER[nu.getMonth()]}</h3>
-            <PinnKort s={pinnRad} trappa={trappa} jag={arJag} lon={arJag ? pinnar?.minLon : undefined} />
+            {pinnRad && <PinnKort s={pinnRad} trappa={trappa} jag={arJag} lon={arJag ? pinnar?.minLon : undefined} />}
+            {ktRad && <PinnKort s={{ ...ktRad, namn: ktNamn(ktRad.namn) }} trappa={sorteradTrappa(ktRad.trappa)} jag={arJag}
+              lon={arJag ? ktLon(pinnar?.kundtjanst ?? ktRad) : undefined} />}
           </section>
         )}
 
-        {pinnRad && (pinnRad.tjanster?.length ?? 0) > 0 && (
+        {tjanstRad && (tjanstRad.tjanster?.length ?? 0) > 0 && (
           <section className="d2dd__section">
             <h3 className="d2dp-h3">Sålda tjänster — {MANADER[nu.getMonth()]}</h3>
             <div className="d2dp-tjanster">
-              {pinnRad.tjanster!.map((t) => (
+              {tjanstRad.tjanster!.map((t) => (
                 <div key={t.nyckel} className="d2dp-tjanst">
                   <span>{t.etikett}</span>
                   <span>{t.antal}{t.antalScrive > 0 && <small className="d2d-lon__scrive"> ({t.antalScrive})</small>} st</span>
