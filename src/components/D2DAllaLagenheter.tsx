@@ -79,6 +79,9 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
   const [fastighet, setFastighet] = useState(ALLA);
   const [saljare, setSaljare] = useState(ALLA);
   const [status, setStatus] = useState<KnockStatus | typeof ALLA>(ALLA);
+  /** Såld datum (data.sald_datum), ÅÅÅÅ-MM-DD. Tomt = ingen gräns. */
+  const [fran, setFran] = useState("");
+  const [till, setTill] = useState("");
   const [visaAntal, setVisaAntal] = useState(SIDA);
   /** Lägenhet som säljs just nu (fönstret med tjänster och kunduppgifter). */
   const [salj, setSalj] = useState<string | null>(null);
@@ -164,16 +167,39 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
     return rader;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [u, iFast.length, projekt, ort, fastighet, namnFor]);
-  const filtrerade = iFast.filter((l) => saljare === ALLA || saljareAv(l) === saljare);
+  const iSaljare = iFast.filter((l) => saljare === ALLA || saljareAv(l) === saljare);
+  // Såld datum: med ett datumfilter visas bara lägenheter med säljdatum inom perioden.
+  const harDatum = !!fran || !!till;
+  const saldAv = (l: RecordRow) => String((l.data as Record<string, unknown>).sald_datum ?? "").slice(0, 10);
+  const filtrerade = harDatum
+    ? iSaljare.filter((l) => { const d = saldAv(l); return !!d && (!fran || d >= fran) && (!till || d <= till); })
+    : iSaljare;
+  const valjFran = (v: string) => { setFran(v); if (v && (!till || till < v)) setTill(v); };
+  const snabb = (namn: string) => {
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const idag = new Date(); idag.setHours(0, 0, 0, 0);
+    const dag = (n: number) => { const d = new Date(idag); d.setDate(d.getDate() + n); return d; };
+    const veckodag = (idag.getDay() + 6) % 7;   // måndag = 0
+    const p: Record<string, [Date, Date]> = {
+      idag: [idag, idag],
+      igar: [dag(-1), dag(-1)],
+      vecka: [dag(-veckodag), idag],
+      forraVecka: [dag(-veckodag - 7), dag(-veckodag - 1)],
+      manad: [new Date(idag.getFullYear(), idag.getMonth(), 1), idag],
+      forraManad: [new Date(idag.getFullYear(), idag.getMonth() - 1, 1), new Date(idag.getFullYear(), idag.getMonth(), 0)],
+    };
+    const [a, b] = p[namn];
+    setFran(iso(a)); setTill(iso(b));
+  };
 
   const antal: Partial<Record<KnockStatus, number>> = {};
   for (const l of filtrerade) { const k = statusAv(l); antal[k] = (antal[k] ?? 0) + 1; }
   const visade = filtrerade.filter((l) => status === ALLA || statusAv(l) === status);
   const synliga = visade.slice(0, visaAntal);
-  useEffect(() => { setVisaAntal(SIDA); }, [sok, projekt, ort, fastighet, saljare, status]);
+  useEffect(() => { setVisaAntal(SIDA); }, [sok, projekt, ort, fastighet, saljare, status, fran, till]);
 
-  const rensa = () => { setSok(""); setProjekt(ALLA); setOrt(ALLA); setFastighet(ALLA); setSaljare(ALLA); setStatus(ALLA); };
-  const harFilter = !!q || projekt !== ALLA || ort !== ALLA || fastighet !== ALLA || saljare !== ALLA || status !== ALLA;
+  const rensa = () => { setSok(""); setProjekt(ALLA); setOrt(ALLA); setFastighet(ALLA); setSaljare(ALLA); setStatus(ALLA); setFran(""); setTill(""); };
+  const harFilter = !!q || projekt !== ALLA || ort !== ALLA || fastighet !== ALLA || saljare !== ALLA || status !== ALLA || harDatum;
 
   const stangSalj = () => {
     const id = salj;
@@ -234,6 +260,25 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
                   {saljareVal.map((s) => <option key={s.id} value={s.id}>{s.namn} ({s.n})</option>)}
                 </select>
               </label>
+            </div>
+            {/* Såld datum: en dag (samma Från och Till), en period eller snabbval. */}
+            <div className="d2d-allalgh__datum" role="group" aria-label="Filtrera på såld datum">
+              <div className="d2d-alla__val d2d-allalgh__datum-val">
+                <label>
+                  <span>Såld från</span>
+                  <input className="input" type="date" value={fran} max={till || undefined} onChange={(e) => valjFran(e.target.value)} />
+                </label>
+                <label>
+                  <span>Såld till</span>
+                  <input className="input" type="date" value={till} min={fran || undefined} onChange={(e) => setTill(e.target.value)} />
+                </label>
+              </div>
+              <div className="d2d-allalgh__datum-snabb">
+                {([["idag", "Idag"], ["igar", "Igår"], ["vecka", "Denna vecka"], ["forraVecka", "Förra veckan"], ["manad", "Denna månad"], ["forraManad", "Förra månaden"]] as const).map(([k, t]) => (
+                  <button key={k} type="button" className="d2d-reason-chip" onClick={() => snabb(k)}>{t}</button>
+                ))}
+                {harDatum && <button type="button" className="btn btn--ghost btn--sm" onClick={() => { setFran(""); setTill(""); }}>Alla datum</button>}
+              </div>
             </div>
             <div className="d2d-status-picker d2d-alla__status" role="group" aria-label="Filtrera på status">
               <button type="button" className={`d2d-status-btn${status === ALLA ? " d2d-status-btn--active" : ""}`} onClick={() => setStatus(ALLA)}>
