@@ -807,6 +807,7 @@ export function LagenhetTabell({
   onSalj,
   kanAndra,
   visaSaljare = false,
+  statusEtikett,
 }: {
   lagenheter: RecordRow[];
   setLagenheter: Dispatch<SetStateAction<RecordRow[]>>;
@@ -831,6 +832,8 @@ export function LagenhetTabell({
   kanAndra?: (lag: RecordRow) => boolean;
   /** Visa säljarkolumnen även för säljare (när listan har andras lägenheter). */
   visaSaljare?: boolean;
+  /** Egen statusetikett för en rad (t.ex. "Väntar på signering" för ett Scrive-avtal som inte signerats). */
+  statusEtikett?: (lag: RecordRow) => string | null;
 }) {
   const medSaljare = isAdmin || visaSaljare;
   const [utfalld, setUtfalld] = useState<string | null>(null);
@@ -1043,7 +1046,9 @@ export function LagenhetTabell({
                         title={lagData.sald_datum ? `Såld ${String(lagData.sald_datum)}` : undefined}>
                         {lagData.sald_datum ? <><span className="d2d-lag-row__sald-pre">Såld </span>{kortDatum(String(lagData.sald_datum))}</> : "—"}
                       </span>
-                      <span className="d2d-lag-card__badge d2d-lag-table__status-col">{cfg.label}</span>
+                      <span className="d2d-lag-card__badge d2d-lag-table__status-col">{statusEtikett?.(lag) ?? cfg.label}</span>
+                      {/* Mobil: statuskolumnen är dold — egen etikett som rad under adressen. */}
+                      {!!statusEtikett?.(lag) && <span className="d2d-lag-row__etikett">{statusEtikett(lag)}</span>}
                       {/* Ringknapp — grön, till höger om status. tel:-länk så
                           telefonen ringer upp direkt; nedtonad utan nummer. */}
                       {telHref ? (
