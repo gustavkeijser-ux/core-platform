@@ -657,6 +657,15 @@ function FastighetsLista({
 /** Namnet på säljaren som fått adressen tilldelad (eller "—"). Är adressen
  *  såld/signerad av en annan säljare än den som har den nu (säljaren byttes
  *  på fastigheten efteråt) visas även "såld av …". */
+/** "2026-10-14" → "14 okt" (år med om det inte är i år). */
+function kortDatum(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const man = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"][Number(m[2]) - 1] ?? m[2];
+  const ar = Number(m[1]) === new Date().getFullYear() ? "" : ` ${m[1]}`;
+  return `${Number(m[3])} ${man}${ar}`;
+}
+
 /** Skrivskyddat kort: vems lägenheten är. */
 function SaljareInfo({ id }: { id: string | null }) {
   const name = useUserName(id);
@@ -950,7 +959,7 @@ export function LagenhetTabell({
                 det vanligaste. Klick på huvudraden öppnar lägenheten som förut. */}
             {sparFel && <div className="d2d-lag-fel" role="alert">{sparFel}</div>}
             {lagenheter.length > 0 && (
-              <div className={`d2d-lag-table${medSaljare ? " d2d-lag-table--admin" : ""}${expanderbar ? " d2d-lag-table--expander" : ""}`}>
+              <div className={`d2d-lag-table d2d-lag-table--sald${medSaljare ? " d2d-lag-table--admin" : ""}${expanderbar ? " d2d-lag-table--expander" : ""}`}>
                 <div className="d2d-lag-table__head" aria-hidden="true">
                   <span />
                   {medSaljare && <span>Säljare</span>}
@@ -959,6 +968,7 @@ export function LagenhetTabell({
                   <span>Lgh</span>
                   <span className="d2d-lag-table__namn-col">Namn</span>
                   <span className="d2d-lag-table__komm-col">Kommentar</span>
+                  <span className="d2d-lag-table__sald-col">Såld</span>
                   <span className="d2d-lag-table__status-col">Status</span>
                   <span className="d2d-lag-table__ring-col" />
                 </div>
@@ -1027,6 +1037,11 @@ export function LagenhetTabell({
                         title={kommentar || undefined}
                       >
                         {kommentar || "—"}
+                      </span>
+                      {/* Såld datum (data.sald_datum) — egen kolumn; på mobil en rad under. */}
+                      <span className={`d2d-lag-row__cell d2d-lag-row__cell--sald d2d-lag-table__sald-col${lagData.sald_datum ? "" : " d2d-lag-row__cell--empty"}`}
+                        title={lagData.sald_datum ? `Såld ${String(lagData.sald_datum)}` : undefined}>
+                        {lagData.sald_datum ? <><span className="d2d-lag-row__sald-pre">Såld </span>{kortDatum(String(lagData.sald_datum))}</> : "—"}
                       </span>
                       <span className="d2d-lag-card__badge d2d-lag-table__status-col">{cfg.label}</span>
                       {/* Ringknapp — grön, till höger om status. tel:-länk så
