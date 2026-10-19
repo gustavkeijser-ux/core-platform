@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { startaSynligPoll } from "@/lib/synligPoll";
 import { FilterPills, SkeletonRows } from "./PageChrome";
 import "@/styles/d2d.css";
 
@@ -165,25 +166,36 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
   /** Utfälld säljare i "Per säljare" (visar tjänsterna). */
   const [oppenSaljare, setOppenSaljare] = useState<string | null>(null);
 
+  /** När siffrorna senast hämtades (visas vid filtren). */
+  const [hamtad, setHamtad] = useState<Date | null>(null);
+
   // Alla tre flikarna hämtas på en gång, så att byte av flik går direkt.
+  // Siffrorna uppdateras löpande: var 2:a minut medan sidan syns och direkt när
+  // man kommer tillbaka till fliken. Bara första hämtningen efter ett filterbyte
+  // tömmer vyn — de löpande uppdateringarna byter siffrorna på plats.
   useEffect(() => {
     let on = true;
-    setAlla(null); setFel(null);
+    let forsta = true;
+    setAlla(null); setFel(null); setHamtad(null);
     const egen = period === "datum";
     if (egen && fran && till && fran > till) { setFel("Från-datumet ligger efter till-datumet."); return; }
-    const arg = {
-      p_projekt: projekt || null, p_saljare: saljare || null,
-      p_fran: egen ? fran || null : periodFran(period),
-      p_till: egen ? till || null : null,
+    const hamta = async () => {
+      const arg = {
+        p_projekt: projekt || null, p_saljare: saljare || null,
+        p_fran: egen ? fran || null : periodFran(period),
+        p_till: egen ? till || null : null,
+      };
+      const res = await Promise.all(FLIKAR.map(([k]) => supabase.rpc("d2d_utfall_kalla", { p_kalla: k, ...arg })));
+      if (!on) return;
+      const err = res.find((r) => r.error)?.error;
+      if (err) { if (forsta) setFel(err.message); return; }   // ett tillfälligt fel vid löpande uppdatering behåller siffrorna
+      forsta = false;
+      setFel(null);
+      setAlla(Object.fromEntries(FLIKAR.map(([k], i) => [k, res[i].data as Utfall])));
+      setHamtad(new Date());
     };
-    Promise.all(FLIKAR.map(([k]) => supabase.rpc("d2d_utfall_kalla", { p_kalla: k, ...arg })))
-      .then((res) => {
-        if (!on) return;
-        const err = res.find((r) => r.error)?.error;
-        if (err) { setFel(err.message); return; }
-        setAlla(Object.fromEntries(FLIKAR.map(([k], i) => [k, res[i].data as Utfall])));
-      });
-    return () => { on = false; };
+    const stopp = startaSynligPoll(hamta, 2 * 60_000);
+    return () => { on = false; stopp(); };
   }, [period, fran, till, projekt, saljare]);
   const ord = ORD[kalla];
 
@@ -260,6 +272,11 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
           <option value="">Alla säljare</option>
           {u?.saljare.map((x) => <option key={x.id} value={x.id}>{x.namn ?? "Okänd"}</option>)}
         </select>
+        {hamtad && (
+          <span className="utf__uppdaterad" title="Siffrorna uppdateras automatiskt varannan minut">
+            Uppdaterad {hamtad.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )}
       </div>
 
       {fel && <div className="formfield__error">{fel}</div>}
