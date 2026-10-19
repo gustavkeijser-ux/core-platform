@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { startaSynligPoll } from "@/lib/synligPoll";
+import { skrivXlsx, laddaNed } from "@/lib/xlsxSkriv";
+import { byggUtfallRapport, lasVtExport, type RapportData } from "@/lib/d2dUtfallRapport";
 import { FilterPills, SkeletonRows } from "./PageChrome";
 import "@/styles/d2d.css";
 
@@ -170,6 +172,32 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
   /** Utfälld säljare i "Per säljare" (visar tjänsterna). */
   const [oppenSaljare, setOppenSaljare] = useState<string | null>(null);
 
+  // Excel-rapport: perioden och filtren ovan, plus en valfri VT-export att matcha mot.
+  const [rapportOppen, setRapportOppen] = useState(false);
+  const [vtFil, setVtFil] = useState<File | null>(null);
+  const [rapportBusy, setRapportBusy] = useState(false);
+  const [rapportFel, setRapportFel] = useState<string | null>(null);
+  const rapportPeriod = (): { fran: string | null; till: string | null } =>
+    period === "datum" ? { fran: fran || null, till: till || null }
+      : { fran: periodFran(period), till: period === "allt" ? null : dagStr(new Date()) };
+  async function hamtaRapport() {
+    setRapportBusy(true); setRapportFel(null);
+    try {
+      const { fran: f, till: t } = rapportPeriod();
+      const vt = vtFil ? await lasVtExport(vtFil) : null;
+      const { data, error } = await supabase.rpc("d2d_utfall_rapport", {
+        p_fran: f, p_till: t, p_projekt: projekt || null, p_saljare: saljare || null,
+      });
+      if (error) throw new Error(error.message);
+      const blad = byggUtfallRapport(data as RapportData, vt, vtFil?.name);
+      laddaNed(skrivXlsx(blad), `Utfall_${f ?? "start"}_${t ?? dagStr(new Date())}.xlsx`);
+    } catch (e) {
+      setRapportFel(e instanceof Error ? e.message : "Kunde inte skapa rapporten.");
+    } finally {
+      setRapportBusy(false);
+    }
+  }
+
   /** När siffrorna senast hämtades (visas vid filtren). */
   const [hamtad, setHamtad] = useState<Date | null>(null);
 
@@ -294,7 +322,36 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
             Uppdaterad {hamtad.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}
           </span>
         )}
+        <button type="button" className={`btn btn--sm ${rapportOppen ? "btn--brand" : "btn--ghost"} utf__rapport-knapp`}
+          aria-expanded={rapportOppen} onClick={() => setRapportOppen((o) => !o)}>
+          Excel-rapport
+        </button>
       </div>
+
+      {rapportOppen && (() => {
+        const { fran: f, till: t } = rapportPeriod();
+        return (
+          <section className="card utf__rapport">
+            <div className="utf__rapport-text">
+              <strong>Rapport för {f ?? "allt"}{f || t ? ` – ${t ?? "idag"}` : ""}</strong>
+              <span className="formfield__help">
+                Följer perioden och filtren ovan. Bladen: Summering, Sålda (med Godkänd i VT), Scrive, Attach rate per tjänst och Snitt — gemensamt och per person.
+              </span>
+            </div>
+            <label className="utf__rapport-fil">
+              <span>VT-export (valfri)</span>
+              <input type="file" accept=".xlsx,.csv,.txt,.tsv" onChange={(e) => setVtFil(e.target.files?.[0] ?? null)} />
+              <small className="formfield__help">
+                {vtFil ? `Matchas mot ${vtFil.name} på adress och lägenhet.` : "Utan fil blir kolumnen Godkänd i VT tom."} Personnummer i filen läses inte in.
+              </small>
+            </label>
+            <button type="button" className="btn btn--brand" disabled={rapportBusy} onClick={hamtaRapport}>
+              {rapportBusy ? "Skapar…" : "Hämta Excel"}
+            </button>
+            {rapportFel && <div className="formfield__error">{rapportFel}</div>}
+          </section>
+        );
+      })()}
 
       {fel && <div className="formfield__error">{fel}</div>}
       {!u && !fel && <div className="card"><SkeletonRows rows={6} /></div>}
