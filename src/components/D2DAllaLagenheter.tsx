@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { ObjectDef, RecordRow } from "@/lib/data";
 import { useTenantUsers } from "@/lib/users";
@@ -22,6 +22,9 @@ import "@/styles/d2d.css";
 const ALLA = "alla";
 const UTAN_PROJEKT = "utan";
 const UTAN_SALJARE = "utan";
+const VANTAR = "__vantar__";
+/** Scrive-avtalet väntar på kundens signatur (d2d_alla_lagenheter: scrive_vantar). */
+const vantarPaSignering = (l: RecordRow) => (l as RecordRow & { scrive_vantar?: boolean }).scrive_vantar === true;
 const SIDA = 150;
 const SEL = "id,object_type,data,status,owner_user_id,title,created_at,updated_at";
 
@@ -78,7 +81,8 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
   const [ort, setOrt] = useState(ALLA);
   const [fastighet, setFastighet] = useState(ALLA);
   const [saljare, setSaljare] = useState(ALLA);
-  const [status, setStatus] = useState<KnockStatus | typeof ALLA>(ALLA);
+  /** Status att filtrera på; VANTAR = Signera med Scrive där avtalet väntar på kundens signatur. */
+  const [status, setStatus] = useState<KnockStatus | typeof ALLA | typeof VANTAR>(ALLA);
   /** Såld datum (data.sald_datum), ÅÅÅÅ-MM-DD. Tomt = ingen gräns. */
   const [fran, setFran] = useState("");
   const [till, setTill] = useState("");
@@ -194,7 +198,8 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
 
   const antal: Partial<Record<KnockStatus, number>> = {};
   for (const l of filtrerade) { const k = statusAv(l); antal[k] = (antal[k] ?? 0) + 1; }
-  const visade = filtrerade.filter((l) => status === ALLA || statusAv(l) === status);
+  const antalVantar = filtrerade.filter(vantarPaSignering).length;
+  const visade = filtrerade.filter((l) => status === ALLA || (status === VANTAR ? vantarPaSignering(l) : statusAv(l) === status));
   const synliga = visade.slice(0, visaAntal);
   useEffect(() => { setVisaAntal(SIDA); }, [sok, projekt, ort, fastighet, saljare, status, fran, till]);
 
@@ -285,11 +290,20 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
                 Alla {filtrerade.length}
               </button>
               {ALLA_STATUS_ORDNING.filter((k) => (antal[k] ?? 0) > 0).map((k) => (
-                <button key={k} type="button"
-                  className={`d2d-status-btn ${STATUS_CONFIG[k].cssClass}${status === k ? " d2d-status-btn--active" : ""}`}
-                  onClick={() => setStatus(status === k ? ALLA : k)}>
-                  {STATUS_CONFIG[k].label} {antal[k]}
-                </button>
+                <Fragment key={k}>
+                  <button type="button"
+                    className={`d2d-status-btn ${STATUS_CONFIG[k].cssClass}${status === k ? " d2d-status-btn--active" : ""}`}
+                    onClick={() => setStatus(status === k ? ALLA : k)}>
+                    {STATUS_CONFIG[k].label} {antal[k]}
+                  </button>
+                  {k === "scrive" && antalVantar > 0 && (
+                    <button type="button"
+                      className={`d2d-status-btn ${STATUS_CONFIG.scrive.cssClass} d2d-status-btn--vantar${status === VANTAR ? " d2d-status-btn--active" : ""}`}
+                      onClick={() => setStatus(status === VANTAR ? ALLA : VANTAR)}>
+                      Väntar på signering {antalVantar}
+                    </button>
+                  )}
+                </Fragment>
               ))}
               {harFilter && <button type="button" className="btn btn--ghost btn--sm d2d-allalgh__rensa" onClick={rensa}>Rensa filter</button>}
             </div>
@@ -317,6 +331,7 @@ export function D2DAllaLagenheter({ minId, isAdmin, objectDef, onBack, onOpenLag
               expanderbar
               onSalj={setSalj}
               visaSaljare
+              statusEtikett={(l) => (vantarPaSignering(l) ? "Väntar på signering" : null)}
               kanAndra={(l) => isAdmin || (l as RecordRow & { kan_andra?: boolean }).kan_andra !== false}
               fastighetNamn={(id) => {
                 const l = alla.find((x) => x.id === id);
