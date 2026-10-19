@@ -30,6 +30,8 @@ type Utfall = {
   /** kundtjanst = kundtjänstens rad (affärer den lämnat till en säljare); viaKt = säljarens affärer som kom via kundtjänst. */
   perSaljare: Array<{ id: string; namn: string | null; besok: number; oppnade: number; salda: number; mer: number; avtal?: number;
     kundtjanst?: boolean; viaKt?: number;
+    /** Egna sålda (utan dem som kom via kundtjänst) — nämnare för snitt och mer än bredband. */
+    saldaEgna?: number;
     /** Sålda tjänster i urvalet (bredband per hastighet, TV, streaming, mobil, extraanvändare, router, TV-box). */
     tjanster?: Array<{ nyckel: string; etikett: string; antal: number }>;
     /** Antal per kategori (samma nycklar som sald.kategorier) — underlag för attach rate per säljare. */
@@ -462,7 +464,8 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
           <section className="card utf__sek">
             <h2>Per säljare</h2>
             <p className="utf__ingress">Snitt avtal/kund = antal avtal (tjänster) delat med antal {ord.enhet} kunder. Hela urvalet: {snitt(u.sald.avtalSumma, u.sald.antal)}. Klicka på en säljare för att se vilka tjänster som sålts.
-              {" "}En affär som kundtjänst lämnat till en säljare räknas på både säljaren och kundtjänst, som i lönen och topplistan.</p>
+              {" "}En affär som kundtjänst lämnat till en säljare räknas i Sålda på både säljaren och kundtjänst, som i lönen och topplistan.
+              Säljarens snitt, mer än bredband och attach rate räknas på säljarens egna affärer; kundtjänstens affärer har sitt snitt på kundtjänstraden.</p>
             <div className="rtable-scroll">
               <table className="rtable utf__tabell">
                 <thead><tr><th>Säljare</th><th>Besök</th><th>Öppnade</th><th>{ord.kolumn}</th><th>Mer än bredband</th><th>Snitt avtal/kund</th><th>Attach TV</th></tr></thead>
@@ -484,8 +487,8 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
                           <td data-label="Öppnade" className="utf__num">{p.oppnade}</td>
                           <td data-label={ord.kolumn} className="utf__num">{p.salda} ({pct(p.salda, p.oppnade)} %)
                             {!p.kundtjanst && (p.viaKt ?? 0) > 0 && <small className="utf__sub"> varav {p.viaKt} via kundtjänst</small>}</td>
-                          <td data-label="Mer än bredband" className="utf__num">{p.mer} av {p.salda}</td>
-                          <td data-label="Snitt avtal/kund" className="utf__num">{snitt(p.avtal, p.salda)}</td>
+                          <td data-label="Mer än bredband" className="utf__num">{p.mer} av {p.saldaEgna ?? p.salda}</td>
+                          <td data-label="Snitt avtal/kund" className="utf__num">{snitt(p.avtal, p.saldaEgna ?? p.salda)}</td>
                           <td data-label="Attach TV" className="utf__num">{bb > 0 ? `${pct(kat.tv ?? 0, bb)} %` : "–"}</td>
                         </tr>
                         {open && (
