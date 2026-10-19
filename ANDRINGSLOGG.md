@@ -28,6 +28,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
+## 2026-10-19
+
+- [D2D] Kolumnen "Såld" (säljdatum, `sald_datum`) i lägenhetslistorna — Alla lägenheter och lägenheterna i en fastighet. På mobil visas "Såld 14 okt" på en egen rad under adressen. `d2d_alla_lagenheter` skickar med sald_datum. 1 854 av 1 860 sålda har datum; 6 saknar spår av säljtidpunkt. Scrive-lägenheter får inget säljdatum (de är avtalsförslag). Filer: supabase/migrations/20261019_0900_d2d_alla_lagenheter_sald_datum.sql (körd), src/components/D2DSellerApp.tsx, src/styles/d2d.css.
+
 ## 2026-10-16
 
 - [D2D] Flera mobilabonnemang av samma sort per kund (t.ex. 2 × 10 GB) med varsitt nummer att flytta. Nytt fält `mobil_antal` ({"10_gb": 2}) med −/+ per valt abonnemang under Mobil i "Vad såldes?". Nummerpanelen (tillfälligt nummer) visar en rad per abonnemang (typ huvud + `abonnemang`) och en per extraanvändare; ifyllda rader tas aldrig bort automatiskt. Pris i avtalssammanfattningen och Scrive (scrive-sign, driftsatt v30) räknas per styck. Lön/pinnar/Utfall och antal avtal räknar varje abonnemang (`d2d_mobil_enheter`); nummerbytet skapas först när alla nummer är ifyllda (`nb_complete`). Befintliga lägenheter påverkas inte (ingen hade mer än ett abonnemang; alla 6 nummerbyten är fortsatt kompletta). Filer: supabase/migrations/20261016_1300_d2d_flera_mobilabonnemang.sql (körd), src/lib/d2dPris.ts, src/components/MobilNummer.tsx, src/components/D2DSellerApp.tsx, supabase/functions/scrive-sign/index.ts.
