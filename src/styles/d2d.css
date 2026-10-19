@@ -801,6 +801,7 @@
 }
 
 /* Utfall: egen period (Från–Till) när pillret "Datum" är valt. */
+.utf__uppdaterad { margin-left: auto; align-self: center; font-size: var(--text-xs); color: var(--ink-faint); white-space: nowrap; }
 .utf__datum { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); align-items: end; flex-basis: 100%; }
 .utf__datum label {
   display: flex; flex-direction: column; gap: 4px; min-width: 0;
