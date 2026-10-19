@@ -30,6 +30,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## 2026-10-19
 
+- [D2D] Alla lägenheter: filter på såld datum — Såld från/till (ett datum fylls i båda automatiskt, Till kan tömmas för "från och med") och snabbval Idag, Igår, Denna vecka, Förra veckan, Denna månad, Förra månaden. Med datumfilter visas bara lägenheter med säljdatum i perioden; ingår i Rensa filter. Filer: src/components/D2DAllaLagenheter.tsx, src/styles/d2d.css.
 - [D2D] Kolumnen "Såld" (säljdatum, `sald_datum`) i lägenhetslistorna — Alla lägenheter och lägenheterna i en fastighet. På mobil visas "Såld 14 okt" på en egen rad under adressen. `d2d_alla_lagenheter` skickar med sald_datum. 1 854 av 1 860 sålda har datum; 6 saknar spår av säljtidpunkt. Scrive-lägenheter får inget säljdatum (de är avtalsförslag). Filer: supabase/migrations/20261019_0900_d2d_alla_lagenheter_sald_datum.sql (körd), src/components/D2DSellerApp.tsx, src/styles/d2d.css.
 
 ## 2026-10-16
