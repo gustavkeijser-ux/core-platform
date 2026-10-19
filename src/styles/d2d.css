@@ -1291,6 +1291,33 @@
   .d2d-allalgh__val--admin { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
 }
 
+/* Kolumnen Såld (säljdatum) före Status. På mobil en egen rad under adressen. */
+.d2d-detail .d2d-lag-table--sald {
+  --lag-cols: 2.5rem minmax(0, 1.4fr) 4.5rem 4.5rem minmax(0, 1.1fr) minmax(0, 1.5fr) 5.5rem 8.5rem 2.25rem;
+}
+.d2d-detail .d2d-lag-table--sald.d2d-lag-table--admin {
+  --lag-cols: 2.5rem minmax(0, 1fr) minmax(0, 1.3fr) 4rem 4rem minmax(0, 1fr) minmax(0, 1.4fr) 5.5rem 8.5rem 2.25rem;
+}
+.d2d-lag-row__cell--sald { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.d2d-lag-row__sald-pre { display: none; }
+@media (max-width: 480px) {
+  .d2d-detail .d2d-lag-table--sald {
+    --lag-cols: 2rem minmax(0, 1fr) 2.75rem 2.75rem 2rem;
+  }
+  .d2d-detail .d2d-lag-table--sald.d2d-lag-table--admin {
+    --lag-cols: 2rem minmax(0, .9fr) minmax(0, 1fr) 2.25rem 2.75rem 2rem;
+  }
+  .d2d-lag-table__head .d2d-lag-table__sald-col { display: none; }
+  .d2d-detail .d2d-lag-row .d2d-lag-row__cell--sald {
+    grid-column: 2 / -1;
+    order: 1;
+    font-size: var(--text-xs);
+    color: var(--ink-muted);
+  }
+  .d2d-detail .d2d-lag-row .d2d-lag-row__cell--sald.d2d-lag-row__cell--empty { display: none; }
+  .d2d-lag-row__sald-pre { display: inline; }
+}
+
 /* Skrivskyddat kort (en annan säljares lägenhet i Alla lägenheter). */
 .d2d-lag-panel--las { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
 .d2d-lag-panel__info { font-size: var(--text-sm); color: var(--ink-muted); }
