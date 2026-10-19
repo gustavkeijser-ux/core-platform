@@ -1112,14 +1112,97 @@ async function hamtaPlanering(projektId: string | null) {
   return data as { statusar: SaljStatus[]; projekt: PlanProjekt[] | StatusSumma; fastigheter?: Record<string, StatusSumma> };
 }
 
+// -----------------------------------------------------------------------------
+// Fastighetsinfo — det säljaren behöver veta innan knackningen (portkod,
+// befintliga leverantörer, befintlig TV och när fastigheten aktiveras).
+// Fälten finns på d2d_fastighet och visas i säljarvyns infobox (infraRows i
+// D2DSellerApp); här fylls de i vid planeringen. Varje fält sparas när man
+// lämnar det.
+// -----------------------------------------------------------------------------
+
+const FAST_INFO_FALT: Array<{ key: string; label: string; typ: "text" | "date"; kort: string; placeholder?: string }> = [
+  { key: "portkod", label: "Portkod", typ: "text", kort: "Portkod", placeholder: "t.ex. 1234" },
+  { key: "befintlig_fiber", label: "Befintlig leverantör fiber", typ: "text", kort: "Fiber", placeholder: "t.ex. Telia, Bahnhof" },
+  { key: "befintlig_koax", label: "Befintlig leverantör koax", typ: "text", kort: "Koax", placeholder: "t.ex. Tele2/Com Hem" },
+  { key: "nuvarande_tv", label: "Befintlig TV", typ: "text", kort: "TV", placeholder: "t.ex. Tele2 TV Bas" },
+  { key: "kundklar_datum", label: "Fastigheten aktiveras (kundklar)", typ: "date", kort: "Aktiveras" },
+];
+
+function infoVarde(data: Record<string, unknown>, key: string): string {
+  const v = data[key];
+  if (v == null) return "";
+  const s = String(v);
+  return key === "kundklar_datum" ? s.slice(0, 10) : s;
+}
+
+function FastighetInfoEditor({ fastighetId, initial, onSaved }: {
+  fastighetId: string; initial: Record<string, unknown>; onSaved: (key: string, value: string | null) => void;
+}) {
+  const [varden, setVarden] = useState<Record<string, string>>(() =>
+    Object.fromEntries(FAST_INFO_FALT.map((f) => [f.key, infoVarde(initial, f.key)])));
+  const [status, setStatus] = useState<Record<string, "sparar" | "ok" | "fel">>({});
+
+  async function spara(key: string) {
+    const v = varden[key].trim();
+    if (v === infoVarde(initial, key)) return;
+    setStatus((s) => ({ ...s, [key]: "sparar" }));
+    try {
+      await updateRecord(fastighetId, { [key]: v === "" ? null : v });
+      onSaved(key, v === "" ? null : v);
+      setStatus((s) => ({ ...s, [key]: "ok" }));
+    } catch {
+      setStatus((s) => ({ ...s, [key]: "fel" }));
+    }
+  }
+
+  return (
+    <div className="d2dpb-info">
+      <p className="d2dpb-info__hjalp">Visas för säljaren i fastighetens infobox. Sparas när du lämnar fältet.</p>
+      <div className="d2dpb-info__grid">
+        {FAST_INFO_FALT.map((f) => (
+          <label key={f.key} className="d2dpb-info__falt">
+            <span className="d2dpb-info__label">
+              {f.label}
+              {status[f.key] === "sparar" && <em> sparar…</em>}
+              {status[f.key] === "ok" && <em className="d2dpb-info__ok"> ✓ sparat</em>}
+              {status[f.key] === "fel" && <em className="d2dpb-info__fel"> kunde inte spara</em>}
+            </span>
+            <input
+              className="input"
+              type={f.typ}
+              value={varden[f.key]}
+              placeholder={f.placeholder}
+              onChange={(e) => setVarden((s) => ({ ...s, [f.key]: e.target.value }))}
+              onBlur={() => spara(f.key)}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FastighetRow({
   fastighet, sellers, statusar, summa, grannar, onChanged, onRemove,
 }: {
   fastighet: FastRow; sellers: SellerOption[]; statusar: SaljStatus[]; summa?: StatusSumma;
   grannar?: Granne[] | null; onChanged: () => void; onRemove: () => void;
 }) {
-  const [open, setOpen] = useState<"none" | "addresses" | "assign">("none");
+  const [open, setOpen] = useState<"none" | "addresses" | "assign" | "info">("none");
   const [turordning, setTurordning] = useState(String((fastighet.data as Record<string, unknown>).turordning ?? ""));
+  // Lokal spegel av fastighetsinfon så raden uppdateras direkt vid sparning
+  // utan att hela projektet laddas om (och panelen stängs).
+  const [info, setInfo] = useState<Record<string, unknown>>(() => {
+    const d = fastighet.data as Record<string, unknown>;
+    return Object.fromEntries(FAST_INFO_FALT.map((f) => [f.key, d[f.key] ?? null]));
+  });
+  const infoText = FAST_INFO_FALT
+    .map((f) => [f.kort, infoVarde(info, f.key)] as const)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k} ${v}`)
+    .join(" · ");
+  const infoSaknas = FAST_INFO_FALT.filter((f) => !infoVarde(info, f.key)).length;
 
   async function saveTurordning() {
     const n = turordning.trim() === "" ? null : Number(turordning);
@@ -1153,6 +1236,10 @@ function FastighetRow({
             title={assignment.map((x) => `${namn(x.user_id)} ${x.procent} %`).join(", ")}>
             {assignment.length ? assignment.map((x) => namn(x.user_id)).join(", ") : "Ingen säljare tilldelad"}
           </span>
+          <span className={`d2dpb-rad__info${infoSaknas ? " d2dpb-rad__info--saknas" : ""}`} title={infoText || "Fastighetsinfo saknas"}>
+            {infoText || "Fastighetsinfo saknas"}
+            {!!infoText && infoSaknas > 0 && <i> · {infoSaknas} saknas</i>}
+          </span>
         </div>
         <span className={`d2dpb-lage d2dpb-lage--${lage.ton}`}>{lage.text}</span>
         <div className="d2dpb-rad__narmast">
@@ -1173,6 +1260,7 @@ function FastighetRow({
           <span key={st.key} className="d2dpb-rad__antal" data-label={st.label}>{sum.antal[st.key] || "–"}</span>
         ))}
         <div className="d2dpb-rad__knappar">
+          <button className="btn btn--ghost btn--sm" aria-pressed={open === "info"} onClick={() => setOpen(open === "info" ? "none" : "info")}>Info</button>
           <button className="btn btn--ghost btn--sm" aria-pressed={open === "addresses"} onClick={() => setOpen(open === "addresses" ? "none" : "addresses")}>Lägenheter</button>
           <button className="btn btn--ghost btn--sm" aria-pressed={open === "assign"} onClick={() => setOpen(open === "assign" ? "none" : "assign")}>Tilldela</button>
           <button className="btn btn--ghost btn--sm d2dpb-rad__bort" onClick={onRemove} title="Ta bort fastigheten ur projektet" aria-label="Ta bort fastigheten ur projektet">✕</button>
@@ -1180,6 +1268,13 @@ function FastighetRow({
       </div>
       <div className="d2dpb-rad__mobil-legend"><StatusLegend statusar={statusar} summa={sum} /></div>
 
+      {open === "info" && (
+        <FastighetInfoEditor
+          fastighetId={fastighet.id}
+          initial={info}
+          onSaved={(key, value) => setInfo((s) => ({ ...s, [key]: value }))}
+        />
+      )}
       {open === "addresses" && (
         <AddressEditor
           fastighetId={fastighet.id}
