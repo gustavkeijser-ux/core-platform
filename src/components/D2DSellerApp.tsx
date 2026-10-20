@@ -13,13 +13,13 @@ import { FieldInput } from "@/lib/fields";
 import { ThemeToggle, useTheme } from "@/lib/theme";
 import { brandCssVars } from "@/lib/color";
 import { FieldConfigPanel } from "./FieldConfigPanel";
-import { MobilNummerPanel } from "./MobilNummer";
+import { MobilNummerPanel, mobilNummerBrist } from "./MobilNummer";
 import { AvtalsSammanfattning } from "./D2DAvtal";
 import { D2DAvtalPage } from "./D2DAvtalPage";
 import { ScriveSignering } from "./D2DScrive";
 import { BindningPanel, EjMerPanel } from "./D2DBindning";
 import { UTAN_NETFLIX_FALT, SPORT_MED_NETFLIX, EXTRA_ANTAL_FALT, EXTRA_VAL, antalExtra, MOBIL_ANTAL_FALT, antalAbonnemang } from "@/lib/d2dPris";
-import { useRoute, navigate, goBack } from "@/lib/route";
+import { useRoute, navigate, goBack, sattLamnaSparr } from "@/lib/route";
 import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShared } from "@/lib/returnRow";
 
 const rememberRow = (listKey: string, id: string) => rememberRowShared("d2d:" + listKey, id);
@@ -1464,7 +1464,29 @@ export function LagenhetForm({
     };
   }, [flush]);
 
+  // Såld/Scrive med mobil: säljaren får inte lämna kundkortet förrän
+  // nummerhanteringen är klar (valt nummer; vid tillfälligt nummer även
+  // startdatum + riktigt nummer och ägare). Admin spärras inte.
+  const [lamnaFel, setLamnaFel] = useState(false);
+  const lamnaBrist = !isAdmin && (status === "sald" || status === "scrive") ? mobilNummerBrist(data) : null;
+  const bristRef = useRef<string | null>(null);
+  bristRef.current = lamnaBrist;
+  const visaLamnaFel = useCallback(() => {
+    setLamnaFel(true);
+    window.setTimeout(() => {
+      const mal = document.querySelector(".mnr") ?? document.querySelector(".d2d-lamna-fel");
+      mal?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }, []);
+  useEffect(() => sattLamnaSparr(() => {
+    if (!bristRef.current) return false;
+    void flush();
+    visaLamnaFel();
+    return true;
+  }), [lagenhetId, flush, visaLamnaFel]);
+
   const handleBack = async () => {
+    if (lamnaBrist) { void flush(); visaLamnaFel(); return; }
     await flush();
     // Lämnar säljaren en såld lägenhet firas det med fyrverkerier (2 s).
     if (status === "sald") skjutFyrverkeri();
@@ -1663,6 +1685,12 @@ export function LagenhetForm({
         </span>
       </div>
 
+      {lamnaFel && lamnaBrist && (
+        <div className="d2d-error d2d-lamna-fel" role="alert">
+          <strong>Kundkortet kan inte lämnas ännu.</strong> {lamnaBrist}
+        </div>
+      )}
+
       {error && (
         <div className="d2d-error d2d-error--row">
           <span>{error}</span>
@@ -1801,6 +1829,7 @@ export function LagenhetForm({
                   data={data}
                   isAdmin={isAdmin}
                   planLabel={(k) => f.options.choices?.find((c) => c.key === k)?.label ?? k}
+                  lamnaFel={lamnaFel ? lamnaBrist : null}
                   onPatch={(patch, delay) => { setData((d) => ({ ...d, ...patch })); queueSave(patch, null, delay); }}
                 />
               )}
