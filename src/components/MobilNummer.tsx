@@ -32,6 +32,8 @@ type Props = {
   onPatch: (patch: Record<string, unknown>, delayMs: number) => void;
   /** Visningsnamn för ett abonnemang ("10_gb" → "10 GB"). */
   planLabel?: (key: string) => string;
+  /** Visas överst när säljaren försökt lämna kundkortet med uppgifter som saknas. */
+  lamnaFel?: string | null;
 };
 
 const TOM_RAD = (typ: NummerRad["typ"]): NummerRad => ({ typ, riktigt: "", agare: "" });
@@ -58,6 +60,27 @@ function justera(rows: NummerRad[], enheter: string[], antalExtraRader: number):
     ut.push({ ...r, typ: "huvud", ...(enheter[i] ? { abonnemang: enheter[i] } : {}) });
   }
   return [...ut, ...extra];
+}
+
+/**
+ * Vad som saknas i nummerhanteringen för att säljaren ska få lämna kundkortet
+ * (null = inget saknas). Gäller bara när mobil är såld: valet av nummer måste
+ * vara gjort, och vid tillfälligt (slumpat) nummer krävs startdatum samt
+ * riktigt nummer och ägare på varje rad — annars skapas inget nummerbyte.
+ */
+export function mobilNummerBrist(data: Record<string, unknown>): string | null {
+  const mobil = Array.isArray(data.salt_mobil) ? (data.salt_mobil as unknown[]).map(String) : [];
+  if (!mobil.length) return null;
+  const val = (data.mobil_nummerval as string | null) ?? "";
+  if (!val) return "Välj hur kundens mobilnummer ska hanteras (under Mobil).";
+  if (val !== "tillfalligt" || data.mobil_nummerbyte_id) return null;
+  const rows = justera(rader(data), mobilEnheter(data), mobil.includes(EXTRA_VAL) ? antalExtra(data) : 0);
+  const start = (data.mobil_startdatum as string | null) ?? "";
+  const nummerSaknas = rows.some((r) => !r.riktigt?.trim() || !r.agare?.trim());
+  if (!start && nummerSaknas) return "Fyll i startdatum, riktigt nummer och ägare för nummerporteringen.";
+  if (!start) return "Fyll i startdatum för mobilabonnemanget (nummerporteringen).";
+  if (nummerSaknas) return "Fyll i riktigt nummer och ägare för alla nummer som ska porteras.";
+  return null;
 }
 
 /** Dagar från idag till ett datum (ÅÅÅÅ-MM-DD). */
@@ -90,7 +113,7 @@ export function StartdatumVarning({ datum }: { datum: string }) {
   );
 }
 
-export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel = (k) => k }: Props) {
+export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel = (k) => k, lamnaFel }: Props) {
   const val = (data.mobil_nummerval as string | null) ?? "";
   const [slumpat, setSlumpat] = useState(val === "tillfalligt" || val === "nytt_nummer");
   useEffect(() => { if (val === "tillfalligt" || val === "nytt_nummer") setSlumpat(true); }, [val]);
@@ -141,6 +164,11 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel
 
   return (
     <div className="mnr">
+      {lamnaFel && (
+        <div className="mnr-warn mnr-warn--hard" role="alert">
+          Du kan inte lämna kundkortet förrän detta är ifyllt: {lamnaFel}
+        </div>
+      )}
       <span className="d2d-sold-panel__hint">Välj först hur kundens nummer ska hanteras</span>
       <div className="d2d-reason-panel__chips">
         <button
