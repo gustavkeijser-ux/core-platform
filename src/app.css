@@ -3525,6 +3525,8 @@ th:nth-last-child(-n+3) .kolf__panel { left: auto; right: 0; }
 
 /* ── Mobilnummer i D2D (portering / tillfälligt nummer) ─────────────── */
 .mnr { display: flex; flex-direction: column; gap: var(--sp-2); }
+/* Plats för den klistrade topbaren när kortet scrollar hit (spärrad Tillbaka). */
+.mnr, .d2d-lamna-fel { scroll-margin-top: 5.5rem; }
 .mnr-info { margin: 0; font-size: var(--text-sm); color: var(--ink-muted); }
 .mnr-form { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-2); }
 .mnr-ok {
