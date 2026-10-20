@@ -33,10 +33,32 @@ const depth = (): number => {
   return typeof d === "number" ? d : 0;
 };
 
+/**
+ * Spärr mot att lämna en vy (t.ex. kundkortet när obligatoriska uppgifter
+ * saknas). Funktionen returnerar true = stanna kvar (och visar själv varför).
+ * Gäller appens navigering och webbläsarens/telefonens bakåt.
+ */
+let sparr: { stanna: () => boolean; hash: string; state: unknown } | null = null;
+
+export function sattLamnaSparr(stanna: () => boolean): () => void {
+  const s = { stanna, hash: window.location.hash, state: history.state };
+  sparr = s;
+  return () => { if (sparr === s) sparr = null; };
+}
+
+// Registreras när modulen laddas, alltså före useRoute-lyssnarna, så att en
+// spärrad bakåt kan stoppas innan vyn byts.
+window.addEventListener("hashchange", (e) => {
+  if (!sparr || window.location.hash === sparr.hash || !sparr.stanna()) return;
+  e.stopImmediatePropagation();
+  history.pushState(sparr.state, "", sparr.hash);
+});
+
 /** Navigera. replace = ersätt nuvarande historikpost (ingen ny bakåt-punkt). */
 export function navigate(segs: string[], query?: Record<string, string | null | undefined>, replace = false) {
   const next = formatRoute(segs, query);
   if (next === window.location.hash) return;
+  if (sparr && sparr.stanna()) return;
   if (replace) {
     history.replaceState({ ...(history.state ?? {}), ceDepth: depth() }, "", next);
   } else {
