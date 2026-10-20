@@ -28,6 +28,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
+## 2026-10-20
+
+- [D2D] Kundkortet kan inte lämnas när mobil är såld (Såld/Scrive) och nummerhanteringen inte är klar: nummerval saknas, eller tillfälligt (slumpat) nummer utan startdatum/riktigt nummer/ägare. Spärren gäller Tillbaka-knappen, appens navigering och webbläsarens/telefonens bakåt; meddelande överst och i Mobil-panelen, som kortet scrollar till. Admin spärras inte. Bakgrund: Lugnets Allé 48 C 1202 och Lundagatan 23 1201 såldes med tillfälligt nummer utan startdatum, så inget nummerbyte skapades. Filer: src/components/MobilNummer.tsx (mobilNummerBrist), src/components/D2DSellerApp.tsx, src/lib/route.ts (sattLamnaSparr), src/app.css. Väntar: säljarna kompletterar startdatum på de två lägenheterna; 19 sålda med mobil saknar nummerval (främst importerade).
+
 ## 2026-10-19
 
 - [D2D] Projektbyggaren: knappen "Info" på varje fastighet öppnar en panel där man fyller i portkod, befintlig leverantör fiber, befintlig leverantör koax, befintlig TV och datum då fastigheten aktiveras (kundklar). Varje fält sparas när man lämnar det; raden visar en sammanfattning och varnar i gult när info saknas. Fälten fanns redan på d2d_fastighet (portkod, befintlig_fiber, befintlig_koax, nuvarande_tv, kundklar_datum) och visas för säljaren i infoboxen — ingen databasändring. Filer: src/components/D2DProjectBuilder.tsx, src/styles/d2d.css.
