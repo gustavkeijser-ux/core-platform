@@ -113,9 +113,9 @@ const AVTALSTATUS: Record<string, string> = { signerat: "Signerat", vantar: "Vä
 const LGHSTATUS: Record<string, string> = { sald: "Såld", scrive: "Signera med Scrive", aterkoppling: "Återkoppling", inte_intresserad: "Inte intresserad", anger: "Ånger", inte_hemma: "Inte hemma" };
 const MER = new Set(["tv", "mobil_huvud", "mobil_extra", "streaming_film", "streaming_sport", "trygghet"]);
 const KATEGORI: Array<[string, string]> = [
-  ["tv", "TV (utöver Start/Bas)"], ["tv_alla", "TV inkl. Start/Bas"], ["streaming_film", "Streaming film och serier"],
+  ["tv", "TV (utöver Start/Bas)"], ["streaming_film", "Streaming film och serier"],
   ["streaming_sport", "Sportpaket"], ["trygghet", "Trygghetspaket"], ["mobil_huvud", "Mobil – huvudabonnemang"],
-  ["mobil_extra", "Mobil – extraanvändare"], ["router", "Router"], ["tvbox", "TV-box"],
+  ["mobil_extra", "Mobil – extraanvändare"],
 ];
 const andel = (a: number, b: number): Cell => (b > 0 ? { procent: a / b } : "–");
 const snitt = (a: number, b: number): Cell => (b > 0 ? { tal: a / b, dec: 2 } : "–");
