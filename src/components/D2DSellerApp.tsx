@@ -1362,6 +1362,21 @@ export const ALLA_STATUS_ORDNING: KnockStatus[] = [
 // Lägenhetformulär (knackvy)
 // =============================================================================
 
+/**
+ * Kundkortet sparar som utkast: fälten sparas direkt, men Utfall, pinnar,
+ * topplista och lön räknar på lägenhetens bekräftade underlag (avtalsförslaget)
+ * tills säljaren går ut ur lägenheten — då bekräftas utkastet. Se migrationen
+ * 20261022_1400_d2d_avtalsunderlag.sql.
+ */
+async function sparaUtkast(id: string, data?: Record<string, unknown>, status?: string | null): Promise<void> {
+  const { error } = await supabase.rpc("d2d_spara_utkast", { p_id: id, p_data: data ?? null, p_status: status ?? null });
+  if (error) throw new DataError(error.code === "42501" ? "forbidden" : "invalid", error.message);
+}
+
+async function bekraftaLagenhet(id: string): Promise<void> {
+  try { await supabase.rpc("d2d_bekrafta_lagenhet", { p_id: id }); } catch { /* bekräftas nästa gång */ }
+}
+
 export function LagenhetForm({
   lagenhetId,
   fastighetId,
@@ -1445,7 +1460,7 @@ export function LagenhetForm({
 
     const run = (async () => {
       try {
-        await updateRecord(lagenhetId, Object.keys(p.data).length ? p.data : undefined, p.status);
+        await sparaUtkast(lagenhetId, Object.keys(p.data).length ? p.data : undefined, p.status);
         setSaveState(hasPending() ? "pending" : "saved");
         // Servern skapar nummerbytesärendet i efterhand (trigger) — hämta
         // kopplingen så att "registrerat" + låst startdatum syns direkt.
@@ -1491,12 +1506,15 @@ export function LagenhetForm({
     const onPageHide = () => { void flush(); };
     document.addEventListener("visibilitychange", onHide);
     window.addEventListener("pagehide", onPageHide);
+    const id = lagenhetId;
     return () => {
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", onPageHide);
-      void flush();
+      // Säljaren går ut ur lägenheten: spara det sista och bekräfta — först
+      // då räknas ändringarna i Utfall, pinnar, topplista och lön.
+      void flush().then(() => bekraftaLagenhet(id));
     };
-  }, [flush]);
+  }, [flush, lagenhetId]);
 
   // Såld/Scrive med mobil: säljaren får inte lämna kundkortet förrän
   // nummerhanteringen är klar (valt nummer; vid tillfälligt nummer även
@@ -1522,6 +1540,7 @@ export function LagenhetForm({
   const handleBack = async () => {
     if (lamnaBrist) { void flush(); visaLamnaFel(); return; }
     await flush();
+    await bekraftaLagenhet(lagenhetId);
     // Lämnar säljaren en såld lägenhet firas det med fyrverkerier (2 s).
     if (status === "sald") skjutFyrverkeri();
     onBack();
