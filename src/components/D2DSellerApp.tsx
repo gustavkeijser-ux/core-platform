@@ -1664,9 +1664,10 @@ export function LagenhetForm({
     const nextSvar = { ...svar, [f.key]: ja };
     const patch: Record<string, unknown> = { salt_svar: nextSvar };
     if (f.fieldType === "boolean") patch[f.key] = ja; // Ja/Nej är själva värdet
-    // Mobil = Nej → inget nummerval heller (ett ev. öppet nummerbyte makuleras).
-    if (f.key === "salt_mobil" && !ja) patch.mobil_nummerval = null;
-    else if (!ja) patch[f.key] = null; // Nej = inget valt i kategorin
+    if (!ja) patch[f.key] = null; // Nej = inget valt i kategorin
+    // Mobil = Nej → inga abonnemang, antal eller nummerval heller (ett ev.
+    // öppet nummerbyte makuleras). Ifyllda nummer ligger kvar.
+    if (f.key === "salt_mobil" && !ja) Object.assign(patch, { mobil_nummerval: null, mobil_antal: null, mobil_extra_antal: null });
     setData((d) => ({ ...d, ...patch }));
     queueSave(patch, null, 0);
   };
