@@ -15,6 +15,7 @@ import { LyftAffarTab } from "./LyftAffarTab";
 import { DealFollowUp } from "./DealFollowUp";
 import { FmoTab } from "./FmoTab";
 import { TeliaLagenheterTab } from "./TeliaLagenheterTab";
+import { LagenhetForm } from "./D2DSellerApp";
 
 /** Fält som styrs via egen UI på affärskortet, inte via det generiska formuläret. */
 const DEAL_CUSTOM_FIELDS = new Set([
@@ -896,6 +897,33 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
       )}
     </>
   );
+
+  // D2D-lägenhet: samma kundkort som säljarna ser i D2D-appen (status, "Vad
+  // såldes?", Mobil/nummerportering, kunduppgifter, Scrive …) — inte CRM:ets
+  // generiska fältformulär. Kortet sparar själv; listan laddas om vid Tillbaka.
+  if (isPage && record && resolvedDef.key === "d2d_lagenhet") {
+    return (
+      <div className="page record-page">
+        <nav className="crumbs" aria-label="Brödsmulor">
+          <button className="crumbs__link" onClick={() => (onOpenList ? onOpenList(resolvedDef.key) : onClose())}>
+            {resolvedDef.labelPlural}
+          </button>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+          <span className="crumbs__current">{record.title ?? "Namnlös post"}</span>
+        </nav>
+        <div className="d2d-crmkort">
+          <LagenhetForm
+            lagenhetId={record.id}
+            fastighetId=""
+            objectDef={resolvedDef}
+            isAdmin={!!isAdmin}
+            onBack={() => { onSaved(record); onClose(); }}
+            onFieldsChanged={onMetadataChanged}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (isPage) {
     const main = renderTabContent();
