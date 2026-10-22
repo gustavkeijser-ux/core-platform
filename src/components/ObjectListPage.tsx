@@ -7,6 +7,8 @@ import { UserBadge, useTenantUsers } from "@/lib/users";
 import { rememberRow, useReturnToRow, loadListState, saveListState } from "@/lib/returnRow";
 import { recordsToCsv, downloadCsv } from "@/lib/csv";
 import { StatusPill } from "./StatusPill";
+import { prisKategorier } from "./D2DAvtal";
+import { saldaTjanster } from "@/lib/d2dPris";
 import { RecordDrawer } from "./RecordDrawer";
 import { KanbanBoard } from "./KanbanBoard";
 import { LeveransKort } from "./LeveransKort";
@@ -136,6 +138,8 @@ function LangText({ text }: { text: string }) {
   );
 }
 
+const D2D_SALD = new Set(["sald", "scrive", "anger"]);
+
 type Cell = { kind: "title" } | { kind: "status" } | { kind: "field"; field: FieldDef };
 
 /**
@@ -224,6 +228,10 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
     /* eslint-disable-next-line */
     [objectDef, columns, fastaKey]);
   const hasStatuses = objectDef.statuses.length > 0;
+  // D2D-lägenheter: sålda tjänster visas bredvid statusen (Såld/Scrive/Ånger).
+  const d2dTjanstFalt = useMemo(
+    () => (objectDef.key === "d2d_lagenhet" ? prisKategorier(objectDef.fields) : null),
+    [objectDef.key, objectDef.fields]);
 
   // ── Ägarfält + uppföljningsdatum (styrs av fältoptioner, t.ex. Affärer:
   // Säljare = owner_field, Nästa steg datum = _overdue).
@@ -825,7 +833,13 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
                     {layout.map((cell) => {
                       if (cell.kind === "title") return <td key="__title" className="rtable__title" data-label={objectDef.labelSingular}>{r.title ?? "Namnlös post"}</td>;
                       if (cell.kind === "status") return (
-                        <td key="__status" data-label="Status"><StatusPill status={r.status} def={objectDef.statuses.find((s) => s.key === r.status)} /></td>
+                        <td key="__status" data-label="Status">
+                          <StatusPill status={r.status} def={objectDef.statuses.find((s) => s.key === r.status)} />
+                          {d2dTjanstFalt && r.status && D2D_SALD.has(r.status) && (() => {
+                            const t = saldaTjanster(r.data, d2dTjanstFalt);
+                            return <span className="rtable__tjanster" title={t.join(", ")}>{t.length ? t.join(" · ") : "Inga tjänster ifyllda"}</span>;
+                          })()}
+                        </td>
                       );
                       const c = cell.field;
                       return (
