@@ -673,24 +673,28 @@ function kortDatum(iso: string): string {
 }
 
 /** Varning i "Vad såldes?" när adressen redan är såld (av någon annan, eller
- *  före i dag). Ändras tjänsterna räknas det som ett nytt sälj — i dag och på
- *  den som ändrar — så det måste vara en ny hyresgäst. Säljaren bekräftar
- *  (frågan visas när hen försöker ändra något); Nej lämnar allt orört. */
-function NyHyresgastVarning({ saljare, saldDatum, fraga, onJa, onNej }: {
-  saljare: string; saldDatum: string | null; fraga: boolean; onJa: () => void; onNej: () => void;
+ *  före i dag). Säljaren väljer när hen försöker ändra något:
+ *  - Ny hyresgäst: räknas som ett nytt sälj — i dag och på den som ändrar.
+ *  - Ändra befintligt sälj: kompletterar det som missats; säljdatum och
+ *    säljare behålls (d2d_andra_befintligt_salj).
+ *  - Ändra inget: allt lämnas orört. */
+function NyHyresgastVarning({ saljare, saldDatum, fraga, onJa, onBefintligt, onNej }: {
+  saljare: string; saldDatum: string | null; fraga: boolean; onJa: () => void; onBefintligt: () => void; onNej: () => void;
 }) {
   const namn = useUserName(saljare);
   return (
     <div className={`d2d-nyhyresgast${fraga ? " d2d-nyhyresgast--fraga" : ""}`} role={fraga ? "alertdialog" : "note"} aria-live="polite">
       <strong>Adressen är redan såld</strong>
       <span>
-        Såld av {namn}{saldDatum ? ` den ${kortDatum(saldDatum)}` : ""}. Ändrar du tjänsterna registreras det som ett
-        nytt sälj — i dag och på dig. Det får bara göras om det är en <b>ny hyresgäst</b> på adressen.
+        Såld av {namn}{saldDatum ? ` den ${kortDatum(saldDatum)}` : ""}. Är det en <b>ny hyresgäst</b> registreras
+        ändringen som ett nytt sälj — i dag och på dig. Har något missats i det befintliga säljet väljer du
+        <b> Ändra befintligt sälj</b>: då behålls säljdatum och säljare.
       </span>
       {fraga && (
         <div className="d2d-nyhyresgast__knappar">
-          <button type="button" className="btn btn--primary btn--sm" onClick={onJa}>Ja, ny hyresgäst – ändra</button>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={onNej}>Nej, ändra inget</button>
+          <button type="button" className="btn btn--brand btn--sm" onClick={onBefintligt}>Ändra befintligt sälj</button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onJa}>Ny hyresgäst – nytt sälj</button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onNej}>Ändra inget</button>
         </div>
       )}
     </div>
@@ -1883,6 +1887,18 @@ export function LagenhetForm({
               saldDatum={data.sald_datum ? String(data.sald_datum) : null}
               fraga={!!nyHyresgastFraga}
               onJa={() => { setNyHyresgastOk(true); const fn = nyHyresgastFraga; setNyHyresgastFraga(null); fn?.(); }}
+              onBefintligt={async () => {
+                const fn = nyHyresgastFraga;
+                try {
+                  await flush();
+                  const { error: e } = await supabase.rpc("d2d_andra_befintligt_salj", { p_id: lagenhetId });
+                  if (e) throw e;
+                } catch {
+                  setError("Kunde inte markera ändringen som befintligt sälj — försök igen.");
+                  return;
+                }
+                setNyHyresgastOk(true); setNyHyresgastFraga(null); fn?.();
+              }}
               onNej={() => setNyHyresgastFraga(null)}
             />
           )}
