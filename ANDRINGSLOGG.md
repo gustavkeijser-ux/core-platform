@@ -28,6 +28,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
+## 2026-10-22
+
+- [D2D] Säljdatumet följer säljarens tjänsteändringar (Gustav 22 okt): när en säljare (eller någon som inte är admin) ändrar tjänster (salt_*, mobil_antal, mobil_extra_antal) på en redan såld adress sätts Såld datum till den dagen och loggas; admin som rättar åt någon annan flyttar inte datumet, import rör inget. Låsningen från 14 okt gäller fortfarande för statusbyten fram och tillbaka. Historik omräknad: 6 adresser fick datumet för säljarens senaste tjänsteändring (Skyttegatan 33 A 1001 25→29 sep, Skyttegatan 19 B 1002 29 sep→6 okt, Fleminggatan 35 A 1203 1→2 okt, Skultunavägen 14 B 1201 7→9 okt, Skultunavägen 14 C 1201 21 jul→9 okt (Leo ändrade Antons sälj), Lugnets Allé 48 C 1202 14→15 okt). Loggen finns bara sedan 28 sep, så äldre ändringar kan inte räknas om. Filer: supabase/migrations/20261022_0957_d2d_saljdatum_tjanster.sql. DB: d2d_tjanster_del, d2d_sald_datum_tjanster, trg_d2d_sald_datum_tjanster.
+
 ## 2026-10-20
 
 - [D2D] Nummerporteringar enligt Gustavs underlag 20 okt: sju försäljningar (Anita Lind, Mercy/Rebecca Osayande, Karin Adolfsson, Anna Andréen med Alice Thulin och Solveig Andréen, Alain Raymond, Marcus Karlborg, Göran/Kerstin Jakobsson) kompletterade på lägenheten med kundnamn, personnummer, tillfälligt nummer, startdatum och nummer att portera, så att synken skapade sju öppna nummerbyten med admin-uppgifter (hantera senast 12–29 okt; Karin Adolfsson start 16 nov är redan försenad). Jakobsson ändrad från 10 GB + extraanvändare till 2 × 10 GB (Kerstin eget abonnemang, enligt underlaget). Anita Lind matchades mot lägenheten "Lindh", Skyttegatan 3 A lgh 1001 (sålt 29 sep) – kontrollera. Ingen kod ändrad. DB: records (d2d_lagenhet, nummerbyte, tasks). Väntar: Gustav/Lukas skickar in porteringarna i Telias portal och markerar Genomförd.
