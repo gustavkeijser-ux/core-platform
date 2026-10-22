@@ -67,21 +67,30 @@ function justera(rows: NummerRad[], enheter: string[], antalExtraRader: number):
  * (null = inget saknas). Gäller bara när mobil är såld: valet av nummer måste
  * vara gjort, och vid tillfälligt (slumpat) nummer krävs startdatum samt
  * riktigt nummer och ägare på varje rad — annars skapas inget nummerbyte.
+ * Vid nummerportering (porteras direkt eller tillfälligt nummer) är kundens
+ * personnummer obligatoriskt (10 eller 12 siffror).
  */
+export function pnrGiltigt(v: unknown): boolean {
+  const n = String(v ?? "").replace(/\D/g, "").length;
+  return n === 10 || n === 12;
+}
+
 export function mobilNummerBrist(data: Record<string, unknown>): string | null {
   const mobil = Array.isArray(data.salt_mobil) ? (data.salt_mobil as unknown[]).map(String) : [];
   const svar = data.salt_svar as Record<string, unknown> | null | undefined;
   if (!mobil.length || svar?.salt_mobil === false) return null; // Mobil = Nej
   const val = (data.mobil_nummerval as string | null) ?? "";
   if (!val) return "Välj hur kundens mobilnummer ska hanteras (under Mobil).";
-  if (val !== "tillfalligt" || data.mobil_nummerbyte_id) return null;
+  const pnrSaknas = (val === "portera_direkt" || val === "tillfalligt") && !pnrGiltigt(data.personnummer);
+  const pnrText = "Fyll i kundens personnummer (10 eller 12 siffror) för nummerporteringen.";
+  if (val !== "tillfalligt" || data.mobil_nummerbyte_id) return pnrSaknas ? pnrText : null;
   const rows = justera(rader(data), mobilEnheter(data), mobil.includes(EXTRA_VAL) ? antalExtra(data) : 0);
   const start = (data.mobil_startdatum as string | null) ?? "";
   const nummerSaknas = rows.some((r) => !r.riktigt?.trim() || !r.agare?.trim());
   if (!start && nummerSaknas) return "Fyll i startdatum, riktigt nummer och ägare för nummerporteringen.";
   if (!start) return "Fyll i startdatum för mobilabonnemanget (nummerporteringen).";
   if (nummerSaknas) return "Fyll i riktigt nummer och ägare för alla nummer som ska porteras.";
-  return null;
+  return pnrSaknas ? pnrText : null;
 }
 
 /** Dagar från idag till ett datum (ÅÅÅÅ-MM-DD). */
@@ -162,6 +171,21 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel
 
   const saknas = (v: string) => !v.trim();
   const komplett = !!start && rows.every((r) => !saknas(r.riktigt) && !saknas(r.agare));
+  const pnr = (data.personnummer as string | null) ?? "";
+  const pnrFalt = (
+    <label className="mnr-field">
+      <span className="label">Kundens personnummer *</span>
+      <input
+        className={`input${!pnrGiltigt(pnr) ? " mnr-input--missing" : ""}`}
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="ÅÅÅÅMMDD-XXXX"
+        value={pnr}
+        onChange={(e) => onPatch({ personnummer: e.target.value || null }, 800)}
+      />
+      {!!pnr.trim() && !pnrGiltigt(pnr) && <span className="formfield__help">Personnumret ska ha 10 eller 12 siffror.</span>}
+    </label>
+  );
 
   return (
     <div className="mnr">
@@ -215,7 +239,10 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel
       )}
 
       {val === "portera_direkt" && (
-        <p className="mnr-info">Kunden behåller sitt nummer — ingen manuell nummerbyte behövs.</p>
+        <div className="mnr-form">
+          <p className="mnr-info">Kunden behåller sitt nummer — ingen manuell nummerbyte behövs.</p>
+          {pnrFalt}
+        </div>
       )}
       {val === "nytt_nummer" && (
         <p className="mnr-info">Kunden behåller det slumpade numret — ingen manuell portering behövs.</p>
@@ -243,6 +270,8 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel
             {startLast && <span className="formfield__help">Startdatum kan inte ändras efter registrering — kontakta admin.</span>}
           </label>
           {start && <StartdatumVarning datum={start} />}
+
+          {pnrFalt}
 
           {rows.map((r, i) => (
             <fieldset key={i} className={`mnr-card${r.typ === "huvud" ? " mnr-card--huvud" : ""}`}>
