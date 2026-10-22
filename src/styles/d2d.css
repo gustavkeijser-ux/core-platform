@@ -1546,3 +1546,13 @@
   .d2dpb-info__grid { grid-template-columns: 1fr; }
   .d2dpb-rad__knappar { flex-wrap: wrap; }
 }
+
+/* Säljarvyn: varning när tjänster ändras på en redan såld adress (ny hyresgäst) */
+.d2d-nyhyresgast { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3);
+  border-radius: var(--r-md); background: var(--warn-soft); color: var(--warn-ink);
+  font-size: var(--text-sm); line-height: var(--leading-body); scroll-margin-top: 5.5rem; }
+.d2d-nyhyresgast strong { font-size: var(--text-base); }
+.d2d-nyhyresgast--fraga { background: color-mix(in srgb, var(--hue-red) 12%, transparent); color: var(--hue-red); }
+.d2d-nyhyresgast--fraga b { font-weight: 800; }
+.d2d-nyhyresgast__knappar { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
+.d2d-nyhyresgast__knappar .btn { min-height: 40px; }
