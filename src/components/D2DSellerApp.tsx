@@ -657,6 +657,12 @@ function FastighetsLista({
 /** Namnet på säljaren som fått adressen tilldelad (eller "—"). Är adressen
  *  såld/signerad av en annan säljare än den som har den nu (säljaren byttes
  *  på fastigheten efteråt) visas även "såld av …". */
+/** Dagens datum (lokal tid) som "ÅÅÅÅ-MM-DD". */
+function idagIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** "2026-10-14" → "14 okt" (år med om det inte är i år). */
 function kortDatum(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
@@ -664,6 +670,31 @@ function kortDatum(iso: string): string {
   const man = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"][Number(m[2]) - 1] ?? m[2];
   const ar = Number(m[1]) === new Date().getFullYear() ? "" : ` ${m[1]}`;
   return `${Number(m[3])} ${man}${ar}`;
+}
+
+/** Varning i "Vad såldes?" när adressen redan är såld (av någon annan, eller
+ *  före i dag). Ändras tjänsterna räknas det som ett nytt sälj — i dag och på
+ *  den som ändrar — så det måste vara en ny hyresgäst. Säljaren bekräftar
+ *  (frågan visas när hen försöker ändra något); Nej lämnar allt orört. */
+function NyHyresgastVarning({ saljare, saldDatum, fraga, onJa, onNej }: {
+  saljare: string; saldDatum: string | null; fraga: boolean; onJa: () => void; onNej: () => void;
+}) {
+  const namn = useUserName(saljare);
+  return (
+    <div className={`d2d-nyhyresgast${fraga ? " d2d-nyhyresgast--fraga" : ""}`} role={fraga ? "alertdialog" : "note"} aria-live="polite">
+      <strong>Adressen är redan såld</strong>
+      <span>
+        Såld av {namn}{saldDatum ? ` den ${kortDatum(saldDatum)}` : ""}. Ändrar du tjänsterna registreras det som ett
+        nytt sälj — i dag och på dig. Det får bara göras om det är en <b>ny hyresgäst</b> på adressen.
+      </span>
+      {fraga && (
+        <div className="d2d-nyhyresgast__knappar">
+          <button type="button" className="btn btn--primary btn--sm" onClick={onJa}>Ja, ny hyresgäst – ändra</button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onNej}>Nej, ändra inget</button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Skrivskyddat kort: vems lägenheten är. */
@@ -1359,6 +1390,9 @@ export function LagenhetForm({
   const oppnadRef = useRef(Date.now());
   const tidSparadRef = useRef(false);
   useEffect(() => { oppnadRef.current = Date.now(); tidSparadRef.current = false; }, [lagenhetId]);
+  // Inloggad användare — för att veta om det är ens eget sälj som ändras.
+  const [minId, setMinId] = useState<string | null>(null);
+  useEffect(() => { void supabase.auth.getSession().then(({ data: s }) => setMinId(s.session?.user.id ?? null)); }, []);
 
   useEffect(() => {
     (async () => {
@@ -1500,6 +1534,26 @@ export function LagenhetForm({
   const set = (key: string, delayMs = 800) => (value: unknown) => {
     setData((d) => ({ ...d, [key]: value }));
     queueSave({ [key]: value }, null, delayMs);
+  };
+
+  // ── Tidigare sälj: ny hyresgäst? ─────────────────────────────────────────
+  // Ändrar en säljare tjänsterna på en adress som redan är såld (av någon
+  // annan, eller före i dag) flyttar servern säljet till i dag och till den
+  // som ändrar (d2d_sald_datum_tjanster). Det får bara göras när det är en
+  // ny hyresgäst på adressen, så säljaren bekräftar först. Admin som rättar
+  // åt någon annan flyttar inget och får ingen fråga.
+  const tidigareSalj = status === "sald" && !!data.saljare && (!isAdmin || String(data.saljare) === minId)
+    && (String(data.saljare) !== minId || (!!data.sald_datum && String(data.sald_datum) < idagIso()));
+  const [nyHyresgastOk, setNyHyresgastOk] = useState(false);
+  const [nyHyresgastFraga, setNyHyresgastFraga] = useState<(() => void) | null>(null);
+  useEffect(() => { setNyHyresgastOk(false); setNyHyresgastFraga(null); }, [lagenhetId]);
+  const vaktaTjanst = (fn: () => void) => {
+    if (tidigareSalj && !nyHyresgastOk) {
+      setNyHyresgastFraga(() => fn);
+      window.setTimeout(() => document.querySelector(".d2d-nyhyresgast")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+      return;
+    }
+    fn();
   };
 
   /** Nu, som ISO-tidpunkt i UTC (servern sparar datum/tid i UTC; fälten
@@ -1803,6 +1857,15 @@ export function LagenhetForm({
       {(status === "sald" || status === "scrive") && soldFields.length > 0 && (
         <div className="d2d-reason-panel d2d-sold-panel">
           <span className="label">{status === "scrive" ? "Vad ska kunden signera?" : "Vad såldes?"}</span>
+          {tidigareSalj && !nyHyresgastOk && (
+            <NyHyresgastVarning
+              saljare={String(data.saljare)}
+              saldDatum={data.sald_datum ? String(data.sald_datum) : null}
+              fraga={!!nyHyresgastFraga}
+              onJa={() => { setNyHyresgastOk(true); const fn = nyHyresgastFraga; setNyHyresgastFraga(null); fn?.(); }}
+              onNej={() => setNyHyresgastFraga(null)}
+            />
+          )}
           {/* TV-box frågas inte: den ingår alltid i TV-paketet. */}
           {soldFields.filter((f) => f.key !== "salt_tvbox").map((f) => (
             <div key={f.key} className="d2d-sold-panel__group">
@@ -1813,13 +1876,13 @@ export function LagenhetForm({
                     type="button"
                     aria-pressed={answer(f) === true}
                     className={`d2d-yesno__btn${answer(f) === true ? " d2d-yesno__btn--ja" : ""}`}
-                    onClick={() => setAnswer(f, true)}
+                    onClick={() => vaktaTjanst(() => setAnswer(f, true))}
                   >Ja</button>
                   <button
                     type="button"
                     aria-pressed={answer(f) === false}
                     className={`d2d-yesno__btn${answer(f) === false ? " d2d-yesno__btn--nej" : ""}`}
-                    onClick={() => setAnswer(f, false)}
+                    onClick={() => vaktaTjanst(() => setAnswer(f, false))}
                   >Nej</button>
                 </div>
               </div>
@@ -1843,7 +1906,7 @@ export function LagenhetForm({
                     type="button"
                     aria-pressed={isPicked(f, c.key)}
                     className={`d2d-reason-chip d2d-sold-chip${isPicked(f, c.key) ? " d2d-sold-chip--active" : ""}`}
-                    onClick={() => pickSold(f, c.key)}
+                    onClick={() => vaktaTjanst(() => pickSold(f, c.key))}
                   >
                     {c.label}
                   </button>
@@ -1852,12 +1915,12 @@ export function LagenhetForm({
               {/* Flera av samma abonnemang (t.ex. 2 × 10 GB) — varje abonnemang får eget nummer nedan. */}
               {f.key === "salt_mobil" && (f.options.choices ?? []).filter((c) => c.key !== EXTRA_VAL && isPicked(f, c.key)).map((c) => {
                 const antal = antalAbonnemang(data, c.key);
-                const satt = (n: number) => {
+                const satt = (n: number) => vaktaTjanst(() => {
                   const v = Math.max(1, Math.min(20, Math.floor(n) || 1));
                   const m = { ...((data[MOBIL_ANTAL_FALT] as Record<string, unknown> | null) ?? {}) };
                   if (v > 1) m[c.key] = v; else delete m[c.key];
                   set(MOBIL_ANTAL_FALT, 0)(Object.keys(m).length ? m : null);
-                };
+                });
                 return (
                   <div key={c.key} className="d2d-extra">
                     <span className="d2d-sold-panel__hint">Antal {c.label}</span>
@@ -1875,7 +1938,7 @@ export function LagenhetForm({
               })}
               {f.key === "salt_mobil" && isPicked(f, EXTRA_VAL) && (() => {
                 const antal = antalExtra(data);
-                const satt = (n: number) => set(EXTRA_ANTAL_FALT, 0)(Math.max(1, Math.min(20, Math.floor(n) || 1)));
+                const satt = (n: number) => vaktaTjanst(() => set(EXTRA_ANTAL_FALT, 0)(Math.max(1, Math.min(20, Math.floor(n) || 1))));
                 return (
                   <div className="d2d-extra">
                     <span className="d2d-sold-panel__hint">Antal extraanvändare</span>
@@ -1896,7 +1959,7 @@ export function LagenhetForm({
                   type="button"
                   aria-pressed={data[UTAN_NETFLIX_FALT] === true}
                   className={`d2d-reason-chip d2d-sold-chip d2d-sold-chip--toggle${data[UTAN_NETFLIX_FALT] === true ? " d2d-sold-chip--active" : ""}`}
-                  onClick={() => set(UTAN_NETFLIX_FALT, 0)(data[UTAN_NETFLIX_FALT] === true ? null : true)}
+                  onClick={() => vaktaTjanst(() => set(UTAN_NETFLIX_FALT, 0)(data[UTAN_NETFLIX_FALT] === true ? null : true))}
                 >
                   {data[UTAN_NETFLIX_FALT] === true ? "✓ " : ""}Utan Netflix (lägre pris)
                 </button>
