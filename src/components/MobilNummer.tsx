@@ -67,8 +67,8 @@ function justera(rows: NummerRad[], enheter: string[], antalExtraRader: number):
  * (null = inget saknas). Gäller bara när mobil är såld: valet av nummer måste
  * vara gjort, och vid tillfälligt (slumpat) nummer krävs startdatum samt
  * riktigt nummer och ägare på varje rad — annars skapas inget nummerbyte.
- * Vid nummerportering (porteras direkt eller tillfälligt nummer) är kundens
- * personnummer obligatoriskt (10 eller 12 siffror).
+ * Vid tillfälligt nummer (nummerbyte) är kundens personnummer obligatoriskt
+ * (10 eller 12 siffror). Porteras direkt kräver inget personnummer.
  */
 export function pnrGiltigt(v: unknown): boolean {
   const n = String(v ?? "").replace(/\D/g, "").length;
@@ -81,7 +81,7 @@ export function mobilNummerBrist(data: Record<string, unknown>): string | null {
   if (!mobil.length || svar?.salt_mobil === false) return null; // Mobil = Nej
   const val = (data.mobil_nummerval as string | null) ?? "";
   if (!val) return "Välj hur kundens mobilnummer ska hanteras (under Mobil).";
-  const pnrSaknas = (val === "portera_direkt" || val === "tillfalligt") && !pnrGiltigt(data.personnummer);
+  const pnrSaknas = val === "tillfalligt" && !pnrGiltigt(data.personnummer);
   const pnrText = "Fyll i kundens personnummer (10 eller 12 siffror) för nummerporteringen.";
   if (val !== "tillfalligt" || data.mobil_nummerbyte_id) return pnrSaknas ? pnrText : null;
   const rows = justera(rader(data), mobilEnheter(data), mobil.includes(EXTRA_VAL) ? antalExtra(data) : 0);
@@ -239,10 +239,7 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel
       )}
 
       {val === "portera_direkt" && (
-        <div className="mnr-form">
-          <p className="mnr-info">Kunden behåller sitt nummer — ingen manuell nummerbyte behövs.</p>
-          {pnrFalt}
-        </div>
+        <p className="mnr-info">Kunden behåller sitt nummer — ingen manuell nummerbyte behövs.</p>
       )}
       {val === "nytt_nummer" && (
         <p className="mnr-info">Kunden behåller det slumpade numret — ingen manuell portering behövs.</p>
