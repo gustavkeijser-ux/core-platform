@@ -34,7 +34,7 @@ type Utfall = {
     kundtjanst?: boolean; viaKt?: number;
     /** Egna sålda (utan dem som kom via kundtjänst) — nämnare för snitt och mer än bredband. */
     saldaEgna?: number;
-    /** Sålda tjänster i urvalet (bredband per hastighet, TV, streaming, mobil, extraanvändare, router, TV-box). */
+    /** Sålda tjänster i urvalet (bredband per hastighet, TV, streaming, mobil, extraanvändare; inte router, TV-box, TV Start/Bas). */
     tjanster?: Array<{ nyckel: string; etikett: string; antal: number }>;
     /** Antal per kategori (samma nycklar som sald.kategorier) — underlag för attach rate per säljare. */
     kategorier?: Record<string, number> }>;
@@ -61,9 +61,9 @@ const KATEGORI: Array<[string, string]> = [
 ];
 /** Attach rate: tilläggstjänster per tecknat bredband. [nyckel i kategorier, etikett, kort etikett (per säljare)]. */
 const ATTACH: Array<[string, string, string]> = [
-  ["tv", "TV (utöver Start/Bas)", "TV"], ["tv_alla", "TV inkl. Start/Bas", "TV alla"], ["streaming_film", "Streaming film och serier", "Streaming"],
+  ["tv", "TV (utöver Start/Bas)", "TV"], ["streaming_film", "Streaming film och serier", "Streaming"],
   ["streaming_sport", "Sportpaket", "Sport"], ["trygghet", "Trygghetspaket", "Trygghet"], ["mobil_huvud", "Mobil – huvudabonnemang", "Mobil"],
-  ["mobil_extra", "Mobil – extraanvändare", "Extra"], ["router", "Router", "Router"], ["tvbox", "TV-box", "TV-box"],
+  ["mobil_extra", "Mobil – extraanvändare", "Extra"],
 ];
 const EJ_MER: Record<string, string> = {
   tittar_lite: "Tittar lite på TV/streaming", mobil_bunden: "Mobilen är bunden", har_telia: "Har redan Telia",
@@ -403,7 +403,7 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
             </div>
           )}
           <p className="formfield__help">
-            Andel av de {ord.enhet} kunderna med bredband som också tecknade tjänsten. TV Start och TV Bas räknas inte som TV-försäljning men syns i "TV inkl. Start/Bas".
+            Andel av de {ord.enhet} kunderna med bredband som också tecknade tjänsten. Router, TV-box, TV Start och TV Bas räknas inte i Utfall.
             Extraanvändare räknas per styck, så andelen kan överstiga 100 %.
           </p>
         </section>
