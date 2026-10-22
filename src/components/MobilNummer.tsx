@@ -70,7 +70,8 @@ function justera(rows: NummerRad[], enheter: string[], antalExtraRader: number):
  */
 export function mobilNummerBrist(data: Record<string, unknown>): string | null {
   const mobil = Array.isArray(data.salt_mobil) ? (data.salt_mobil as unknown[]).map(String) : [];
-  if (!mobil.length) return null;
+  const svar = data.salt_svar as Record<string, unknown> | null | undefined;
+  if (!mobil.length || svar?.salt_mobil === false) return null; // Mobil = Nej
   const val = (data.mobil_nummerval as string | null) ?? "";
   if (!val) return "Välj hur kundens mobilnummer ska hanteras (under Mobil).";
   if (val !== "tillfalligt" || data.mobil_nummerbyte_id) return null;
