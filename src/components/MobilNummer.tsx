@@ -64,7 +64,7 @@ function justera(rows: NummerRad[], enheter: string[], antalExtraRader: number):
 
 /**
  * Vad som saknas i nummerhanteringen för att säljaren ska få lämna kundkortet
- * (null = inget saknas). Gäller bara när mobil är såld: valet av nummer måste
+ * (null = inget saknas). Gäller när Mobil = Ja: abonnemang måste väljas, valet av nummer måste
  * vara gjort, och vid tillfälligt (slumpat) nummer krävs startdatum samt
  * riktigt nummer och ägare på varje rad — annars skapas inget nummerbyte.
  * Vid tillfälligt nummer (nummerbyte) är kundens personnummer obligatoriskt
@@ -78,7 +78,9 @@ export function pnrGiltigt(v: unknown): boolean {
 export function mobilNummerBrist(data: Record<string, unknown>): string | null {
   const mobil = Array.isArray(data.salt_mobil) ? (data.salt_mobil as unknown[]).map(String) : [];
   const svar = data.salt_svar as Record<string, unknown> | null | undefined;
-  if (!mobil.length || svar?.salt_mobil === false) return null; // Mobil = Nej
+  if (svar?.salt_mobil === false) return null; // Mobil = Nej
+  // Mobil = Ja: abonnemang måste väljas, sedan nummerhanteringen nedan.
+  if (!mobil.length) return svar?.salt_mobil === true ? "Välj vilket mobilabonnemang kunden köper (under Mobil)." : null;
   const val = (data.mobil_nummerval as string | null) ?? "";
   if (!val) return "Välj hur kundens mobilnummer ska hanteras (under Mobil).";
   const pnrSaknas = val === "tillfalligt" && !pnrGiltigt(data.personnummer);
