@@ -136,6 +136,27 @@ function valda(f: FieldDef, v: unknown): string[] {
 }
 
 /**
+ * Sålda tjänster som korta etiketter ("BB300", "TV Bas", "10 GB × 2"), i samma
+ * ordning som "Vad såldes?". Följer det säljaren ser: en kategori med svaret
+ * Nej räknas inte även om val ligger kvar. TV-box och "utan Netflix" är
+ * tillägg till TV/sport och visas inte separat.
+ */
+export function saldaTjanster(data: Record<string, unknown>, soldFields: FieldDef[]): string[] {
+  const svar = (data.salt_svar && typeof data.salt_svar === "object" ? data.salt_svar : {}) as Record<string, boolean>;
+  const ut: string[] = [];
+  for (const f of soldFields) {
+    if (f.key === TVBOX_FALT || f.key === UTAN_NETFLIX_FALT) continue;
+    if (f.fieldType !== "boolean" && svar[f.key] === false) continue;
+    for (const val of valda(f, data[f.key])) {
+      const label = val ? (f.options.choices?.find((c) => c.key === val)?.label ?? val) : f.label;
+      const st = f.key !== "salt_mobil" ? 1 : val === EXTRA_VAL ? antalExtra(data) : antalAbonnemang(data, val);
+      ut.push(st > 1 ? `${label} × ${st}` : label);
+    }
+  }
+  return ut;
+}
+
+/**
  * Sammanfattning av avtalet utifrån det säljaren valt under "Vad såldes?".
  * Regler (från Telias kampanjer):
  *  - Bredband har kombopris med TV, annars stand alone-pris.
