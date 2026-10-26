@@ -5,6 +5,7 @@ import { beraknaAvtal, loadPrislista, onPrislista, type Prislista } from "@/lib/
 import { prisKategorier } from "./D2DAvtal";
 import { FilterPills, SkeletonRows } from "./PageChrome";
 import { ScriveOkopplade } from "./D2DScriveImport";
+import "@/styles/d2d.css";
 
 /* =============================================================================
    Door to door → Avtal. Tre flikar:
@@ -20,7 +21,7 @@ import { ScriveOkopplade } from "./D2DScriveImport";
    ========================================================================== */
 
 type Avtal = {
-  id: string; status: "skapas" | "vantar" | "signerat" | "avvisat" | "avbrutet" | "fel";
+  id: string; status: "skapas" | "vantar" | "signerat" | "avvisat" | "avbrutet" | "fel" | "ersatt";
   leverans: "plats" | "skickat" | "manuell"; kundNamn: string | null; skapad: string; signerad: string | null;
   harPdf: boolean; fel: string | null; lagenhetId: string; adress: string | null; lgh: string | null;
   ort: string | null; fastighet: string | null; projekt: string | null; projektId: string | null;
@@ -35,7 +36,7 @@ type SaldRad = Sald & { tjanster: string[]; manadSumma: number; engangSumma: num
 
 const STATUS: Record<Avtal["status"], string> = {
   signerat: "Signerat", vantar: "Väntar på signatur", skapas: "Skapas", avvisat: "Avvisat",
-  avbrutet: "Avbrutet", fel: "Fel",
+  avbrutet: "Avbrutet", fel: "Fel", ersatt: "Ersatt av sälj",
 };
 type Flik = "scrive" | "salda" | "totalt";
 type Filter = "signerat" | "vantar" | "ovriga" | "alla";
@@ -111,14 +112,14 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [], saljarvy = false }:
   const antal = useMemo(() => ({
     signerat: signerade.length,
     vantar: avtalUrval.filter((a) => a.status === "vantar" || a.status === "skapas").length,
-    ovriga: avtalUrval.filter((a) => ["avvisat", "avbrutet", "fel"].includes(a.status)).length,
+    ovriga: avtalUrval.filter((a) => ["avvisat", "avbrutet", "fel", "ersatt"].includes(a.status)).length,
     alla: avtalUrval.length,
   }), [avtalUrval, signerade]);
 
   const avtalLista = useMemo(() => avtalUrval.filter((a) => {
     if (filter === "signerat" && a.status !== "signerat") return false;
     if (filter === "vantar" && a.status !== "vantar" && a.status !== "skapas") return false;
-    if (filter === "ovriga" && !["avvisat", "avbrutet", "fel"].includes(a.status)) return false;
+    if (filter === "ovriga" && !["avvisat", "avbrutet", "fel", "ersatt"].includes(a.status)) return false;
     return sok(q, [a.kundNamn, a.adress, a.lgh, a.ort, a.fastighet, a.projekt, a.saljare]);
   }), [avtalUrval, filter, q]);
 
