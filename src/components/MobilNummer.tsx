@@ -10,7 +10,8 @@ import { mobilEnheter, antalExtra, EXTRA_VAL } from "@/lib/d2dPris";
  *        – Nytt nummer (behålls)                → nytt_nummer
  *
  * Vid "tillfalligt" är startdatum, kundens befintliga nummer och vem som
- * står på det obligatoriska (för huvudnumret och ev. extraanvändare). Det
+ * står på det obligatoriska (för huvudnumret och ev. extraanvändare): kunden
+ * själv eller en annan person — då även personens namn, personnummer och e-post. Det
  * tillfälliga/slumpade numret fylls inte i av säljaren (borttaget okt 2026 —
  * fältet finns kvar i datan för äldre poster). När allt är ifyllt skapar servern automatiskt ett
  * nummerbytesärende + en admin-uppgift (se migration 0029). Startdatum
@@ -22,7 +23,25 @@ import { mobilEnheter, antalExtra, EXTRA_VAL } from "@/lib/d2dPris";
  * aldrig bort automatiskt.
  */
 
-export type NummerRad = { typ: "huvud" | "extra"; tillfalligt?: string; riktigt: string; agare: string; abonnemang?: string };
+export type NummerRad = {
+  typ: "huvud" | "extra"; tillfalligt?: string; riktigt: string; agare: string; abonnemang?: string;
+  /** Vem står på numret idag: kunden själv eller en annan person (okt 2026). */
+  innehavare?: "kund" | "annan";
+  /** Annan person: personnummer och e-post till den som står på numret. */
+  agare_pnr?: string; agare_epost?: string;
+};
+
+export const epostGiltig = (v: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v ?? "").trim());
+
+/** Vad som saknas på en nummerrad vid tillfälligt nummer (tom lista = komplett). */
+export function radBrist(r: NummerRad): string[] {
+  const ut: string[] = [];
+  if (!r.riktigt?.trim()) ut.push("riktigt nummer");
+  if (r.innehavare !== "kund" && r.innehavare !== "annan") ut.push("vem som står på numret (kunden själv eller annan person)");
+  if (r.innehavare === "annan" && (!r.agare?.trim() || !pnrGiltigt(r.agare_pnr) || !epostGiltig(r.agare_epost)))
+    ut.push("namn, personnummer och e-post för den som står på numret");
+  return ut;
+}
 
 type Props = {
   lagenhetId: string;
@@ -88,11 +107,14 @@ export function mobilNummerBrist(data: Record<string, unknown>): string | null {
   if (val !== "tillfalligt" || data.mobil_nummerbyte_id) return pnrSaknas ? pnrText : null;
   const rows = justera(rader(data), mobilEnheter(data), mobil.includes(EXTRA_VAL) ? antalExtra(data) : 0);
   const start = (data.mobil_startdatum as string | null) ?? "";
-  const nummerSaknas = rows.some((r) => !r.riktigt?.trim() || !r.agare?.trim());
-  if (!start && nummerSaknas) return "Fyll i startdatum, riktigt nummer och ägare för nummerporteringen.";
-  if (!start) return "Fyll i startdatum för mobilabonnemanget (nummerporteringen).";
-  if (nummerSaknas) return "Fyll i riktigt nummer och ägare för alla nummer som ska porteras.";
-  return pnrSaknas ? pnrText : null;
+  const saknas = [...new Set([
+    ...(start ? [] : ["startdatum"]),
+    ...rows.flatMap(radBrist),
+    ...(pnrSaknas ? ["kundens personnummer"] : []),
+  ])];
+  if (!saknas.length) return null;
+  if (saknas.length === 1 && pnrSaknas) return pnrText;
+  return `Fyll i ${saknas.join(", ")} för nummerporteringen.`;
 }
 
 /** Dagar från idag till ett datum (ÅÅÅÅ-MM-DD). */
@@ -168,11 +190,18 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel
     if (!kvar) { const m = valdaMobil.filter((v) => v !== EXTRA_VAL); patch.salt_mobil = m.length ? m : null; }
     onPatch(patch, 0);
   };
-  const setCell = (i: number, key: "riktigt" | "agare", v: string) =>
+  const setCell = (i: number, key: "riktigt" | "agare" | "agare_pnr" | "agare_epost", v: string) =>
     saveRows(rows.map((r, j) => (j === i ? { ...r, [key]: v } : r)));
+  const kundNamn = String(data.kund_namn ?? "").trim();
+  /** Kunden själv: ägaren är kunden (namnet fylls i åt säljaren). Annan person:
+   *  namn, personnummer och e-post fylls i. */
+  const setInnehavare = (i: number, v: "kund" | "annan") =>
+    saveRows(rows.map((r, j) => (j !== i ? r
+      : v === "kund" ? { ...r, innehavare: v, agare: kundNamn || "Kunden", agare_pnr: undefined, agare_epost: undefined }
+      : { ...r, innehavare: v, agare: r.innehavare === "kund" ? "" : r.agare })), 0);
 
   const saknas = (v: string) => !v.trim();
-  const komplett = !!start && rows.every((r) => !saknas(r.riktigt) && !saknas(r.agare));
+  const komplett = !!start && rows.every((r) => radBrist(r).length === 0);
   const pnr = (data.personnummer as string | null) ?? "";
   const pnrFalt = (
     <label className="mnr-field">
@@ -285,11 +314,35 @@ export function MobilNummerPanel({ lagenhetId, data, isAdmin, onPatch, planLabel
                 <input className={`input${saknas(r.riktigt) ? " mnr-input--missing" : ""}`} type="tel" inputMode="tel"
                   placeholder="073-331 71 42" value={r.riktigt} onChange={(e) => setCell(i, "riktigt", e.target.value)} />
               </label>
-              <label className="mnr-field">
+              <div className="mnr-field mnr-innehavare" role="group" aria-label="Vem står på numret idag?">
                 <span className="label">Vem står på numret idag? *</span>
-                <input className={`input${saknas(r.agare) ? " mnr-input--missing" : ""}`}
-                  placeholder="För- och efternamn" value={r.agare} onChange={(e) => setCell(i, "agare", e.target.value)} />
-              </label>
+                <div className="d2d-reason-panel__chips">
+                  {([["kund", "Kunden själv"], ["annan", "Annan person"]] as const).map(([k, t]) => (
+                    <button key={k} type="button" aria-pressed={r.innehavare === k}
+                      className={`d2d-reason-chip d2d-sold-chip${r.innehavare === k ? " d2d-sold-chip--active" : ""}${!r.innehavare ? " mnr-chip--missing" : ""}`}
+                      onClick={() => setInnehavare(i, k)}>{t}</button>
+                  ))}
+                </div>
+              </div>
+              {r.innehavare === "annan" && (
+                <div className="mnr-annan">
+                  <label className="mnr-field">
+                    <span className="label">Namn på den som står på numret *</span>
+                    <input className={`input${saknas(r.agare) ? " mnr-input--missing" : ""}`}
+                      placeholder="För- och efternamn" value={r.agare} onChange={(e) => setCell(i, "agare", e.target.value)} />
+                  </label>
+                  <label className="mnr-field">
+                    <span className="label">Personens personnummer *</span>
+                    <input className={`input${!pnrGiltigt(r.agare_pnr) ? " mnr-input--missing" : ""}`} inputMode="numeric" autoComplete="off"
+                      placeholder="ÅÅÅÅMMDD-XXXX" value={r.agare_pnr ?? ""} onChange={(e) => setCell(i, "agare_pnr", e.target.value)} />
+                  </label>
+                  <label className="mnr-field">
+                    <span className="label">Personens e-post *</span>
+                    <input className={`input${!epostGiltig(r.agare_epost) ? " mnr-input--missing" : ""}`} type="email" inputMode="email" autoComplete="off"
+                      placeholder="namn@exempel.se" value={r.agare_epost ?? ""} onChange={(e) => setCell(i, "agare_epost", e.target.value)} />
+                  </label>
+                </div>
+              )}
               {r.typ === "extra" && (
                 <button type="button" className="btn btn--ghost btn--sm mnr-remove"
                   onClick={() => taBortExtra(i)}>
