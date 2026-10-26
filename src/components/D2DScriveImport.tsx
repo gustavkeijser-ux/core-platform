@@ -34,7 +34,7 @@ async function anropa<T = any>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-const STATUS_TEXT: Record<string, string> = { signerat: "Signerat", vantar: "Väntar på signatur", skapas: "Utkast", avvisat: "Avvisat", avbrutet: "Avbrutet", fel: "Fel" };
+const STATUS_TEXT: Record<string, string> = { signerat: "Signerat", vantar: "Väntar på signatur", skapas: "Utkast", avvisat: "Avvisat", avbrutet: "Avbrutet", fel: "Fel", ersatt: "Ersatt av sälj" };
 const LAG_STATUS: Record<string, string> = {
   ej_knackad: "Ej knackad", inte_hemma: "Inte hemma", aterkoppling: "Återkoppling", inte_intresserad: "Inte intresserad",
   befintlig_telia: "Befintlig Telia", intresserad: "Intresserad", sald: "Såld", scrive: "Signera med Scrive", kall_kund: "Kall kund",
