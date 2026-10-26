@@ -194,6 +194,7 @@ type ImportRad = {
 const ATGARD: Record<string, { label: string; kort: string; ton: string }> = {
   anger: { label: "Markeras som ånger", kort: "blir ånger", ton: "fel" },
   orderlagd: { label: "Orderlagd — VT-beställning markeras beställd", kort: "orderlagda", ton: "ok" },
+  scrive_till_sald: { label: "Orderlagd — Scrive-affären blir Såld", kort: "Scrive → Såld", ton: "ok" },
   redan_anger: { label: "Redan ånger", kort: "redan ånger", ton: "neutral" },
   konflikt: { label: "Telia säger orderlagd men adressen har ånger — kolla", kort: "att kolla", ton: "varn" },
   ingen_traff: { label: "Hittades inte i CRM", kort: "hittades inte", ton: "varn" },
@@ -274,14 +275,14 @@ export function TeliaImport({ onKlar }: { onKlar?: () => void }) {
     (resultat ?? []).forEach((r) => { c[r.atgard] = (c[r.atgard] ?? 0) + 1; });
     return c;
   }, [resultat]);
-  const atgarder = (antal.anger ?? 0) + (antal.orderlagd ?? 0);
+  const atgarder = (antal.anger ?? 0) + (antal.orderlagd ?? 0) + (antal.scrive_till_sald ?? 0);
 
   return (
     <section className="card telia-imp">
       <div className="telia-imp__head">
         <div>
           <h2>Telia-underlag</h2>
-          <p className="vt-panel__regel">Läs in Telias VT-fil. Orderstatus <b>Cancelled</b> blir ånger (räknas bort från säljaren), <b>Open</b>/<b>Complete</b> markerar VT-beställningen som beställd. Matchning på personnummer, annars adress och lägenhetsnummer. Du ser resultatet innan något ändras.</p>
+          <p className="vt-panel__regel">Läs in Telias VT-fil. Orderstatus <b>Cancelled</b> blir ånger (räknas bort från säljaren), <b>Open</b>/<b>Complete</b> markerar VT-beställningen som beställd, och en adress som står på Scrive blir Såld (Scrive-avtalet ersätts). Matchning på personnummer, annars adress och lägenhetsnummer. Du ser resultatet innan något ändras.</p>
         </div>
         <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => filRef.current?.click()}>
           {busy && !resultat ? "Läser…" : "Välj fil (.xlsx)"}
@@ -305,7 +306,7 @@ export function TeliaImport({ onKlar }: { onKlar?: () => void }) {
                     <td data-label="Orderstatus">{r.status ?? "—"}</td>
                     <td data-label="I filen">{r.filAdress}</td>
                     <td data-label="I CRM">{r.lagenhetId ? <span className="telia-imp__crm">{r.kund ?? "—"}<span className="telia-imp__sub">{r.adress}{r.saljare ? ` · ${r.saljare}` : ""}</span></span> : "—"}</td>
-                    <td data-label="Åtgärd"><span className={`telia-imp__atg telia-imp__atg--${ATGARD[r.atgard]?.ton ?? "neutral"}`}>{kord && (r.atgard === "anger" || r.atgard === "orderlagd") ? "✓ " : ""}{ATGARD[r.atgard]?.label ?? r.atgard}</span></td>
+                    <td data-label="Åtgärd"><span className={`telia-imp__atg telia-imp__atg--${ATGARD[r.atgard]?.ton ?? "neutral"}`}>{kord && ["anger", "orderlagd", "scrive_till_sald"].includes(r.atgard) ? "✓ " : ""}{ATGARD[r.atgard]?.label ?? r.atgard}</span></td>
                   </tr>
                 ))}
               </tbody>
