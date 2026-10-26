@@ -230,7 +230,15 @@ export function NummerbytenPage() {
                         <tr key={i}>
                           <td data-label="Typ">{n.typ === "huvud" ? <span className="mnr-badge">Huvudnummer</span> : "Extraanvändare"}</td>
                           <td data-label="Nummer som porteras in" className="nb-mono"><strong>{n.riktigt || "—"}</strong></td>
-                          <td data-label="Står på numret idag">{n.agare || "—"}</td>
+                          <td data-label="Står på numret idag">
+                            {n.innehavare === "kund" ? <>Kunden själv{n.agare && n.agare !== "Kunden" ? ` (${n.agare})` : ""}</>
+                              : <>{n.agare || "—"}{n.innehavare === "annan" && (
+                                  <div className="nb-agare">
+                                    {n.agare_pnr && <span className="nb-mono">{n.agare_pnr}</span>}
+                                    {n.agare_epost && <a href={`mailto:${n.agare_epost}`}>{n.agare_epost}</a>}
+                                  </div>
+                                )}</>}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
