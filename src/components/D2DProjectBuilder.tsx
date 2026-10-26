@@ -88,8 +88,8 @@ function KartaSection({ projektId, totalFastigheter, reloadKey = 0 }: { projektI
       for (const p of punkter) {
         const marker = L.marker([p.lat, p.lon]).addTo(map);
         const rader = [
-          `<strong>${p.titel ?? p.fastighetsbeteckning ?? "Fastighet"}</strong>`,
-          p.fastighetsbeteckning ? p.fastighetsbeteckning : null,
+          `<strong>${p.fastighetsbeteckning ?? p.titel ?? "Fastighet"}</strong>`,
+          p.fastighetsbeteckning && p.titel && p.titel !== p.fastighetsbeteckning ? p.titel : null,
           [p.adress, p.ort].filter(Boolean).join(", ") || null,
           p.geoKalla === "ort" ? "<em>Ungefärlig placering (ort, ej exakt adress)</em>" : null,
         ].filter(Boolean);
@@ -240,8 +240,8 @@ function LeveransKarta() {
           radius: 6, color: farg, fillColor: farg, fillOpacity: 0.85, weight: 1,
         }).addTo(map);
         const rader = [
-          `<strong>${p.titel ?? p.fastighetsbeteckning ?? "Fastighet"}</strong>`,
-          p.fastighetsbeteckning ? p.fastighetsbeteckning : null,
+          `<strong>${p.fastighetsbeteckning ?? p.titel ?? "Fastighet"}</strong>`,
+          p.fastighetsbeteckning && p.titel && p.titel !== p.fastighetsbeteckning ? p.titel : null,
           [p.adress, p.ort].filter(Boolean).join(", ") || null,
           p.geoKalla === "ort" ? "<em>Ungefärlig placering (ort, ej exakt adress)</em>" : null,
           p.redanIProjekt ? "<em>Redan i ett D2D-projekt</em>" : null,
@@ -423,10 +423,10 @@ export const EXCEL_RUBRIK_TILL_FALT: Record<string, keyof AddrRow> = {
 };
 
 function AddressEditor({
-  fastighetId, existingCount, onImported, statusar = [], sellers = [],
+  fastighetId, existingCount, onImported, statusar = [], sellers = [], rubrik,
 }: {
   fastighetId: string; existingCount: number; onImported: () => void;
-  statusar?: SaljStatus[]; sellers?: SellerOption[];
+  statusar?: SaljStatus[]; sellers?: SellerOption[]; rubrik?: React.ReactNode;
 }) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [rows, setRows] = useState<AddrRow[]>([{ ...EMPTY_ADDR_ROW }]);
@@ -515,6 +515,7 @@ function AddressEditor({
 
   return (
     <div className="d2dpb-addr">
+      {rubrik}
       <div className="d2dpb-addr__header">
         <span>{existingCount} adress(er) redan inlagda</span>
         <button className="btn btn--ghost btn--sm" onClick={hamtaFranTelia} disabled={hamtar}
@@ -789,9 +790,9 @@ function jamforLag(a: LagRad, b: LagRad) {
 }
 
 function AssignmentEditor({
-  fastighetId, sellers, initial, manuell, onSaved,
+  fastighetId, sellers, initial, manuell, onSaved, rubrik,
 }: {
-  fastighetId: string; sellers: SellerOption[]; initial: Assignment[];
+  fastighetId: string; sellers: SellerOption[]; initial: Assignment[]; rubrik?: React.ReactNode;
   manuell: Record<string, string> | null; onSaved: () => void;
 }) {
   const [valda, setValda] = useState<string[]>(() =>
@@ -889,6 +890,7 @@ function AssignmentEditor({
 
   return (
     <div className="d2dpb-assign">
+      {rubrik}
       <div className="d2dpb-assign__sellers">
         {valda.map((id) => (
           <span key={id} className="d2dpb-assign__chip">
@@ -1135,8 +1137,8 @@ function infoVarde(data: Record<string, unknown>, key: string): string {
   return key === "kundklar_datum" ? s.slice(0, 10) : s;
 }
 
-function FastighetInfoEditor({ fastighetId, initial, onSaved }: {
-  fastighetId: string; initial: Record<string, unknown>; onSaved: (key: string, value: string | null) => void;
+function FastighetInfoEditor({ fastighetId, initial, onSaved, rubrik }: {
+  fastighetId: string; initial: Record<string, unknown>; onSaved: (key: string, value: string | null) => void; rubrik?: React.ReactNode;
 }) {
   const [varden, setVarden] = useState<Record<string, string>>(() =>
     Object.fromEntries(FAST_INFO_FALT.map((f) => [f.key, infoVarde(initial, f.key)])));
@@ -1157,6 +1159,7 @@ function FastighetInfoEditor({ fastighetId, initial, onSaved }: {
 
   return (
     <div className="d2dpb-info">
+      {rubrik}
       <p className="d2dpb-info__hjalp">Visas för säljaren i fastighetens infobox. Sparas när du lämnar fältet.</p>
       <div className="d2dpb-info__grid">
         {FAST_INFO_FALT.map((f) => (
@@ -1181,6 +1184,14 @@ function FastighetInfoEditor({ fastighetId, initial, onSaved }: {
       </div>
     </div>
   );
+}
+
+/** Fastigheten står alltid som rubrik (fastighetsbeteckningen) och adressen/namnet under. */
+function fastighetRubrik(f: RecordRow): { rubrik: string; under: string | null } {
+  const beteckning = String((f.data as Record<string, unknown>).fastighetsbeteckning ?? "").trim();
+  const namn = (f.title ?? "").trim();
+  if (!beteckning) return { rubrik: namn || "Namnlös", under: null };
+  return { rubrik: beteckning, under: namn && namn !== beteckning ? namn : null };
 }
 
 function FastighetRow({
@@ -1211,6 +1222,13 @@ function FastighetRow({
   }
 
   const data = fastighet.data as Record<string, unknown>;
+  const rubrik = fastighetRubrik(fastighet);
+  const panelRubrik = (
+    <div className="d2dpb-panel__rubrik">
+      <strong>{rubrik.rubrik}</strong>
+      {rubrik.under && <span>{rubrik.under}</span>}
+    </div>
+  );
   const assignment = (data.saljartilldelning as Assignment[] | undefined) ?? [];
   const sum: StatusSumma = summa ?? { lagenheter: 0, saljare: 0, antal: {} };
   const k = nyckeltal(sum);
@@ -1230,8 +1248,8 @@ function FastighetRow({
           aria-label="Turordning"
         />
         <div className="d2dpb-rad__namn">
-          <strong>{fastighet.title ?? "Namnlös"}</strong>
-          <span>{[data.fastighetsbeteckning, `${fastighet._addrCount} adresser`].filter(Boolean).map(String).join(" · ")}</span>
+          <strong>{rubrik.rubrik}</strong>
+          <span>{[rubrik.under, `${fastighet._addrCount} adresser`].filter(Boolean).join(" · ")}</span>
           <span className={`d2dpb-rad__saljare${assignment.length ? "" : " d2dpb-rad__saljare--ingen"}`}
             title={assignment.map((x) => `${namn(x.user_id)} ${x.procent} %`).join(", ")}>
             {assignment.length ? assignment.map((x) => namn(x.user_id)).join(", ") : "Ingen säljare tilldelad"}
@@ -1271,6 +1289,7 @@ function FastighetRow({
       {open === "info" && (
         <FastighetInfoEditor
           fastighetId={fastighet.id}
+          rubrik={panelRubrik}
           initial={info}
           onSaved={(key, value) => setInfo((s) => ({ ...s, [key]: value }))}
         />
@@ -1278,6 +1297,7 @@ function FastighetRow({
       {open === "addresses" && (
         <AddressEditor
           fastighetId={fastighet.id}
+          rubrik={panelRubrik}
           existingCount={fastighet._addrCount}
           onImported={onChanged}
           statusar={statusar}
@@ -1287,6 +1307,7 @@ function FastighetRow({
       {open === "assign" && (
         <AssignmentEditor
           fastighetId={fastighet.id}
+          rubrik={panelRubrik}
           sellers={sellers}
           initial={assignment}
           manuell={(data.manuell_tilldelning as Record<string, string> | undefined) ?? null}
