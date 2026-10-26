@@ -1573,3 +1573,5 @@
   .mnr-annan { grid-template-columns: 1fr; }
 }
 .nb-agare { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: var(--text-sm); color: var(--ink-muted); }
+/* Scrive-avtal som ersatts av ett sälj (adressen blev Såld). */
+.d2d-scrive__status--ersatt { background: color-mix(in srgb, var(--hue-blue) 14%, transparent); color: var(--hue-blue); }
