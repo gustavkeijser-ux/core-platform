@@ -1591,3 +1591,18 @@
 .nb-agare { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: var(--text-sm); color: var(--ink-muted); }
 /* Scrive-avtal som ersatts av ett sälj (adressen blev Såld). */
 .d2d-scrive__status--ersatt { background: color-mix(in srgb, var(--hue-blue) 14%, transparent); color: var(--hue-blue); }
+/* Avsluta säljet: Bekräftad / Ej bekräftad (D2DBekraftelse). */
+.d2d-bekr {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: var(--sp-4); border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border);
+  scroll-margin-top: var(--sp-12);
+}
+.d2d-bekr--fel { border-color: var(--danger-ink); background: var(--danger-soft); }
+.d2d-bekr__avsluta { width: 100%; justify-content: center; }
+.d2d-bekr__val { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.d2d-bekr .d2d-bekr__chip { justify-content: center; text-align: center; min-height: 44px; border: 2px solid var(--border-strong); background: var(--surface-alt); font-size: var(--text-sm); }
+.d2d-bekr .d2d-bekr__chip--ja { background: color-mix(in srgb, var(--hue-green) 16%, transparent); color: var(--ok-ink); border-color: var(--hue-green); }
+.d2d-bekr .d2d-bekr__chip--nej { background: color-mix(in srgb, var(--hue-amber) 18%, transparent); color: var(--warn-ink); border-color: var(--hue-amber); }
+.d2d-bekr__hint { margin: 0; font-size: var(--text-sm); color: var(--ink-muted); }
+.d2d-bekr__falt { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--sp-2) var(--sp-3); }
+.d2d-bekr__brist { margin: 0; font-size: var(--text-sm); color: var(--danger-ink); font-weight: 600; }
