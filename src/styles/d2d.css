@@ -997,6 +997,22 @@
 .d2dpb-rad .d2dpb-fast__turordning { width: 52px; text-align: center; }
 .d2dpb-rad--oppen > .d2dpb-rad__main { background: var(--surface-alt); }
 .d2dpb-rad > .d2dpb-addr, .d2dpb-rad > .d2dpb-assign, .d2dpb-rad > .d2dpb-info { margin: 0; padding: var(--sp-4) var(--sp-5); background: var(--surface-alt); border-top: 1px solid var(--divider); }
+/* Panelerna (Lägenheter, Tilldela, Info) får inte blåsa upp kortet: utan min-width: 0 tar
+   grid-barnet tabellens hela bredd, kortet klipper (overflow: hidden) och inget går att
+   scrolla i sidled. Nu scrollar tabellerna inne i panelen i stället. */
+.d2dpb-tabell, .d2dpb-rad, .d2dpb-rad > .d2dpb-addr, .d2dpb-rad > .d2dpb-assign, .d2dpb-rad > .d2dpb-info { min-width: 0; max-width: 100%; }
+.d2dpb-addr__table-wrap, .d2dpb-lgh__tabell { max-width: 100%; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.d2dpb-addr__table-wrap { overflow-x: auto; }
+.d2dpb-manual { min-width: 0; }
+.d2dpb-manual__list { overflow-x: hidden; }
+
+/* Fastigheten som rubrik i varje öppen panel (adresserna står under). */
+.d2dpb-panel__rubrik { display: flex; flex-direction: column; gap: 2px; margin: 0 0 var(--sp-3); min-width: 0; }
+.d2dpb-panel__rubrik strong { font-size: var(--text-base); font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.d2dpb-panel__rubrik span { font-size: var(--text-xs); color: var(--ink-muted); overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .d2dpb-rad > .d2dpb-addr, .d2dpb-rad > .d2dpb-assign, .d2dpb-rad > .d2dpb-info { padding: var(--sp-3) var(--sp-4); }
+}
 .d2dpb-rad__mobil-legend { display: block; padding: 0 var(--sp-5) 12px calc(56px + var(--sp-3) + var(--sp-5)); }
 .d2dpb-prad .d2dpb-rad__mobil-legend { grid-column: 1 / -1; padding: 0; }
 
