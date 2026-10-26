@@ -10,7 +10,7 @@ import { ScriveOkopplade } from "./D2DScriveImport";
    att säljaren ser exakt vad kunden fått. Signerat avtal sparas som PDF.
    ========================================================================== */
 
-type AvtalStatus = "skapas" | "vantar" | "signerat" | "avvisat" | "avbrutet" | "fel";
+type AvtalStatus = "skapas" | "vantar" | "signerat" | "avvisat" | "avbrutet" | "fel" | "ersatt";
 type Avtal = {
   id: string; status: AvtalStatus; leverans: "plats" | "skickat" | "manuell"; kundNamn: string | null;
   harPdf: boolean; fel: string | null; skapad: string; signerad: string | null; skapadAv: string | null;
@@ -23,6 +23,7 @@ const STATUS_TEXT: Record<AvtalStatus, string> = {
   avvisat: "Kunden avvisade avtalet",
   avbrutet: "Avbrutet",
   fel: "Något gick fel",
+  ersatt: "Ersatt – affären är såld",
 };
 
 async function anropa<T = any>(body: Record<string, unknown>): Promise<T> {
