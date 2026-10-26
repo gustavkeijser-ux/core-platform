@@ -17,6 +17,7 @@ import { MobilNummerPanel, mobilNummerBrist } from "./MobilNummer";
 import { AvtalsSammanfattning } from "./D2DAvtal";
 import { D2DAvtalPage } from "./D2DAvtalPage";
 import { ScriveSignering } from "./D2DScrive";
+import { BekraftelsePanel, bekraftelseBrist } from "./D2DBekraftelse";
 import { BindningPanel, EjMerPanel } from "./D2DBindning";
 import { UTAN_NETFLIX_FALT, SPORT_MED_NETFLIX, EXTRA_ANTAL_FALT, EXTRA_VAL, antalExtra, MOBIL_ANTAL_FALT, antalAbonnemang } from "@/lib/d2dPris";
 import { useRoute, navigate, goBack, sattLamnaSparr } from "@/lib/route";
@@ -1399,6 +1400,9 @@ export function LagenhetForm({
   const [record, setRecord] = useState<RecordRow | null>(null);
   const [data, setData] = useState<Record<string, unknown>>({});
   const [status, setStatus] = useState<string | null>(null);
+  // Status när kortet öppnades: blir adressen Såld under besöket måste säljaren
+  // välja Bekräftad / Ej bekräftad innan kortet lämnas.
+  const [startStatus, setStartStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -1421,6 +1425,7 @@ export function LagenhetForm({
         setRecord(res.record);
         setData({ ...res.record.data });
         setStatus(res.record.status);
+        setStartStatus(res.record.status);
 
         // Fastighetens infrastrukturdata som utgångsläge för infon nedan.
         // fastighetId saknas när man kommer från Signerade/Återkoppling —
@@ -1523,14 +1528,22 @@ export function LagenhetForm({
   // Såld/Scrive med mobil: säljaren får inte lämna kundkortet förrän
   // nummerhanteringen är klar (valt nummer; vid tillfälligt nummer även
   // startdatum + riktigt nummer och ägare). Admin spärras inte.
+  const nyHyresgastOkRef = useRef(false);
   const [lamnaFel, setLamnaFel] = useState(false);
-  const lamnaBrist = !isAdmin && (status === "sald" || status === "scrive") ? mobilNummerBrist(data) : null;
+  const mobilBrist = !isAdmin && (status === "sald" || status === "scrive") ? mobilNummerBrist(data) : null;
+  // Såld: Bekräftad / Ej bekräftad (Ej bekräftad kräver personnummer + telefon).
+  // Valet krävs när adressen blev Såld under besöket eller ett befintligt sälj ändras.
+  const bekrBrist = !isAdmin && status === "sald"
+    ? bekraftelseBrist(data, startStatus !== "sald" || nyHyresgastOkRef.current) : null;
+  const lamnaBrist = mobilBrist ?? bekrBrist;
   const bristRef = useRef<string | null>(null);
   bristRef.current = lamnaBrist;
+  const bristMalRef = useRef(".mnr");
+  bristMalRef.current = mobilBrist ? ".mnr" : ".d2d-bekr";
   const visaLamnaFel = useCallback(() => {
     setLamnaFel(true);
     window.setTimeout(() => {
-      const mal = document.querySelector(".mnr") ?? document.querySelector(".d2d-lamna-fel");
+      const mal = document.querySelector(bristMalRef.current) ?? document.querySelector(".d2d-lamna-fel");
       mal?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
   }, []);
@@ -1542,7 +1555,7 @@ export function LagenhetForm({
   }), [lagenhetId, flush, visaLamnaFel]);
 
   const handleBack = async () => {
-    if (lamnaBrist) { void flush(); visaLamnaFel(); return; }
+    if (bristRef.current) { void flush(); visaLamnaFel(); return; }
     await flush();
     await bekraftaLagenhet(lagenhetId);
     // Lämnar säljaren en såld lägenhet firas det med fyrverkerier (2 s).
@@ -1568,6 +1581,7 @@ export function LagenhetForm({
   const tidigareSalj = status === "sald" && !!data.saljare && (!isAdmin || String(data.saljare) === minId)
     && (String(data.saljare) !== minId || (!!data.sald_datum && String(data.sald_datum) < idagIso()));
   const [nyHyresgastOk, setNyHyresgastOk] = useState(false);
+  nyHyresgastOkRef.current = nyHyresgastOk;
   const [nyHyresgastFraga, setNyHyresgastFraga] = useState<(() => void) | null>(null);
   useEffect(() => { setNyHyresgastOk(false); setNyHyresgastFraga(null); }, [lagenhetId]);
   const vaktaTjanst = (fn: () => void) => {
@@ -2008,6 +2022,19 @@ export function LagenhetForm({
             <EjMerPanel fields={objectDef?.fields ?? []} data={data} set={set} />
           )}
           <AvtalsSammanfattning data={data} soldFields={soldFields} isAdmin={isAdmin} />
+          {status === "sald" && (
+            <BekraftelsePanel
+              lagenhetId={lagenhetId}
+              data={data}
+              fel={lamnaFel && !mobilBrist && !!bekrBrist}
+              kundFalt={["personnummer", "kund_telefon"].map((k) => configurableFields.find((f) => f.key === k))
+                .filter((f): f is FieldDef => !!f)
+                .map((f) => <FieldInput key={f.key} field={f} value={data[f.key]} onChange={set(f.key, 800)} />)}
+              onVal={(v) => set("sald_bekraftelse", 0)(v)}
+              // Vänta en render så att valet/fälten hunnit in innan spärren kollas.
+              onAvsluta={() => window.setTimeout(() => { void handleBack(); }, 0)}
+            />
+          )}
           {kundFalt.length > 0 && (
             <div className="d2d-kunduppgifter">
               <span className="label">Kunduppgifter</span>
