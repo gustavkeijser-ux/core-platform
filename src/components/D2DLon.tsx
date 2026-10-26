@@ -45,7 +45,7 @@ type Niva = {
   niva: number | null; bonus: number; nastaNiva: number | null; nastaBonus: number | null; kvar: number | null;
 };
 type Justering = { id: string; belopp: number; kommentar: string; skapadAt: string; skapadAv: string | null };
-/** Riktig lön räknas bara på Såld. "vantar" = Scrive-signerade som ännu inte är Sålda:
+/** Riktig lön räknas bara på Såld. "vantar" = Scrive-signerade som ännu inte är Sålda och Sålda som är Ej bekräftade:
  *  visas inom parentes och ingår bara i den potentiella lönen (…InklVantar). */
 type SaljareRad = Niva & {
   id: string; namn: string;
@@ -371,7 +371,7 @@ export function PinnKort({ s, trappa, jag, lon, onOpen }: {
           {!!s.anger && <small className="d2d-loner__neg" title="Ånger på affärer från en tidigare period dras av"> −{pn(s.angerPinnar ?? 0)} ånger</small>}</span>
       </div>
       <div className="d2d-pinnar__stapel" role="progressbar" aria-valuemin={fran} aria-valuemax={till} aria-valuenow={s.pinnar}
-        title={`${pn(s.pinnar)} av ${till} pinnar${s.vantar ? ` (+${pn(s.vantar)} Scrive-signerade, räknas när de blir Sålda)` : ""}`}>
+        title={`${pn(s.pinnar)} av ${till} pinnar${s.vantar ? ` (+${pn(s.vantar)} väntande: Scrive-signerade och ej bekräftade sälj)` : ""}`}>
         <div className="d2d-pinnar__fyll" style={{ width: `${andel * 100}%` }} />
         {vantarAndel > 0 && (
           <div className="d2d-pinnar__fyll d2d-pinnar__fyll--vantar" style={{ left: `${andel * 100}%`, width: `${vantarAndel * 100}%` }} />
@@ -394,7 +394,7 @@ export function PinnKort({ s, trappa, jag, lon, onOpen }: {
           <small>
             {lon.fastLon ? `fast ${kr(lon.fastLon)} + ` : ""}{pn(s.pinnar)} × {kr(lon.krPerPinne)}{lon.bonus > 0 ? ` + bonus ${kr(lon.bonus)}` : ""}
             {lon.justeringar ? ` ${lon.justeringar > 0 ? "+" : "−"} ${kr(Math.abs(lon.justeringar))}` : ""}
-            {lon.lonInklVantar > lon.lon ? ` · potentiellt ${kr(lon.lonInklVantar)} inkl. Scrive` : ""}
+            {lon.lonInklVantar > lon.lon ? ` · potentiellt ${kr(lon.lonInklVantar)} inkl. väntande` : ""}
             {lon.semesterersattning ? ` · semesterersättning ${kr(lon.semesterersattning)} sparas` : ""}
           </small>
         </div>
@@ -459,7 +459,7 @@ export function BlitzPinnar({ minId, data, onOpenProfil }: {
       {trappa.length > 0 && (
         <p className="d2d-pinnar__trappa">
           Trappa: {trappa.map((t) => `${t.pinnar} → ${kr(t.bonus)}`).join(" · ")}
-          <br />Pinnar räknas på Såld. Inom parentes = Scrive-signerade, som räknas när adressen blir Såld.
+          <br />Pinnar räknas på Såld. Inom parentes = väntande: Scrive-signerade (räknas när adressen blir Såld) och sälj du markerat Ej bekräftat (räknas när du ändrar till Bekräftad).
         </p>
       )}
     </section>
@@ -590,7 +590,7 @@ export function D2DLonerPage({ fields }: { fields: FieldDef[] }) {
         <p>
           Lön = <strong>{kr(krPinne)} per pinne</strong> + bonus när ett trappsteg nås + justeringar. Den riktiga lönen räknas bara på adresser
           med status <strong>Såld</strong>, den löneperiod de blev sålda; lönen betalas ut {data.modell.utbetalningManaderEfter ?? 1} månad{(data.modell.utbetalningManaderEfter ?? 1) === 1 ? "" : "er"} efter.
-          Scrive-signerade som ännu inte är Sålda står inom parentes och ingår bara i den potentiella lönen. Välj <strong>Sålda</strong> för bara den
+          Scrive-signerade som ännu inte är Sålda och sälj som är Ej bekräftade står inom parentes och ingår bara i den potentiella lönen. Välj <strong>Sålda</strong> för bara den
           riktiga lönen eller <strong>Scrive</strong> för vad de signerade avtalen ger när de blir Sålda. Klicka på en säljare för underlag och justeringar.
           {" "}<strong>Ånger:</strong> ångras en affär i samma löneperiod räknas den inte alls; ångras den efter att perioden gått dras pinnarna av i den period ångern registrerades.
           {" "}<strong>Kundtjänst:</strong> affärer som kundtjänst lämnat till en säljare ger kundtjänst alla pinnar (egen kr/pinne och trappa, plus fast lön)
