@@ -28,6 +28,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
+## 2026-10-26
+
+- [D2D] Tillfälligt (slumpat) nummer: för varje nummer (huvudnummer och extraanvändare) väljer säljaren om kunden själv eller en annan person står på numret (Gustav 26 okt). Annan person kräver namn, personnummer och e-post för den personen; kunden själv fyller ägaren åt säljaren. Obligatoriskt — kundkortet kan inte lämnas förrän det är ifyllt. Sparas i mobil_nummer.rows[] (innehavare, agare, agare_pnr, agare_epost) och följer med till nummerbytesärendet, där Nummerbyten visar "Kunden själv" eller namn, personnummer och e-post. nb_complete kräver detta för nya rader (äldre rader utan innehavare räknas som förut). Filer: src/components/MobilNummer.tsx, src/components/NummerbytenPage.tsx, src/styles/d2d.css, supabase/migrations/20261026_1000_d2d_nummer_innehavare.sql. DB: körd.
+
 ## 2026-10-22
 
 - [D2D] "Ändra befintligt sälj" (Gustav 22 okt): i rutan "Adressen är redan såld" i Vad såldes? finns nu tre val — Ändra befintligt sälj (komplettera det som missats; säljdatum och säljare behålls), Ny hyresgäst – nytt sälj (som förut: i dag och på säljaren) och Ändra inget. Ändra befintligt sälj anropar d2d_andra_befintligt_salj som markerar lägenheten (data.behall_saljdatum) och loggar det; d2d_sald_datum_tjanster flyttar inget när markeringen fanns, och markeringen tas bort när säljaren går ut ur lägenheten (d2d_underlag_trg/d2d_bekrafta_lagenhet). Testat i DB (Jacob, Ängesvägen 4 1101: datum kvar 8 okt med knappen, flyttas utan; rullat tillbaka) och i 390/1280 px. Filer: src/components/D2DSellerApp.tsx, supabase/migrations/20261022_1800_d2d_andra_befintligt_salj.sql. DB: körd.
