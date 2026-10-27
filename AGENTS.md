@@ -55,6 +55,17 @@ Varje agent ändrar bara i sitt område. Behöver du ändra något som ägs av n
 5. **Skriv i `ANDRINGSLOGG.md`** (se nästa avsnitt) och pusha den sist.
 6. **Svara Gustav kort:** vad som ändrats, vad det gav (siffror om det finns), och om något väntar på honom.
 
+## 3b. Testmiljön (gäller när Gustav meddelat att den är igång)
+
+Vi jobbar i en testmiljö och Gustav väljer när något publiceras till riktiga CRM:et.
+
+- **Grenar:** `staging` = testmiljön (test.crm.connectestate.se), `main` = riktiga CRM:et. Agenter pushar **bara till `staging`**: hämta med `git fetch -q && git checkout -q -B staging origin/staging`, öppna `…/edit/staging/<sökväg>` resp. `…/new/staging/<katalog>`, verifiera mot `origin/staging`. Pusha aldrig till `main`.
+- **Databas:** testdatabasen är Supabase-grenen "test" (eget projekt-id, se ANDRINGSLOGG). `execute_sql` mot testgrenen för att prova; mot riktiga databasen bara läsfrågor. **Varje databasändring sparas som migreringsfil** i `supabase/migrations/` (namnregeln ovan). Filen körs automatiskt mot testdatabasen när den pushas till `staging`, och mot riktiga databasen när Gustav publicerar. Skriv migreringar så att de går att köra på en databas där ändringen inte redan gjorts (de körs exakt en gång per databas; vilka som körts står i `ce_drift.migreringar`).
+- **Edge functions:** deploya till testgrenen. När Gustav publicerat deployas samma kod till riktiga projektet.
+- **Publicera (bara Gustav):** GitHub → Pull requests → `staging` → `main` → Merge. Då körs nya migreringar mot riktiga databasen (`verktyg/kor_migreringar.sh`, stoppar vid första fel) och riktiga sidan byggs.
+- **Synka testmiljön:** Actions → "Synka testmiljön" → Run workflow → skriv `SYNKA`. Kopierar riktiga databasen (inkl. inloggningar) till test; opublicerade migreringar körs om. Schemalagda jobb, Vault, Storage-filer och funktionshemligheter följer inte med, så testmiljön skickar aldrig mejl.
+- Testmiljön innehåller riktiga personuppgifter — samma försiktighet som i riktiga CRM:et.
+
 ## 4. Ändringsloggen
 
 `ANDRINGSLOGG.md` är systemets minne. Ingen agent minns andra chattar — det som inte står i loggen har inte hänt.
