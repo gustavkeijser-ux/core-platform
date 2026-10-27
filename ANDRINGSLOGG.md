@@ -6,6 +6,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## Öppna punkter
 
+- [Master] Gustav: testmiljön — godkänn Supabase-grenen "test", lägg upp test.crm.connectestate.se + FTP hos Loopia, lägg in GitHub-hemligheterna PROD_DB_URL, STAGING_DB_URL, FTP_STAGING_SERVER/USERNAME/PASSWORD och variablerna STAGING_SUPABASE_URL/STAGING_SUPABASE_ANON_KEY, och test-adressen under Auth → URL Configuration i testgrenen. Flytta BASLINJE i verktyg/kor_migreringar.sh till dagens datum när testmiljön tas i bruk.
 - [Master] Gustav: uppgradera Supabase Compute från Micro till Small/Medium (databasen stryps vid last; se logg 15 okt).
 - [Säljprocess] Gustav/Lukas: feedback 6 okt "Affärer – vyn ska spegla ut så som CE översikt ser ut" — vilken vy/vilka kolumner menas?
 - [Master] Gustav: gör GitHub-kodförrådet `core-platform` privat (Settings → General → Danger Zone → Change visibility). Det är publikt; inga hemligheter finns i historiken men schema, kod och tenant-id i AGENTS.md syns.
@@ -27,6 +28,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav (valfritt): lägg till ett textfält "Antal extraanvändare" i Scrive-mallen om antalet ska stå separat i avtalet (fylls i automatiskt).
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
+
+## 2026-10-27
+
+- [Master] Testmiljö förberedd (Gustav 27 okt): GitHub-grenen `staging` (skapad från main) byggs av flödet "Testmiljön (staging)" till test.crm.connectestate.se med en TESTMILJÖ-rad överst (VITE_MILJO=test) och kör nya migreringar mot testdatabasen. Publicera = Gustav slår ihop staging → main; deploy.yml kör då nya migreringar mot riktiga databasen före bygget (hoppar över med varning tills PROD_DB_URL finns). "Synka testmiljön" (manuellt, skriv SYNKA) kopierar riktiga databasen inkl. inloggningar till test; cron, Vault, Storage och funktionshemligheter följer inte med. Körda migreringar spåras i ce_drift.migreringar (baslinje 20261027_0000). Skripten testade mot lokala Postgres-databaser. AGENTS.md: nytt avsnitt 3b (gäller när testmiljön är igång). Filer: .github/workflows/deploy-staging.yml, sync-staging.yml, deploy.yml, verktyg/kor_migreringar.sh, verktyg/synka_test.sh, src/main.tsx, AGENTS.md. Väntar: Supabase-grenen "test" (kostnadsgodkännande), Loopia-underdomän + FTP, GitHub-hemligheter/variabler, Auth-adress i testgrenen.
 
 ## 2026-10-26
 
