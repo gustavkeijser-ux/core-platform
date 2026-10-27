@@ -6,6 +6,7 @@ import { M365StatusPage } from "./M365StatusPage";
 import { D2DPrislistaPage } from "./D2DAvtal";
 import { ImportPage } from "./ImportPage";
 import { LeadDeskSettings } from "./LeadDeskTalk";
+import { PubliceraPage } from "./PubliceraPage";
 
 /* =============================================================================
    Inställningar — en sida för allt som är konfiguration (#/installningar/<flik>).
@@ -13,7 +14,7 @@ import { LeadDeskSettings } from "./LeadDeskTalk";
    visas styrs av roll: Profil och Import för alla, resten bara för admin.
    ========================================================================== */
 
-export type SettingsTab = "profil" | "utseende" | "anvandare" | "m365" | "leaddesk" | "priser" | "import";
+export type SettingsTab = "profil" | "utseende" | "anvandare" | "m365" | "leaddesk" | "priser" | "import" | "publicera";
 
 export const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; sub: string; admin?: boolean; cases?: boolean }> = [
   { key: "profil", label: "Profil", sub: "Ditt konto, lösenord och läge" },
@@ -23,6 +24,7 @@ export const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; sub: string
   { key: "leaddesk", label: "LeadDesk", sub: "Telefonpanelen: inloggningsadress, ring direkt och skärmpop", admin: true },
   { key: "priser", label: "Priser (D2D)", sub: "Priser och villkor för alla avtalsförslag i D2D", admin: true },
   { key: "import", label: "Import", sub: "Läs in data från fil" },
+  { key: "publicera", label: "Publicera", sub: "För över det som gjorts i testmiljön till riktiga CRM:et", admin: true },
 ];
 
 export function isSettingsTab(s: string | undefined): s is SettingsTab {
@@ -59,6 +61,7 @@ export function SettingsPage({ tab, onTab, session, isAdmin, canCases, branding,
         {current === "leaddesk" && isAdmin && <LeadDeskSettings />}
         {current === "priser" && isAdmin && <D2DPrislistaPage fields={lagFields} />}
         {current === "import" && <ImportPage />}
+        {current === "publicera" && isAdmin && <PubliceraPage />}
       </div>
     </div>
   );
