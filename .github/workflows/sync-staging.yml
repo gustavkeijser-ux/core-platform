@@ -1,0 +1,40 @@
+name: Synka testmiljön
+
+# Kopierar riktiga CRM:ets databas (inkl. inloggningar) till testdatabasen.
+# Allt i testmiljön skrivs över. Körs bara manuellt: Actions → Synka testmiljön →
+# Run workflow, skriv SYNKA. Se verktyg/synka_test.sh för vad som följer med.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bekrafta:
+        description: "Skriv SYNKA för att skriva över testmiljön"
+        required: true
+
+concurrency:
+  group: staging
+  cancel-in-progress: false
+
+jobs:
+  synka:
+    if: ${{ inputs.bekrafta == 'SYNKA' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (staging)
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+
+      - name: Postgres-klient 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Kopiera riktiga databasen till testmiljön
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+          STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: bash verktyg/synka_test.sh "$PROD_DB_URL" "$STAGING_DB_URL"
