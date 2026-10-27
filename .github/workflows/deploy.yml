@@ -12,6 +12,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Publicering från testmiljön: nya migreringar (supabase/migrations) körs mot
+      # riktiga databasen innan sidan byggs. Misslyckas en migrering publiceras inget.
+      - name: Postgres-klient 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Nya migreringar mot riktiga databasen
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+        run: |
+          if [ -z "$PROD_DB_URL" ]; then echo "::warning::PROD_DB_URL saknas — inga migreringar körda."; exit 0; fi
+          bash verktyg/kor_migreringar.sh "$PROD_DB_URL"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
