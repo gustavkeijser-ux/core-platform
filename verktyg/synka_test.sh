@@ -50,8 +50,9 @@ SQL
 
 echo "4/5 Läser in inloggningar och data…"
 pg_restore --no-owner --data-only -d "$TEST" "$T/auth.dump"
-# Schemat public skapades ovan med Supabases standardrättigheter — hoppa över det i dumpen.
-pg_restore -l "$T/public.dump" | grep -v ' SCHEMA - public ' > "$T/lista"
+# Schemat public skapades ovan med Supabases standardrättigheter — hoppa över det i dumpen,
+# liksom standardrättigheter för Supabases egna roller (får inte ändras härifrån).
+pg_restore -l "$T/public.dump" | grep -v -e ' SCHEMA - public ' -e ' DEFAULT ACL ' > "$T/lista"
 pg_restore --no-owner --exit-on-error -L "$T/lista" -d "$TEST" "$T/public.dump"
 psql "$TEST" -v ON_ERROR_STOP=1 -q -f "$T/auth_triggers.sql"
 psql "$TEST" -v ON_ERROR_STOP=1 -q -f "$T/storage_policyer.sql"
