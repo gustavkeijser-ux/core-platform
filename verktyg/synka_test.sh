@@ -32,10 +32,14 @@ psql "$PROD" -tAc "select format('drop policy if exists %I on %I.%I; create poli
 
 echo "3/5 Tömmer testmiljön…"
 psql "$TEST" -v ON_ERROR_STOP=1 -q <<'SQL'
+create extension if not exists pg_cron;
 select cron.unschedule(jobid) from cron.job;
 drop schema if exists ce_drift cascade;
 drop schema public cascade;
 create schema public;
+-- Tillägg som ligger i public försvinner med schemat och följer inte med dumpen.
+create extension if not exists citext with schema public;
+create extension if not exists pg_trgm with schema public;
 grant usage on schema public to postgres, anon, authenticated, service_role;
 grant all on schema public to postgres, service_role;
 alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
