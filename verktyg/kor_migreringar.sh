@@ -12,7 +12,7 @@
 set -euo pipefail
 export PGOPTIONS="-c client_min_messages=warning"
 DB="${1:?Ange databasadress}"
-BASLINJE="20261027_0000"
+BASLINJE="20261028_2359"
 cd "$(dirname "$0")/.."
 
 psql "$DB" -v ON_ERROR_STOP=1 -q <<SQL
