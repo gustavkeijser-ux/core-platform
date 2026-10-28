@@ -30,6 +30,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
 
+## 2026-10-28
+
+- [D2D] Byte av säljare på en såld/signerad adress tar inte längre säljet från den som sålde (Gustav 28 okt: "Den nya säljaren ska se lägenheten men inte vara den som signerat"). Fördelningen 23 okt (admin, update_record) gick förbi låset och flyttade 18 sälj från Sebastian till Olle, med pinnar, lön och "Signerad av". Nu: byts säljaren på en adress med status Såld/Scrive/Ånger flyttas bara tilldelningen (owner_user_id) och en aktivitet "Tilldelad X — säljet står kvar på Y" skrivs; data.saljare ligger kvar. Vill admin rätta vem som faktiskt sålde: d2d_byt_saljare_pa_salj(id, säljare). Återställt: 15 sälj tillbaka till Sebastian, Olle fortfarande tilldelad och ser dem (fastighetens manuella fördelning pekar på Olle). Skiftesvägen 35 lämnad (Gustav signerade åt säljaren). Ej rörda, kan behöva granskas: byten 22 okt (Anton→Leo, Sebastian→Leo, troligen ny hyresgäst), 19 okt (Gustav→Aron), 18 okt (Kundtjänst→Aron). DB: d2d_lag_las_saljare, d2d_byt_saljare_pa_salj; `supabase/migrations/20261028_1000_d2d_tilldela_utan_att_ta_salj.sql`, körd.
+
 ## 2026-10-27
 
 - [Master] Inställningar → Publicera (Gustav 27 okt): sida som visar opublicerade ändringar i testmiljön (commits staging före main, databasändringar, serverfunktioner, senaste byggen) och en knapp "Publicera till riktiga CRM:et" (bara Gustav, med bekräftelse). Publicering = main flyttas fram till staging (annars sammanslagning + staging flyttas fram); bygget av riktiga CRM:et kör då nya migreringar och bygger sidan. Allt mot GitHub i edge function publicera (verify_jwt, admin + PUBLICERARE = gustav@connectestate.se). Serverfunktioner följer inte med knappen. Filer: PubliceraPage.tsx (ny), styles/publicera.css (ny), SettingsPage.tsx, supabase/functions/publicera/index.ts. Väntar: Gustav lägger in hemligheten GITHUB_TOKEN.
