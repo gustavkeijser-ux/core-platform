@@ -29,18 +29,18 @@ Varje agent ändrar bara i sitt område. Behöver du ändra något som ägs av n
 
 ## 3. Arbetsflöde
 
-1. **Kodförrådet:** `https://github.com/gustavkeijser-ux/core-platform` (gren `main`). Klona till t.ex. `~/work/core-platform`, kör `npm ci`. Hämta alltid färskt före en ändring: `git fetch -q && git reset -q --hard origin/main`.
+1. **Kodförrådet:** `https://github.com/gustavkeijser-ux/core-platform`. Vi jobbar i grenen **`staging`** (testmiljön, se 3b) — aldrig i `main`. Klona till t.ex. `~/work/core-platform`, kör `npm ci`. Hämta alltid färskt före en ändring: `git fetch -q && git checkout -q -B staging origin/staging`.
 2. **Ändra lokalt**, kontrollera:
    - Frontend: `node_modules/.bin/tsc --noEmit -p tsconfig.json`
    - Edge function: kopiera filen, byt `jsr:` mot `npm:` i importerna, kör `deno check`.
    - UI: skärmdump i Playwright (Chromium finns i `/opt/pw-browsers/chromium`) i 1280 och 390 px.
 3. **Pusha** (det finns ingen git-push härifrån — vi går via GitHubs webbeditor i Claude-appens inbyggda webbläsare, där Gustav är inloggad):
    - `python3 verktyg/gh_push.py e <sökväg> "<meddelande>" /tmp/p1.js` (ändrad fil) eller `n` (ny fil).
-   - Öppna `https://github.com/gustavkeijser-ux/core-platform/edit/main/<sökväg>` (ändrad) eller `.../new/main/<katalog>` (ny) och kör innehållet i `/tmp/p1.js` med webbläsarens JavaScript-verktyg. Svaret ska vara `ok <längd>`.
+   - Öppna `https://github.com/gustavkeijser-ux/core-platform/edit/staging/<sökväg>` (ändrad) eller `.../new/staging/<katalog>` (ny) och kör innehållet i `/tmp/p1.js` med webbläsarens JavaScript-verktyg. Svaret ska vara `ok <längd>`.
    - Felet `len …` betyder att filen ändrats på GitHub sedan du hämtade (en annan agent hann före). Hämta om, gör om ändringen, generera nytt skript. Skriv aldrig över.
-   - Verifiera: `git fetch -q && git show origin/main:<sökväg> | cmp -s - <sökväg> && echo OK`.
-   - Kontrollera bygget på `https://github.com/gustavkeijser-ux/core-platform/actions` (raderna `.Box-row`, aria-label "completed successfully"). Varje push till `main` byggs och deployas till Loopia automatiskt.
-4. **Supabase** (projekt `gpxwfboyjwcaqeinxxwr`, via Supabase-verktygen):
+   - Verifiera: `git fetch -q && git show origin/staging:<sökväg> | cmp -s - <sökväg> && echo OK`.
+   - Kontrollera bygget på `https://github.com/gustavkeijser-ux/core-platform/actions` (raderna `.Box-row`, aria-label "completed successfully"). Varje push till `staging` byggs till test.crm.connectestate.se ("Testmiljön (staging)"). `main` är låst: bara Gustav publicerar dit.
+4. **Supabase** (via Supabase-verktygen): ändringar görs i testgrenen **`sdidcwxezkkksheqguot`**. Riktiga projektet `gpxwfboyjwcaqeinxxwr` får bara läsfrågor (se 3b).
    - **Migrationsfiler döps efter tid**, inte löpnummer: `supabase/migrations/AAAAMMDD_HHMM_<omrade>_<vad>.sql` (t.ex. `20261006_1405_leverans_portar.sql`). Då krockar två agenter aldrig. Filerna `0001–0069` är historik.
    - Kör SQL med `execute_sql`. `apply_migration` och långa skript kan hänga (särskilt `DROP`): använd `create or replace` (även `create or replace trigger`), dela upp i mindre delar, och undvik `DROP`. Hänger en `UPDATE` med långa texter: skicka texten base64-kodad, `convert_from(decode('…','base64'),'UTF8')`.
    - Ändra befintliga funktioner på plats med `pg_get_functiondef` + `replace()` + `execute` i ett `do`-block, och kontrollera först att texten du byter finns (`raise exception` annars) och att ändringen inte redan är gjord.
@@ -55,14 +55,14 @@ Varje agent ändrar bara i sitt område. Behöver du ändra något som ägs av n
 5. **Skriv i `ANDRINGSLOGG.md`** (se nästa avsnitt) och pusha den sist.
 6. **Svara Gustav kort:** vad som ändrats, vad det gav (siffror om det finns), och om något väntar på honom.
 
-## 3b. Testmiljön (gäller när Gustav meddelat att den är igång)
+## 3b. Testmiljön (gäller alltid, sedan 29 okt 2026)
 
 Vi jobbar i en testmiljö och Gustav väljer när något publiceras till riktiga CRM:et.
 
 - **Grenar:** `staging` = testmiljön (test.crm.connectestate.se), `main` = riktiga CRM:et. Agenter pushar **bara till `staging`**: hämta med `git fetch -q && git checkout -q -B staging origin/staging`, öppna `…/edit/staging/<sökväg>` resp. `…/new/staging/<katalog>`, verifiera mot `origin/staging`. Pusha aldrig till `main`.
-- **Databas:** testdatabasen är Supabase-grenen "test" (eget projekt-id, se ANDRINGSLOGG). `execute_sql` mot testgrenen för att prova; mot riktiga databasen bara läsfrågor. **Varje databasändring sparas som migreringsfil** i `supabase/migrations/` (namnregeln ovan). Filen körs automatiskt mot testdatabasen när den pushas till `staging`, och mot riktiga databasen när Gustav publicerar. Skriv migreringar så att de går att köra på en databas där ändringen inte redan gjorts (de körs exakt en gång per databas; vilka som körts står i `ce_drift.migreringar`).
-- **Edge functions:** deploya till testgrenen. När Gustav publicerat deployas samma kod till riktiga projektet.
-- **Publicera (bara Gustav):** GitHub → Pull requests → `staging` → `main` → Merge. Då körs nya migreringar mot riktiga databasen (`verktyg/kor_migreringar.sh`, stoppar vid första fel) och riktiga sidan byggs.
+- **Databas:** testdatabasen är Supabase-grenen "Test", projekt-id `sdidcwxezkkksheqguot`. `execute_sql` mot testgrenen för att prova; mot riktiga databasen bara läsfrågor. **Varje databasändring sparas som migreringsfil** i `supabase/migrations/` (namnregeln ovan). Filen körs automatiskt mot testdatabasen när den pushas till `staging`, och mot riktiga databasen när Gustav publicerar. Skriv migreringar så att de går att köra på en databas där ändringen inte redan gjorts (de körs exakt en gång per databas; vilka som körts står i `ce_drift.migreringar`).
+- **Edge functions:** deploya till testgrenen (`sdidcwxezkkksheqguot`). Testgrenen saknar riktiga CRM:ets hemligheter, så funktioner som mejlar, når Scrive eller Microsoft 365 kan inte provas fullt ut där. Efter att Gustav publicerat deployas samma kod till riktiga projektet — bara när Gustav ber om det.
+- **Publicera (bara Gustav):** Inställningar → Publicera i riktiga CRM:et (eller GitHub → Pull requests → `staging` → `main` → Merge). Då körs nya migreringar mot riktiga databasen (`verktyg/kor_migreringar.sh`, stoppar vid första fel) och riktiga sidan byggs. Agenter publicerar aldrig: avsluta med att ändringen ligger i testmiljön och väntar på Gustavs godkännande.
 - **Synka testmiljön:** Actions → "Synka testmiljön" → Run workflow → skriv `SYNKA`. Kopierar riktiga databasen (inkl. inloggningar) till test; opublicerade migreringar körs om. Schemalagda jobb, Vault, Storage-filer och funktionshemligheter följer inte med, så testmiljön skickar aldrig mejl.
 - Testmiljön innehåller riktiga personuppgifter — samma försiktighet som i riktiga CRM:et.
 
