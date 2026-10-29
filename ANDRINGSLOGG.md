@@ -6,8 +6,6 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## Öppna punkter
 
-- [Master] Gustav: skapa en fine-grained GitHub-token för core-platform (Contents: Read and write, Workflows: Read and write, Actions: Read) och lägg in den som Supabase-hemligheten GITHUB_TOKEN — då fungerar Inställningar → Publicera.
-- [Master] Gustav: testmiljön — godkänn Supabase-grenen "test", lägg upp test.crm.connectestate.se + FTP hos Loopia, lägg in GitHub-hemligheterna PROD_DB_URL, STAGING_DB_URL, FTP_STAGING_SERVER/USERNAME/PASSWORD och variablerna STAGING_SUPABASE_URL/STAGING_SUPABASE_ANON_KEY, och test-adressen under Auth → URL Configuration i testgrenen. Flytta BASLINJE i verktyg/kor_migreringar.sh till dagens datum när testmiljön tas i bruk.
 - [Master] Gustav: uppgradera Supabase Compute från Micro till Small/Medium (databasen stryps vid last; se logg 15 okt).
 - [Säljprocess] Gustav/Lukas: feedback 6 okt "Affärer – vyn ska spegla ut så som CE översikt ser ut" — vilken vy/vilka kolumner menas?
 - [Master] Gustav: gör GitHub-kodförrådet `core-platform` privat (Settings → General → Danger Zone → Change visibility). Det är publikt; inga hemligheter finns i historiken men schema, kod och tenant-id i AGENTS.md syns.
@@ -29,6 +27,10 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 - [D2D] Gustav (valfritt): lägg till ett textfält "Antal extraanvändare" i Scrive-mallen om antalet ska stå separat i avtalet (fylls i automatiskt).
 - [D2D] Gustav: sätt priser (och ev. pinnar) för TV4 Play Sport Hockey, TV4 Play Sport Total och All Sport från Viaplay under Inställningar → Priser (kryssrutorna finns nu i mallen).
 - [Master] Övervägs: billigare modell (Haiku) för `ai-chat` om kostnaden blir hög — se `usage` i `ai_messages`.
+
+## 2026-10-29
+
+- [Master] Testmiljön i drift (Gustav 29 okt): test.crm.connectestate.se byggs från grenen `staging` och använder Supabase-grenen "Test" (sdidcwxezkkksheqguot, persistent), synkad med riktiga databasen (70 tabeller, 48 886 poster, inga schemalagda jobb). `main` är låst i GitHub (regeln "Skydda riktiga CRM:et"); bara Gustav publicerar via Inställningar → Publicera (GITHUB_TOKEN inlagd). Migreringsbaslinjen flyttad till 28 okt (alla 89 filer markerade som körda i båda databaserna). Synkskriptet skapar tilläggen citext/pg_trgm/pg_cron och hoppar över standardrättigheter. AGENTS.md: agenter jobbar nu alltid i `staging` och testgrenen (avsnitt 1, 3 och 3b). Filer: AGENTS.md, verktyg/synka_test.sh, verktyg/kor_migreringar.sh.
 
 ## 2026-10-28
 
