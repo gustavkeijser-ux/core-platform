@@ -28,3 +28,21 @@
   .pub__bygge .pub__sub { grid-column: 1 / -1; white-space: normal; }
 }
 .pub__bygge a { color: var(--brand); font-weight: 600; }
+.pub__uppgifter { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--sp-3); }
+.pub__uppgift { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4); }
+.pub__uppgift-huvud { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
+.pub__uppgift-titel { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pub__uppgift-titel strong { overflow-wrap: anywhere; }
+.pub__text { margin: 0; font-size: var(--text-sm); color: var(--ink-soft); white-space: pre-line;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.pub__chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.pub__chips a.pub__chip { text-decoration: none; }
+.pub__bekrafta--neka { background: var(--danger-soft); }
+.pub__fallut { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0;
+  background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.pub__lista .pub__knappar { flex-wrap: nowrap; }
+@media (max-width: 600px) {
+  .pub__uppgift .pub__knappar .btn { flex: 1; }
+}
+.pub a.btn { text-decoration: none; }
+.pub__kort > .pub__chip { align-self: flex-start; }
