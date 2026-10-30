@@ -877,6 +877,36 @@ export async function d2dSetManualAssignment(
   return data as { total: number; tilldelade: number; utdelade: number; projektGodkant: boolean };
 }
 
+/** Delade adresser på en fastighet: lägenhets-id → säljare som delar den (utöver/inkl. den tilldelade). */
+export async function d2dGetDeladeAdresser(fastighetId: string): Promise<Record<string, string[]>> {
+  const { data, error } = await supabase.rpc("d2d_delade_adresser", { p_fastighet_id: fastighetId });
+  if (error) asError(error);
+  return (data ?? {}) as Record<string, string[]>;
+}
+
+/** Ersätter hela delningen för fastigheten (adresser med färre än två säljare blir odelade). */
+export async function d2dSetDeladeAdresser(
+  fastighetId: string, delning: Record<string, string[]>
+): Promise<{ delade: number; andrade: number }> {
+  const { data, error } = await supabase.rpc("d2d_satt_delade_adresser", {
+    p_fastighet_id: fastighetId, p_delning: delning,
+  });
+  if (error) asError(error);
+  return data as { delade: number; andrade: number };
+}
+
+/** Uppdaterar en D2D-lägenhet. Som update_record, men släpper även igenom en
+ *  säljare som adressen delats med (d2d_lagenhet_delning) utan att vara ägare. */
+export async function d2dUppdateraLagenhet(
+  id: string, data?: Record<string, unknown>, status?: string | null
+): Promise<RecordRow> {
+  const { data: row, error } = await supabase.rpc("d2d_uppdatera_lagenhet", {
+    p_id: id, p_data: data ?? null, p_status: status ?? null,
+  });
+  if (error) asError(error);
+  return row as RecordRow;
+}
+
 /** Godkänner ett D2D-projekt: delar ut adresserna till säljarna enligt tilldelningen. */
 export async function d2dApproveProject(
   projektId: string
