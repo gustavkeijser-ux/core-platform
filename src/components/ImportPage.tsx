@@ -10,6 +10,9 @@ type Resultat = {
   statusbyten?: number;
   kopplade_kunder?: number;
   torrkorning: boolean;
+  /** Penetrationsfilen: matchning och vad som skrevs. */
+  fastigheter?: number; hushall?: number; leveranser?: number; fastighetsregister?: number;
+  d2d_fastigheter?: number; omatchade?: number; poster_uppdaterade?: number; matdatum?: string;
 };
 
 type UtanKund = {
@@ -22,7 +25,7 @@ type UtanKund = {
 const BLAD = "Projektplan";
 
 /** Vilket blad det är avgör hur raderna läses in. */
-type BladTyp = "projektplan" | "avslutade" | "flit" | "adresser";
+type BladTyp = "projektplan" | "avslutade" | "flit" | "adresser" | "penetration";
 const bladTyp = (namn: string): BladTyp =>
   /^avslutade/i.test(namn.trim()) ? "avslutade" : /^flit/i.test(namn.trim()) ? "flit"
     : /^adresser|leveransvolym/i.test(namn.trim()) ? "adresser" : "projektplan";
@@ -31,10 +34,24 @@ const RPC: Record<BladTyp, string> = {
   avslutade: "import_projektplan_avslutade",
   flit: "import_flit_sdu",
   adresser: "import_telia_adresser",
+  penetration: "import_telia_penetration",
 };
 const NYA: Record<BladTyp, string> = {
   projektplan: "nya leveranser", avslutade: "nya leveranser", flit: "nya FLIT-SDU", adresser: "nya adresser",
+  penetration: "rader med fastighet",
 };
+/** Telias penetrationsfil ("ConnectEstate penetration ÅÅMMDD.xlsx") känns igen på kolumnerna, inte bladnamnet. */
+const PEN_KOLUMNER = ["AccessSubType", "NF_Agreement_Number", "nf_property_designation", "Siebel_CollIPTV", "Siebel_CollBB",
+  "HC", "BB Telia Pen %", "BB TOT Pen %", "IPTV Telia Ind Pen %", "IPTV Tot Pen %"];
+const arPenetration = (rubriker: string[]) => rubriker.includes("nf_property_designation") && rubriker.some((h) => /pen %/i.test(h));
+/** Mätdatum ur filnamnet: "… 261028.xlsx" → 2026-10-28 (annars dagens datum). */
+function datumUrFilnamn(namn: string): string {
+  const m = namn.match(/(\d{2})(\d{2})(\d{2})(?!\d)/);
+  const idag = new Date().toISOString().slice(0, 10);
+  if (!m) return idag;
+  const d = `20${m[1]}-${m[2]}-${m[3]}`;
+  return Number(m[2]) >= 1 && Number(m[2]) <= 12 && Number(m[3]) >= 1 && Number(m[3]) <= 31 && d <= idag ? d : idag;
+}
 /** Kolumner som adressimporten använder (Telias lägenhetslista). */
 const ADRESS_KOLUMNER = ["Objektnummer", "Punkt ID", "Status", "Gata", "Gatunummer", "Lägenhetsnummer", "Ingång",
   "Postnummer", "Stad", "Kommun", "Fastighetsbeteckning", "Fastighetsbeteckning enhetlig", "Byggnadskategori",
@@ -134,7 +151,10 @@ export function ImportPage() {
   const [blad, setBlad] = useState<string[]>([]);
   const [valtBlad, setValtBlad] = useState(BLAD);
   const [iProjektplan, setIProjektplan] = useState(0);
-  const typ = bladTyp(valtBlad);
+  /** Bladet har penetrationsfilens kolumner (oavsett namn). */
+  const [arPen, setArPen] = useState(false);
+  const [matdatum, setMatdatum] = useState("");
+  const typ: BladTyp = arPen ? "penetration" : bladTyp(valtBlad);
   const [rader, setRader] = useState<Record<string, string>[] | null>(null);
   const [rubriker, setRubriker] = useState<string[]>([]);
   const [kanda, setKanda] = useState<Set<string>>(new Set());
@@ -147,7 +167,7 @@ export function ImportPage() {
 
   function nollstall() {
     setRader(null); setRubriker([]); setForhands(null); setResultat(null);
-    setUtanKund(null); setFel(null); setIProjektplan(0);
+    setUtanKund(null); setFel(null); setIProjektplan(0); setArPen(false);
   }
 
   async function valjFil(e: React.ChangeEvent<HTMLInputElement>) {
@@ -173,8 +193,12 @@ export function ImportPage() {
     setArbetar("Läser bladet…");
     setFel(null);
     try {
-      const t = bladTyp(bladet);
       const b = await lasXlsx(f, bladet);
+      const forstaRubriker = (b.rader[0] || []).map((h) => String(h ?? "").trim());
+      const pen = arPenetration(forstaRubriker);
+      setArPen(pen);
+      if (pen) setMatdatum(datumUrFilnamn(f.name));
+      const t: BladTyp = pen ? "penetration" : bladTyp(bladet);
       // I Telias original ligger en rubrikrad ovanför adressbladets kolumnrubriker.
       const hi = t === "adresser"
         ? Math.max(0, b.rader.slice(0, 10).findIndex((r) => (r ?? []).some((v) => String(v ?? "").trim() === "Objektnummer")))
@@ -196,12 +220,12 @@ export function ImportPage() {
       setRubriker((b.rader[hi] || []).map((h) => String(h ?? "").trim()).filter(Boolean));
 
       const { data } = await supabase.rpc("projektplan_kanda_rubriker");
-      const k = new Set<string>(t === "adresser" ? ADRESS_KOLUMNER
+      const k = new Set<string>(t === "adresser" ? ADRESS_KOLUMNER : t === "penetration" ? PEN_KOLUMNER
         : ((t === "flit" ? data?.flit : data?.falt) ?? []) as string[]);
       if (t === "projektplan" || t === "avslutade") { k.add("Fastighetsbeteckning"); k.add("Ort:"); }
       setKanda(k);
 
-      await kor(objekt, true, t);
+      await kor(objekt, true, t, pen ? datumUrFilnamn(f.name) : undefined);
     } catch (err) {
       setFel(err instanceof Error ? err.message : "Kunde inte läsa bladet.");
       setRader(null);
@@ -211,7 +235,7 @@ export function ImportPage() {
   }
 
   /** Kör i omgångar så att en stor fil inte blir ett enda långt anrop. */
-  async function kor(objekt: Record<string, string>[], torrt: boolean, t: BladTyp = typ) {
+  async function kor(objekt: Record<string, string>[], torrt: boolean, t: BladTyp = typ, datum: string | undefined = matdatum || undefined) {
     setArbetar(torrt ? "Räknar ut vad som skulle hända…" : "Läser in…");
     setFel(null);
     const summa: Resultat = {
@@ -219,11 +243,13 @@ export function ImportPage() {
       statusbyten: 0, kopplade_kunder: 0, torrkorning: torrt,
     };
     try {
-      const omgang = t === "adresser" ? 1000 : 60;
+      // Penetrationsfilen går i ett anrop: en ny fil ersätter den gamla i sin helhet.
+      const omgang = t === "penetration" ? Math.max(1, objekt.length) : t === "adresser" ? 1000 : 60;
       for (let i = 0; i < objekt.length; i += omgang) {
         const { data, error } = await supabase.rpc(RPC[t], {
           p_rows: objekt.slice(i, i + omgang),
           p_dry_run: torrt,
+          ...(t === "penetration" ? { p_datum: datum ?? null } : {}),
         });
         if (error) throw new DataError(error.code === "42501" ? "forbidden" : "unknown", error.message);
         const r = data as Resultat;
@@ -233,11 +259,14 @@ export function ImportPage() {
         summa.slangda_varden += r.slangda_varden ?? 0;
         summa.statusbyten = (summa.statusbyten ?? 0) + (r.statusbyten ?? 0);
         summa.kopplade_kunder = (summa.kopplade_kunder ?? 0) + (r.kopplade_kunder ?? 0);
+        if (t === "penetration") Object.assign(summa, { fastigheter: r.fastigheter, hushall: r.hushall, leveranser: r.leveranser,
+          fastighetsregister: r.fastighetsregister, d2d_fastigheter: r.d2d_fastigheter, omatchade: r.omatchade,
+          poster_uppdaterade: r.poster_uppdaterade, matdatum: r.matdatum });
       }
       if (torrt) setForhands(summa);
       else {
         setResultat(summa); setForhands(null);
-        if (t === "flit" || t === "adresser") return;
+        if (t === "flit" || t === "adresser" || t === "penetration") return;
         // Vilka leveranser fick ingen kund? Det är den lista någon behöver gå igenom.
         const { data } = await supabase.rpc("leveranser_utan_kund");
         setUtanKund((data ?? []) as UtanKund[]);
@@ -265,6 +294,11 @@ export function ImportPage() {
           FLIT-SDU och matchas på GA1-nr. <strong>Adresser</strong> (eller Telias <em>Utdrag app
           Leveransvolymer</em>) blir Telias lägenhetslista, som D2D hämtar lägenheter ur. Befintliga uppdateras, nya skapas. Att köra om samma
           fil ändrar ingenting, så du kan importera så ofta du vill.
+        </p>
+        <p className="imp__not">
+          Telias <strong>penetrationsfil</strong> (<code>ConnectEstate penetration ÅÅMMDD.xlsx</code>) känns igen på sina kolumner:
+          penetrationen (BB Telia, BB totalt, IPTV Telia, IPTV totalt) och antal hushåll skrivs per fastighet på leveransen,
+          fastigheten och D2D-fastigheten, och summeras viktat på koncernmodern och D2D-projektet. En ny fil ersätter den förra.
         </p>
 
         <div className="imp__valj">
@@ -313,6 +347,27 @@ export function ImportPage() {
             </div>
           </div>
 
+          {typ === "penetration" && (
+            <div className="imp__pen">
+              <label className="imp__pen-datum">
+                <span>Mätdatum</span>
+                <input type="date" className="input input--sm" value={matdatum} max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setMatdatum(e.target.value)} disabled={!!arbetar} />
+                <small className="formfield__help">Hämtat ur filnamnet. Visas som "Penetration mätdatum" på posterna.</small>
+              </label>
+              {forhands && (
+                <p className="imp__not">
+                  {forhands.fastigheter ?? 0} fastigheter med {forhands.hushall?.toLocaleString("sv-SE") ?? 0} hushåll.
+                  Hittas i CRM:et: {forhands.leveranser ?? 0} som leverans, {forhands.d2d_fastigheter ?? 0} som D2D-fastighet,
+                  {" "}{forhands.fastighetsregister ?? 0} i fastighetsregistret
+                  {(forhands.omatchade ?? 0) > 0
+                    ? <>; <strong>{forhands.omatchade} hittas inte alls</strong> och sparas utan koppling.</>
+                    : "; alla hittas någonstans."}
+                </p>
+              )}
+            </div>
+          )}
+
           {typ === "avslutade" && (
             <p className="imp__not">
               Alla rader i bladet får status <strong>99. Avslutad</strong>
@@ -325,6 +380,8 @@ export function ImportPage() {
             <p className="imp__not">
               {typ === "adresser"
                 ? `${forhands.hoppade} rader saknar objektnummer eller är dubbletter och hoppas över.`
+                : typ === "penetration"
+                ? `${forhands.hoppade} rader saknar fastighetsbeteckning eller är dubbletter (samma fastighet och avtalsnummer) och hoppas över.`
                 : typ === "flit"
                 ? `${forhands.hoppade} rader saknar både GA1-nr, CS-nr, A-/KO-nr och fastighetsbeteckning och hoppas över.`
                 : `${forhands.hoppade} rader saknar fastighetsbeteckning och hoppas över — utan den går de inte att matcha.`}
@@ -365,16 +422,25 @@ export function ImportPage() {
       {resultat && (
         <div className="card imp__klart">
           <h3>Klart</h3>
-          <p>
-            {resultat.nya} {NYA[typ]}, {resultat.uppdaterade} uppdaterade
-            {resultat.statusbyten ? `, varav ${resultat.statusbyten} bytte status` : ""}.
-            {resultat.hoppade > 0 && ` ${resultat.hoppade} rader hoppades över.`}
-            {resultat.kopplade_kunder
-              ? ` ${resultat.kopplade_kunder} leveranser kopplades till kund.`
-              : ""}
-          </p>
+          {typ === "penetration" ? (
+            <p>
+              {resultat.nya} rader för {resultat.fastigheter ?? 0} fastigheter inlästa (mätdatum {resultat.matdatum ?? "–"}).
+              {" "}Penetrationen skrevs på {resultat.poster_uppdaterade ?? 0} poster: leveranser, fastigheter, D2D-fastigheter, koncernmödrar och D2D-projekt.
+              {(resultat.omatchade ?? 0) > 0 && ` ${resultat.omatchade} fastigheter hittades inte i CRM:et och ligger utan koppling.`}
+            </p>
+          ) : (
+            <p>
+              {resultat.nya} {NYA[typ]}, {resultat.uppdaterade} uppdaterade
+              {resultat.statusbyten ? `, varav ${resultat.statusbyten} bytte status` : ""}.
+              {resultat.hoppade > 0 && ` ${resultat.hoppade} rader hoppades över.`}
+              {resultat.kopplade_kunder
+                ? ` ${resultat.kopplade_kunder} leveranser kopplades till kund.`
+                : ""}
+            </p>
+          )}
           <p className="imp__not">
             {typ === "adresser" ? "Lägenheterna hämtas in när en fastighet läggs till i ett D2D-projekt, eller med knappen Hämta lägenheter från Telia på fastigheten."
+              : typ === "penetration" ? "Talen syns i sektionen Penetration (Telia) på posterna, som kolumner i listorna, i fliken Penetration på koncernmodern och under Door to door → Utfall."
               : <>Öppna {typ === "flit" ? "FLIT-SDU" : "Leveranser"} för att se dem. Listan uppdaterar sig själv, så har du
             den öppen i en annan flik har den redan hunnit ikapp.</>}
           </p>
