@@ -375,39 +375,6 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         <div className="card utf__tom">Inga besök i det här urvalet. Ej knackade dörrar räknas inte.</div>
       )}
 
-      {u && (projekt ? (penValt && penValt.summa && penValt.summa.fastigheter > 0) : (penProjekt && penProjekt.projekt.some((p) => p.fastigheter > 0))) && (
-        <section className="card utf__sek pen">
-          <h2>Penetration enligt Telia {(() => { const d = projekt ? penValt?.summa?.matdatum : penProjekt?.matdatum; return d ? <span className="utf__snitt">mätt {datumStr(d)}</span> : null; })()}</h2>
-          {projekt && penValt?.summa ? (<>
-            <PenTiles s={penValt.summa} />
-            <p className="utf__ingress">
-              Projektets {penValt.summa.fastigheter} {penValt.summa.fastigheter === 1 ? "fastighet" : "fastigheter"} i Telias penetrationsfil, viktat med antal hushåll.
-              Oberoende av period och säljare — det är läget i Telias nät, inte D2D-knackningarna.
-            </p>
-            <PenTabell rader={penValt.rader} />
-          </>) : penProjekt && (<>
-            {penProjekt.totalt && penProjekt.totalt.fastigheter > 0 && <PenTiles s={penProjekt.totalt} />}
-            <p className="utf__ingress">Alla fastigheter som ligger i ett D2D-projekt, viktat med antal hushåll. Välj ett projekt ovan för att se fastigheterna.</p>
-            <div className="rtable-scroll">
-              <table className="rtable pen__tabell">
-                <thead><tr><th>Projekt</th><th className="pen__num">Fastigheter</th><th className="pen__num">HC</th>
-                  {PEN_MATT.map(([k, lbl, titel]) => <th key={k} className="pen__num" title={titel}>{lbl}</th>)}</tr></thead>
-                <tbody>
-                  {penProjekt.projekt.filter((p) => p.fastigheter > 0).map((p) => (
-                    <tr key={p.id} className="rtable__row rtable__row--click" onClick={() => setProjekt(p.id)} title="Visa projektets fastigheter">
-                      <td data-label="Projekt" className="rtable__title">{p.title ?? "Namnlöst projekt"}{p.status && p.status !== "aktiv" && <span className="pen__projekt">{p.status}</span>}</td>
-                      <td data-label="Fastigheter" className="pen__num">{p.fastigheter}</td>
-                      <td data-label="HC" className="pen__num">{p.hc.toLocaleString("sv-SE")}</td>
-                      {PEN_MATT.map(([k]) => <td key={k} data-label={k} className="pen__num">{pctStr(p[k] as number | null)}</td>)}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>)}
-        </section>
-      )}
-
       {u && u.besok > 0 && (<>
         <div className="utf__tiles">
           <div className="utf__tile"><b>{u.besok}</b><span>knackade dörrar</span></div>
@@ -632,6 +599,39 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
           Period räknas på senaste kontakt. Bindningar och skäl kommer från säljarnas val i D2D-vyn; för besöken före 2 oktober 2026 är de ifyllda i efterhand ur anteckningarna.
         </p>
       </>)}
+
+      {u && (projekt ? (penValt && penValt.summa && penValt.summa.fastigheter > 0) : (penProjekt && penProjekt.projekt.some((p) => p.fastigheter > 0))) && (
+        <section className="card utf__sek pen">
+          <h2>Penetration enligt Telia {(() => { const d = projekt ? penValt?.summa?.matdatum : penProjekt?.matdatum; return d ? <span className="utf__snitt">mätt {datumStr(d)}</span> : null; })()}</h2>
+          {projekt && penValt?.summa ? (<>
+            <PenTiles s={penValt.summa} />
+            <p className="utf__ingress">
+              Projektets {penValt.summa.fastigheter} {penValt.summa.fastigheter === 1 ? "fastighet" : "fastigheter"} i Telias penetrationsfil, viktat med antal hushåll.
+              Oberoende av period och säljare — det är läget i Telias nät, inte D2D-knackningarna.
+            </p>
+            <PenTabell rader={penValt.rader} />
+          </>) : penProjekt && (<>
+            {penProjekt.totalt && penProjekt.totalt.fastigheter > 0 && <PenTiles s={penProjekt.totalt} />}
+            <p className="utf__ingress">Alla fastigheter som ligger i ett D2D-projekt, viktat med antal hushåll. Välj ett projekt ovan för att se fastigheterna.</p>
+            <div className="rtable-scroll">
+              <table className="rtable pen__tabell">
+                <thead><tr><th>Projekt</th><th className="pen__num">Fastigheter</th><th className="pen__num">HC</th>
+                  {PEN_MATT.map(([k, lbl, titel]) => <th key={k} className="pen__num" title={titel}>{lbl}</th>)}</tr></thead>
+                <tbody>
+                  {penProjekt.projekt.filter((p) => p.fastigheter > 0).map((p) => (
+                    <tr key={p.id} className="rtable__row rtable__row--click" onClick={() => setProjekt(p.id)} title="Visa projektets fastigheter">
+                      <td data-label="Projekt" className="rtable__title">{p.title ?? "Namnlöst projekt"}{p.status && p.status !== "aktiv" && <span className="pen__projekt">{p.status}</span>}</td>
+                      <td data-label="Fastigheter" className="pen__num">{p.fastigheter}</td>
+                      <td data-label="HC" className="pen__num">{p.hc.toLocaleString("sv-SE")}</td>
+                      {PEN_MATT.map(([k, lbl]) => <td key={k} data-label={lbl} className="pen__num">{pctStr(p[k] as number | null)}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>)}
+        </section>
+      )}
     </div>
   );
 }
