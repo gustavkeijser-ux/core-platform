@@ -399,8 +399,11 @@ revoke all on function public.d2d_telia_utred(uuid, text, text) from public, ano
 grant execute on function public.d2d_telia_utred(uuid, text, text) to authenticated;
 
 -- ── 5. Nyckeltal per säljare och team ─────────────────────────────────────────
+create index if not exists activities_tenant_occurred_idx on public.activities (tenant_id, occurred_at);
+
 /** Nyckeltalen för en månad per säljare (uuid): pinnar, kunder, tjänster, flest tjänster, kontakter
- *  med utfall, matchning mot Telia. */
+ *  med utfall, matchning mot Telia. Månadens aktiviteter läses en gång (akt) så att kontaktfiltren
+ *  blir billiga. */
 create or replace function public.d2d_nyckeltal_rader(p_tenant uuid, p_manad date)
 returns table (saljare uuid, pinnar numeric, kunder int, tjanster int, max_tjanster int, max_kund text, max_lagenhet uuid,
                kontakter int, salj int, aterkoppling int, nej int, ej_hemma int,
@@ -413,38 +416,44 @@ begin
   v_min := d2d_raknas_fran(p_tenant);
   v_mod := d2d_lonemodell_for(p_tenant);
   return query
-  with salda as (
-    select r.id, r.data d, nullif(r.data->>'saljare', '')::uuid saljare, d2d_antal_avtal(r.data) avtal, d2d_pinnar(r.data, v_mod) pinnar
+  with salda0 as materialized (
+    select r.id, r.data d, nullif(r.data->>'saljare', '')::uuid saljare, d2d_sald_tid(r.id, r.data) t
       from records r
      where r.tenant_id = p_tenant and r.object_type = 'd2d_lagenhet' and r.deleted_at is null and r.status = 'sald'
        and coalesce(r.data->>'tillfallig', '') <> 'true'
-       and d2d_sald_tid(r.id, r.data) >= greatest(v_fran, coalesce(v_min, v_fran))
-       and d2d_sald_tid(r.id, r.data) < v_till
+  ),
+  salda as (
+    select s0.id, s0.d, s0.saljare, d2d_antal_avtal(s0.d) avtal, d2d_pinnar(s0.d, v_mod) pinnar
+      from salda0 s0
+     where s0.t >= greatest(v_fran, coalesce(v_min, v_fran)) and s0.t < v_till
+  ),
+  akt as materialized (
+    select a.actor_user_id, a.record_id, a.occurred_at, a.activity_type, a.metadata
+      from activities a join records r on r.id = a.record_id
+     where a.tenant_id = p_tenant and a.occurred_at >= v_fran and a.occurred_at < v_till
+       and r.object_type = 'd2d_lagenhet' and a.actor_user_id is not null
+       and a.activity_type in ('status_change', 'field_change')
+  ),
+  -- massändringar (import, fördelning) räknas inte: fler än 5 statusbyten av samma person inom en minut
+  bulk as (
+    select actor_user_id, date_trunc('minute', occurred_at) minut, count(*) n
+      from akt where activity_type = 'status_change' group by 1, 2
   ),
   kont as (
-    -- statusbyten som användaren själv gjort
-    select a.actor_user_id saljare, a.record_id, a.occurred_at,
+    select a.actor_user_id saljare,
            case when a.metadata->>'to' in ('sald', 'scrive') then 'salj'
                 when a.metadata->>'to' = 'aterkoppling' then 'aterkoppling'
                 when a.metadata->>'to' = 'inte_hemma' then 'ej_hemma' else 'nej' end utfall
-      from activities a join records r on r.id = a.record_id
-     where a.tenant_id = p_tenant and r.object_type = 'd2d_lagenhet' and a.activity_type = 'status_change'
-       and a.actor_user_id is not null and coalesce(a.actor_kind, 'user') = 'user'
-       and a.occurred_at >= v_fran and a.occurred_at < v_till
+      from akt a join bulk b on b.actor_user_id = a.actor_user_id and b.minut = date_trunc('minute', a.occurred_at)
+     where a.activity_type = 'status_change' and b.n <= 5
        and a.metadata ? 'to' and a.metadata->>'kalla' is null
        and a.metadata->>'to' in ('sald', 'scrive', 'aterkoppling', 'inte_hemma', 'inte_saljbar', 'inte_intresserad', 'kall_kund', 'befintlig_telia', 'intresserad')
-       -- massändringar (import, fördelning) räknas inte: fler än 5 statusbyten av samma person inom en minut
-       and (select count(*) from activities b where b.tenant_id = p_tenant and b.actor_user_id = a.actor_user_id
-             and b.activity_type = 'status_change' and b.occurred_at >= date_trunc('minute', a.occurred_at)
-             and b.occurred_at < date_trunc('minute', a.occurred_at) + interval '1 minute') <= 5
     union all
     -- knackningar (Inte hemma igen) utan statusbyte i samma stund
-    select a.actor_user_id, a.record_id, a.occurred_at, 'ej_hemma'
-      from activities a join records r on r.id = a.record_id
-     where a.tenant_id = p_tenant and r.object_type = 'd2d_lagenhet' and a.activity_type = 'field_change'
-       and a.actor_user_id is not null and a.metadata->>'field' = 'antal_knackningar'
-       and a.occurred_at >= v_fran and a.occurred_at < v_till
-       and not exists (select 1 from activities b where b.record_id = a.record_id and b.activity_type = 'status_change'
+    select a.actor_user_id, 'ej_hemma'
+      from akt a
+     where a.activity_type = 'field_change' and a.metadata->>'field' = 'antal_knackningar'
+       and not exists (select 1 from akt b where b.record_id = a.record_id and b.activity_type = 'status_change'
                          and b.actor_user_id = a.actor_user_id and b.occurred_at between a.occurred_at - interval '2 minutes' and a.occurred_at + interval '2 minutes')
   ),
   k as (
@@ -492,30 +501,34 @@ revoke all on function public.d2d_nyckeltal_rader(uuid, date) from public, anon,
 create or replace function public.d2d_nyckeltal_manad(p_manad date default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_t uuid := my_tenant_id(); v_m date := date_trunc('month', coalesce(p_manad, (now() at time zone 'Europe/Stockholm')::date))::date;
-        v_f date; v_alla boolean := d2d_telia_behorig(); v jsonb;
+        v_f date; v_alla boolean := d2d_telia_behorig(); v jsonb; v_nu jsonb; v_fo jsonb;
 begin
   v_f := (v_m - interval '1 month')::date;
-  with nu as (select * from d2d_nyckeltal_rader(v_t, v_m)),
-       fo as (select * from d2d_nyckeltal_rader(v_t, v_f)),
-       ids as (select nu.saljare from nu union select fo.saljare from fo),
+  select coalesce(jsonb_agg(to_jsonb(x.*)), '[]'::jsonb) into v_nu from d2d_nyckeltal_rader(v_t, v_m) x;
+  select coalesce(jsonb_agg(to_jsonb(x.*)), '[]'::jsonb) into v_fo from d2d_nyckeltal_rader(v_t, v_f) x;
+  with nu as (select e from jsonb_array_elements(v_nu) e),
+       fo as (select e from jsonb_array_elements(v_fo) e),
+       ids as (select nullif(nu.e->>'saljare', '')::uuid saljare from nu union select nullif(fo.e->>'saljare', '')::uuid from fo),
        rad as (
          select ids.saljare,
                 (select coalesce(nullif(u.full_name, ''), u.email::text) from users u where u.id = ids.saljare) namn,
-                to_jsonb(nu.*) - 'saljare' nu, to_jsonb(fo.*) - 'saljare' forra
-           from ids left join nu on nu.saljare is not distinct from ids.saljare left join fo on fo.saljare is not distinct from ids.saljare
+                (select nu.e - 'saljare' from nu where nullif(nu.e->>'saljare', '')::uuid is not distinct from ids.saljare) nu,
+                (select fo.e - 'saljare' from fo where nullif(fo.e->>'saljare', '')::uuid is not distinct from ids.saljare) forra
+           from ids
        ),
-       team as (
-         select jsonb_build_object(
-           'pinnar', coalesce(sum(x.pinnar), 0), 'kunder', coalesce(sum(x.kunder), 0), 'tjanster', coalesce(sum(x.tjanster), 0),
-           'max_tjanster', coalesce(max(x.max_tjanster), 0),
-           'max_kund', (select y.max_kund from d2d_nyckeltal_rader(v_t, m.m) y order by y.max_tjanster desc nulls last limit 1),
-           'max_lagenhet', (select y.max_lagenhet from d2d_nyckeltal_rader(v_t, m.m) y order by y.max_tjanster desc nulls last limit 1),
-           'kontakter', coalesce(sum(x.kontakter), 0), 'salj', coalesce(sum(x.salj), 0), 'aterkoppling', coalesce(sum(x.aterkoppling), 0),
-           'nej', coalesce(sum(x.nej), 0), 'ej_hemma', coalesce(sum(x.ej_hemma), 0),
-           'matchade', coalesce(sum(x.matchade), 0), 'avvikande', coalesce(sum(x.avvikande), 0), 'endast_saljare', coalesce(sum(x.endast_saljare), 0),
-           'har_fil', exists (select 1 from d2d_telia_fil f where f.tenant_id = v_t and f.manad = m.m)) j, m.m
-           from (values (v_m), (v_f)) m(m)
-           left join d2d_nyckeltal_rader(v_t, m.m) x on true
+       summa as (
+         select m.m, jsonb_build_object(
+           'pinnar', coalesce(sum((x.e->>'pinnar')::numeric), 0), 'kunder', coalesce(sum((x.e->>'kunder')::int), 0),
+           'tjanster', coalesce(sum((x.e->>'tjanster')::int), 0), 'max_tjanster', coalesce(max((x.e->>'max_tjanster')::int), 0),
+           'max_kund', (array_agg(x.e->>'max_kund' order by (x.e->>'max_tjanster')::int desc nulls last))[1],
+           'max_lagenhet', (array_agg(x.e->>'max_lagenhet' order by (x.e->>'max_tjanster')::int desc nulls last))[1],
+           'kontakter', coalesce(sum((x.e->>'kontakter')::int), 0), 'salj', coalesce(sum((x.e->>'salj')::int), 0),
+           'aterkoppling', coalesce(sum((x.e->>'aterkoppling')::int), 0), 'nej', coalesce(sum((x.e->>'nej')::int), 0),
+           'ej_hemma', coalesce(sum((x.e->>'ej_hemma')::int), 0), 'matchade', coalesce(sum((x.e->>'matchade')::int), 0),
+           'avvikande', coalesce(sum((x.e->>'avvikande')::int), 0), 'endast_saljare', coalesce(sum((x.e->>'endast_saljare')::int), 0),
+           'har_fil', exists (select 1 from d2d_telia_fil f where f.tenant_id = v_t and f.manad = m.m)) j
+           from (values (v_m, v_nu), (v_f, v_fo)) m(m, rows)
+           left join lateral jsonb_array_elements(m.rows) x(e) on true
           group by m.m
        )
   select jsonb_build_object(
@@ -523,7 +536,7 @@ begin
     'saljare', coalesce((select jsonb_agg(jsonb_build_object('id', rad.saljare, 'namn', coalesce(rad.namn, 'Ingen säljare'), 'nu', rad.nu, 'forra', rad.forra)
                                           order by coalesce((rad.nu->>'pinnar')::numeric, 0) desc, rad.namn)
                            from rad where v_alla or rad.saljare = auth.uid()), '[]'::jsonb),
-    'team', case when v_alla then jsonb_build_object('nu', (select j from team where m = v_m), 'forra', (select j from team where m = v_f)) end,
+    'team', case when v_alla then jsonb_build_object('nu', (select j from summa where m = v_m), 'forra', (select j from summa where m = v_f)) end,
     'filer', coalesce((select jsonb_agg(f.manad order by f.manad desc) from d2d_telia_fil f where f.tenant_id = v_t), '[]'::jsonb))
   into v;
   return v;
