@@ -5,7 +5,7 @@ import { D2DAllaLagenheter } from "./D2DAllaLagenheter";
 import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  getMetadata, listRecords, getRecord, updateRecord, createRecord, addRelation,
+  getMetadata, listRecords, getRecord, createRecord, addRelation, d2dUppdateraLagenhet,
   type ObjectDef, type RecordRow, type RelatedRecord, type FieldDef,
   DataError,
 } from "@/lib/data";
@@ -25,7 +25,7 @@ import { rememberRow as rememberRowShared, useReturnToRow as useReturnToRowShare
 
 const rememberRow = (listKey: string, id: string) => rememberRowShared("d2d:" + listKey, id);
 const useReturnToRow = (listKey: string, ready: boolean) => useReturnToRowShared("d2d:" + listKey, ready, "d2d-return-flash");
-import { useUserName } from "@/lib/users";
+import { useUserName, getUserName, loadAllUsers } from "@/lib/users";
 import { D2DDashboard } from "./D2DDashboard";
 import { D2DFeedbackFlik } from "./D2DFeedback";
 import { FelanmalanPanel } from "./D2DFelanmalan";
@@ -738,6 +738,35 @@ function SaldAvRad({ status, saljare, agare }: { status: string | null; saljare:
   );
 }
 
+/** "Delad med …": adressen ses och bearbetas även av andra säljare
+ *  (d2d_lagenhet_delning). Visar de andra i gruppen, inte en själv. */
+function DeladMed({ ids, minId, kort = false }: { ids: string[] | undefined; minId: string | null; kort?: boolean }) {
+  const [, tick] = useState(0);
+  useEffect(() => { loadAllUsers().then(() => tick((n) => n + 1)); }, []);
+  const andra = (ids ?? []).filter((id) => id !== minId);
+  if (andra.length === 0) return null;
+  const namn = andra.map((id) => getUserName(id)).filter(Boolean).join(" och ");
+  if (kort) return <span className="d2d-lag-row__delad">Delad med {namn}</span>;
+  return (
+    <div className="d2d-delad">
+      <strong>Delad adress</strong> · ses och bearbetas även av {namn}. Statusändringar syns hos er båda.
+    </div>
+  );
+}
+
+/** Hämtar delningen (lägenhet → säljare) för en uppsättning lägenheter. */
+async function hamtaDelning(lagIds: string[]): Promise<Record<string, string[]>> {
+  const ut: Record<string, string[]> = {};
+  for (let i = 0; i < lagIds.length; i += 200) {
+    const { data } = await supabase.from("d2d_lagenhet_delning").select("lagenhet_id,user_id")
+      .in("lagenhet_id", lagIds.slice(i, i + 200)).eq("aktiv", true);
+    for (const r of (data ?? []) as Array<{ lagenhet_id: string; user_id: string }>) {
+      (ut[r.lagenhet_id] ??= []).push(r.user_id);
+    }
+  }
+  return ut;
+}
+
 /** tel:-länk av ett inskrivet nummer: behåller siffror och inledande +,
  *  svenskt nummer med inledande 0 blir +46. Tomt/ogiltigt → null. */
 function telefonLank(nr: string): string | null {
@@ -844,6 +873,8 @@ export function LagenhetTabell({
   kanAndra,
   visaSaljare = false,
   statusEtikett,
+  delade,
+  minId = null,
 }: {
   lagenheter: RecordRow[];
   setLagenheter: Dispatch<SetStateAction<RecordRow[]>>;
@@ -870,6 +901,9 @@ export function LagenhetTabell({
   visaSaljare?: boolean;
   /** Egen statusetikett för en rad (t.ex. "Väntar på signering" för ett Scrive-avtal som inte signerats). */
   statusEtikett?: (lag: RecordRow) => string | null;
+  /** Delade adresser: lägenhets-id → säljare som delar den ("Delad med …" i raden). */
+  delade?: Record<string, string[]>;
+  minId?: string | null;
 }) {
   const medSaljare = isAdmin || visaSaljare;
   const [utfalld, setUtfalld] = useState<string | null>(null);
@@ -914,7 +948,7 @@ export function LagenhetTabell({
     const nytt = varde.trim();
     if (nytt === tidigare.trim()) return;
     try {
-      const rad = await updateRecord(lagId, { [key]: nytt || null });
+      const rad = await d2dUppdateraLagenhet(lagId, { [key]: nytt || null });
       // Ett telefonnummer i kommentaren fyller ett tomt telefonfält i
       // databasen (trg_d2d_telefon_fran_kommentar) — visa det direkt.
       const tel = (rad?.data as Record<string, unknown> | undefined)?.kund_telefon;
@@ -934,7 +968,7 @@ export function LagenhetTabell({
     const tidigare = (lag.data as Record<string, unknown>).antal_knackningar ?? null;
     patchaLokalt(lag.id, { antal_knackningar: v });
     try {
-      await updateRecord(lag.id, { antal_knackningar: v });
+      await d2dUppdateraLagenhet(lag.id, { antal_knackningar: v });
       setSparFel(null);
     } catch (e) {
       patchaLokalt(lag.id, { antal_knackningar: tidigare });
@@ -955,7 +989,7 @@ export function LagenhetTabell({
     const tidigareStatus = lag.status;
     patchaLokalt(lag.id, patch, "inte_hemma");
     try {
-      await updateRecord(lag.id, patch, "inte_hemma");
+      await d2dUppdateraLagenhet(lag.id, patch, "inte_hemma");
       setSparFel(null);
     } catch (e) {
       patchaLokalt(lag.id, { antal_knackningar: d.antal_knackningar ?? null, senast_kontakt: d.senast_kontakt ?? null }, tidigareStatus);
@@ -972,7 +1006,7 @@ export function LagenhetTabell({
     const tidigare = lag.status;
     patchaLokalt(lag.id, patch, nyStatus);
     try {
-      await updateRecord(lag.id, patch, nyStatus);
+      await d2dUppdateraLagenhet(lag.id, patch, nyStatus);
       setSparFel(null);
       if (nyStatus === "sald" || nyStatus === "scrive") onSalj?.(lag.id);
     } catch (e) {
@@ -1062,6 +1096,7 @@ export function LagenhetTabell({
                       <span className="d2d-lag-row__cell d2d-lag-row__cell--lgh">
                         {lag.title ?? "—"}
                         {arTillfallig(lagData) && !arTillfallig(fastData) && <TillfalligBadge />}
+                        {!!delade?.[lag.id] && <DeladMed ids={delade[lag.id]} minId={minId} kort />}
                       </span>
                       <span className={`d2d-lag-row__cell d2d-lag-row__cell--namn${sparatNamn ? "" : " d2d-lag-row__cell--empty"}`}>
                         {sparatNamn || "—"}
@@ -1221,6 +1256,8 @@ function FastighetsDetalj({
   const [fastighet, setFastighet] = useState<RecordRow | null>(null);
   const [related, setRelated] = useState<RelatedRecord[]>([]);
   const [lagenheter, setLagenheter] = useState<RecordRow[]>([]);
+  const [delade, setDelade] = useState<Record<string, string[]>>({});
+  const [minId, setMinId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [nyTillfallig, setNyTillfallig] = useState(false);
   const loadData = useCallback(async () => {
@@ -1244,13 +1281,17 @@ function FastighetsDetalj({
           .order("title");
         const { data: session } = await supabase.auth.getSession();
         const minId = session.session?.user.id ?? null;
+        setMinId(minId);
         // Kundtjänst ser alla adresser, även andras återkopplingar (som admin).
         const allaAterkopplingar = isAdmin || await arKundtjanstNu();
         setLagenheter(((lagData ?? []) as RecordRow[])
           .filter((l) => !doldAterkoppling(l, minId, allaAterkopplingar))
           .sort(jamforLagenheter));
+        // Adresser som delas med andra säljare ("Delad med …").
+        hamtaDelning(lagIds).then(setDelade).catch(() => setDelade({}));
       } else {
         setLagenheter([]);
+        setDelade({});
       }
     } catch {
       // tyst
@@ -1333,6 +1374,8 @@ function FastighetsDetalj({
           listKey={listKey}
           ready={!loading}
           onOpenLagenhet={onOpenLagenhet}
+          delade={delade}
+          minId={minId}
         />
       </div>
 
@@ -1416,6 +1459,9 @@ export function LagenhetForm({
   // Inloggad användare — för att veta om det är ens eget sälj som ändras.
   const [minId, setMinId] = useState<string | null>(null);
   useEffect(() => { void supabase.auth.getSession().then(({ data: s }) => setMinId(s.session?.user.id ?? null)); }, []);
+  // Delas adressen med andra säljare? ("Delad adress"-rutan)
+  const [deladMed, setDeladMed] = useState<string[]>([]);
+  useEffect(() => { hamtaDelning([lagenhetId]).then((d) => setDeladMed(d[lagenhetId] ?? [])).catch(() => setDeladMed([])); }, [lagenhetId]);
 
   useEffect(() => {
     (async () => {
@@ -1795,6 +1841,7 @@ export function LagenhetForm({
         saljare={data.saljare ? String(data.saljare) : null}
         agare={record.owner_user_id}
       />
+      <DeladMed ids={deladMed} minId={minId} />
 
       {/* Tillfällig lägenhet (skapad av säljare). Ligger den i en tillfällig
           fastighet godkänns den tillsammans med fastigheten — då visas
