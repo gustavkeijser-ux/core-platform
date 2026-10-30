@@ -280,10 +280,16 @@ export function D2DTeliaAvstamning({ onOpenRecord, startManad }: { onOpenRecord?
   useEffect(() => {
     let on = true;
     setLista(null); setLFel(null);
-    supabase.rpc("d2d_telia_avstamning_lista", { p_manad: `${manad}-01` }).then(({ data, error }) => {
+    (async () => {
+      let { data, error } = await supabase.rpc("d2d_telia_avstamning_lista", { p_manad: `${manad}-01` });
+      // Första gången en månad öppnas finns ingen avstämning än — räkna den (sålda utan fil = Endast säljare).
+      if (!error && on && (data as DiffLista).kanUtreda && (data as DiffLista).rader.length === 0) {
+        const kor = await supabase.rpc("d2d_telia_avstamning_kor", { p_manad: `${manad}-01` });
+        if (!kor.error) ({ data, error } = await supabase.rpc("d2d_telia_avstamning_lista", { p_manad: `${manad}-01` }));
+      }
       if (!on) return;
       if (error) setLFel(error.message); else setLista(data as DiffLista);
-    });
+    })();
     return () => { on = false; };
   }, [manad, lv]);
   const omladda = useCallback(() => { setLv((x) => x + 1); uppdatera(); }, [uppdatera]);
