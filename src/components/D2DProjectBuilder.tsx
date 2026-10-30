@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   listRecords, getRecord, createRecord, updateRecord, removeRelation, addRelation,
   listSellers, d2dImportAddresses, d2dHamtaTeliaLagenheter, d2dSetAssignment, d2dSetManualAssignment, d2dApproveProject,
-  d2dDeleteProjekt,
+  d2dDeleteProjekt, d2dGetDeladeAdresser, d2dSetDeladeAdresser,
   d2dGetKartaData, d2dGeokodaNu, type KartaPunkt,
   d2dGetLeveransKartaData, d2dSkapaFastighetFranLeverans, type LeveransPunkt,
   type RecordRow, type SellerOption, type ObjectDef, DataError,
@@ -802,11 +802,19 @@ function AssignmentEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  // Delade adresser (lägenhets-id → säljare som delar den). null = inte hämtat.
+  const [delade, setDelade] = useState<Record<string, string[]> | null>(null);
+  const [delaOppen, setDelaOppen] = useState(false);
   const flera = valda.length > 1;
 
-  // Adressraderna behövs bara när flera säljare delar fastigheten.
   useEffect(() => {
-    if (!flera || lagenheter) return;
+    d2dGetDeladeAdresser(fastighetId).then(setDelade).catch(() => setDelade({}));
+  }, [fastighetId]);
+
+  // Adressraderna behövs när flera säljare delar fastigheten, eller när
+  // adresser ska delas mellan säljare.
+  useEffect(() => {
+    if (!(flera || delaOppen) || lagenheter) return;
     (async () => {
       const { data: rels } = await supabase.from("relationships").select("from_record_id")
         .eq("rel_type", "d2d_lag_fastighet").eq("to_record_id", fastighetId);
@@ -830,7 +838,7 @@ function AssignmentEditor({
       }
       setKarta(start);
     })().catch(() => setError("Kunde inte hämta adresserna."));
-  }, [flera, lagenheter, fastighetId, manuell]);
+  }, [flera, delaOppen, lagenheter, fastighetId, manuell]);
 
   function laggTill(id: string) {
     if (!id || valda.includes(id)) return;
@@ -940,6 +948,9 @@ function AssignmentEditor({
                         <label className={`d2dpb-manual__item${aktiv[l.id] === sid ? " is-checked" : ""}`}>
                           <input type="checkbox" checked={aktiv[l.id] === sid} onChange={() => vaxla(l.id, sid)} />
                           <span className="d2dpb-manual__label">{l.label}</span>
+                          {!!delade?.[l.id] && (
+                            <span className="d2dpb-delad-badge" title={`Delad — ses av ${delade[l.id].map(namn).join(" och ")}`}>Delad</span>
+                          )}
                           {l.status && l.status !== "ej_knackad" && <StatusPill status={l.status} />}
                         </label>
                       </li>
@@ -962,12 +973,196 @@ function AssignmentEditor({
         <button className="btn btn--brand btn--sm" onClick={save} disabled={saving || valda.length === 0 || (flera && !lagenheter)}>
           {saving ? "Sparar…" : "Spara tilldelning"}
         </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          aria-pressed={delaOppen}
+          onClick={() => setDelaOppen((v) => !v)}
+          title="Låt samma adresser synas hos fler än en säljare"
+        >
+          Dela adresser{delade && Object.keys(delade).length > 0 ? ` (${Object.keys(delade).length})` : ""}
+        </button>
         {ok && <span className="d2d-save-ok">✓ {ok}</span>}
         {error && <span className="d2d-error">{error}</span>}
       </div>
+
+      {delaOppen && (
+        <DelningEditor
+          fastighetId={fastighetId}
+          sellers={sellers}
+          lagenheter={lagenheter}
+          forvalda={valda}
+          delade={delade ?? {}}
+          onSaved={(ny) => { setDelade(ny); onSaved(); }}
+          onClose={() => setDelaOppen(false)}
+        />
+      )}
       {sellers.length === 0 && (
         <div className="d2d-empty">Inga säljare med rollen "Dörrsäljare" finns ännu. Skapa användarkonton och tilldela rollen i Supabase Authentication.</div>
       )}
+    </div>
+  );
+}
+
+// =============================================================================
+// Dela adresser — samma adress hos fler än en säljare
+// =============================================================================
+
+/** Lista med alla adresser på fastigheten. Admin väljer vilka säljare som ska
+ *  dela, och bockar i adresserna. En delad adress syns och bearbetas av alla
+ *  säljare i gruppen; statusbyten görs på samma post så alla ser dem. Den
+ *  vanliga tilldelningen (ägaren) påverkas inte. */
+function DelningEditor({
+  fastighetId, sellers, lagenheter, forvalda, delade, onSaved, onClose,
+}: {
+  fastighetId: string; sellers: SellerOption[]; lagenheter: LagRad[] | null;
+  forvalda: string[]; delade: Record<string, string[]>;
+  onSaved: (ny: Record<string, string[]>) => void; onClose: () => void;
+}) {
+  // Gruppen som nya delningar får: redan delade säljare om det finns, annars
+  // fastighetens valda säljare.
+  const [grupp, setGrupp] = useState<string[]>(() => {
+    const befintlig = Object.values(delade)[0];
+    const start = befintlig && befintlig.length >= 2 ? befintlig : forvalda;
+    return start.filter((id) => sellers.some((s) => s.id === id));
+  });
+  const [val, setVal] = useState<Record<string, string[]>>(delade);
+  const [sok, setSok] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  const namn = (id: string) => sellers.find((s) => s.id === id)?.name ?? "Säljare";
+  const gruppOk = grupp.length >= 2;
+  const antalValda = Object.keys(val).length;
+
+  function laggTill(id: string) {
+    if (!id || grupp.includes(id)) return;
+    const ny = [...grupp, id];
+    setGrupp(ny);
+    // Redan ibockade adresser följer gruppen.
+    setVal((v) => Object.fromEntries(Object.keys(v).map((k) => [k, ny])));
+    setOk(null);
+  }
+  function taBort(id: string) {
+    const ny = grupp.filter((x) => x !== id);
+    setGrupp(ny);
+    setVal((v) => Object.fromEntries(Object.keys(v).map((k) => [k, ny])));
+    setOk(null);
+  }
+  function vaxla(lagId: string) {
+    setVal((v) => {
+      const n = { ...v };
+      if (n[lagId]) delete n[lagId]; else n[lagId] = grupp;
+      return n;
+    });
+    setOk(null);
+  }
+  function sattAlla(pa: boolean) {
+    if (!lagenheter) return;
+    setVal(pa ? Object.fromEntries(synliga.map((l) => [l.id, grupp])) : {});
+    setOk(null);
+  }
+
+  async function save() {
+    setSaving(true); setError(null); setOk(null);
+    try {
+      if (antalValda > 0 && !gruppOk) { setError("Välj minst två säljare som ska dela adresserna."); return; }
+      const res = await d2dSetDeladeAdresser(fastighetId, val);
+      const ny = await d2dGetDeladeAdresser(fastighetId);
+      setVal(ny);
+      setOk(res.delade === 0 ? "Inga adresser delas längre."
+        : `${res.delade} ${res.delade === 1 ? "adress delas" : "adresser delas"} av ${grupp.map(namn).join(" och ")}.`);
+      onSaved(ny);
+    } catch (e) {
+      setError(e instanceof DataError ? e.message : "Kunde inte spara delningen.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const q = sok.trim().toLowerCase();
+  const synliga = (lagenheter ?? []).filter((l) => !q || l.label.toLowerCase().includes(q));
+  const ejIGrupp = sellers.filter((s) => !grupp.includes(s.id));
+
+  return (
+    <div className="d2dpb-delning">
+      <div className="d2dpb-delning__head">
+        <div>
+          <strong>Dela adresser</strong>
+          <p className="ink-faint d2dpb-assign__hint">
+            Bocka i adresser som fler än en säljare ska se. De bearbetas av alla i gruppen och alla ser varandras statusändringar.
+            Den vanliga tilldelningen påverkas inte.
+          </p>
+        </div>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onClose} aria-label="Stäng">✕</button>
+      </div>
+
+      <div className="d2dpb-assign__sellers">
+        <span className="ink-faint d2dpb-delning__etikett">Delas av:</span>
+        {grupp.map((id) => (
+          <span key={id} className="d2dpb-assign__chip">
+            {namn(id)}
+            <button type="button" aria-label={`Ta bort ${namn(id)}`} onClick={() => taBort(id)}>✕</button>
+          </span>
+        ))}
+        {ejIGrupp.length > 0 && (
+          <select className="input d2dpb-assign__add" value="" onChange={(e) => laggTill(e.target.value)} aria-label="Lägg till säljare i gruppen">
+            <option value="">+ Lägg till säljare…</option>
+            {ejIGrupp.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+      </div>
+      {!gruppOk && <p className="d2d-error d2dpb-assign__hint">Välj minst två säljare.</p>}
+
+      {!lagenheter && !error && <div className="d2d-loading">Laddar adresser…</div>}
+      {lagenheter && lagenheter.length === 0 && <div className="d2d-empty">Fastigheten har inga adresser ännu.</div>}
+      {lagenheter && lagenheter.length > 0 && (
+        <div className="d2dpb-manual__col d2dpb-delning__lista">
+          <div className="d2dpb-manual__head d2dpb-delning__verktyg">
+            <input
+              className="input"
+              type="search"
+              placeholder="Sök adress…"
+              value={sok}
+              onChange={(e) => setSok(e.target.value)}
+              aria-label="Sök adress"
+            />
+            <span className="d2d-card__badge">{antalValda} av {lagenheter.length}</span>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => sattAlla(true)} disabled={!gruppOk}>Alla</button>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => sattAlla(false)} disabled={antalValda === 0}>Inga</button>
+          </div>
+          <ul className="d2dpb-manual__list">
+            {synliga.map((l) => {
+              const delas = val[l.id];
+              const agare = l.owner ? namn(l.owner) : null;
+              return (
+                <li key={l.id}>
+                  <label className={`d2dpb-manual__item${delas ? " is-checked" : ""}`}>
+                    <input type="checkbox" checked={!!delas} disabled={!gruppOk && !delas} onChange={() => vaxla(l.id)} />
+                    <span className="d2dpb-manual__label">
+                      {l.label}
+                      <small className="ink-faint d2dpb-delning__vem">
+                        {delas ? `Delas av ${delas.map(namn).join(" och ")}` : agare ? `Tilldelad ${agare}` : "Ej tilldelad"}
+                      </small>
+                    </span>
+                    {l.status && l.status !== "ej_knackad" && <StatusPill status={l.status} />}
+                  </label>
+                </li>
+              );
+            })}
+            {synliga.length === 0 && <li className="ink-faint d2dpb-manual__empty">Inga adresser matchar sökningen.</li>}
+          </ul>
+        </div>
+      )}
+
+      <div className="d2dpb-assign__actions">
+        <button className="btn btn--brand btn--sm" onClick={save} disabled={saving || !lagenheter || (antalValda > 0 && !gruppOk)}>
+          {saving ? "Sparar…" : "Spara delning"}
+        </button>
+        {ok && <span className="d2d-save-ok">✓ {ok}</span>}
+        {error && <span className="d2d-error">{error}</span>}
+      </div>
     </div>
   );
 }
@@ -1253,6 +1448,7 @@ function FastighetRow({
           <span className={`d2dpb-rad__saljare${assignment.length ? "" : " d2dpb-rad__saljare--ingen"}`}
             title={assignment.map((x) => `${namn(x.user_id)} ${x.procent} %`).join(", ")}>
             {assignment.length ? assignment.map((x) => namn(x.user_id)).join(", ") : "Ingen säljare tilldelad"}
+            {Number(data.delade_adresser) > 0 && <i title="Adresser som fler än en säljare ser"> · {Number(data.delade_adresser)} delade</i>}
           </span>
           <span className={`d2dpb-rad__info${infoSaknas ? " d2dpb-rad__info--saknas" : ""}`} title={infoText || "Fastighetsinfo saknas"}>
             {infoText || "Fastighetsinfo saknas"}
