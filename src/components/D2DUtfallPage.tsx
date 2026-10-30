@@ -5,6 +5,8 @@ import { skrivXlsx, laddaNed } from "@/lib/xlsxSkriv";
 import { byggUtfallRapport, lasVtExport, type RapportData } from "@/lib/d2dUtfallRapport";
 import { FilterPills, SkeletonRows } from "./PageChrome";
 import { PenTiles, PenTabell, usePenetration, datumStr, pctStr, PEN_MATT, type PenSumma } from "./PenetrationTab";
+import { D2DTeliaAvstamning } from "./D2DTeliaAvstamning";
+import { readRoute } from "@/lib/route";
 import "@/styles/d2d.css";
 
 /* =============================================================================
@@ -15,6 +17,8 @@ import "@/styles/d2d.css";
      • Sålda — lägenheter med status "Såld" i D2D.
      • Scrive — lägenheter med ett signerat Scrive-avtal.
      • Totalt — båda tillsammans (en kund räknas en gång).
+     • Telia-avstämning — månadens sälj mot Telias orderfil, nyckeltal per säljare och team,
+       differenslista och Excel (D2DTeliaAvstamning.tsx). Nås direkt via #/d2dutfall?flik=telia&manad=ÅÅÅÅ-MM.
    ========================================================================== */
 
 /** ai = AI:s tolkning av kommentaren (när säljaren inte själv valt skäl). */
@@ -166,6 +170,9 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
   const [projekt, setProjekt] = useState("");
   const [saljare, setSaljare] = useState("");
   const [kalla, setKalla] = useState<Kalla>("sald");
+  // Fliken Telia-avstämning ligger utanför Sålda/Scrive/Totalt (egen månad, egna filter).
+  const [startQuery] = useState(() => readRoute().query);
+  const [telia, setTelia] = useState(() => startQuery.get("flik") === "telia");
   const [alla, setAlla] = useState<Partial<Record<Kalla, Utfall>> | null>(null);
   const u = alla?.[kalla] ?? null;
   const [fel, setFel] = useState<string | null>(null);
@@ -304,14 +311,20 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
         {FLIKAR.map(([k, label]) => {
           const n = alla?.[k]?.sald.antal;
           return (
-            <button key={k} role="tab" aria-selected={kalla === k} className={`tab-bar__tab${kalla === k ? " tab-bar__tab--active" : ""}`}
-              onClick={() => setKalla(k)}>
+            <button key={k} role="tab" aria-selected={!telia && kalla === k} className={`tab-bar__tab${!telia && kalla === k ? " tab-bar__tab--active" : ""}`}
+              onClick={() => { setTelia(false); setKalla(k); }}>
               {label}{n != null && <span className="tab-bar__count">{n}</span>}
             </button>
           );
         })}
+        <button role="tab" aria-selected={telia} className={`tab-bar__tab${telia ? " tab-bar__tab--active" : ""}`} onClick={() => setTelia(true)}>
+          Telia-avstämning
+        </button>
       </div>
 
+      {telia && <D2DTeliaAvstamning onOpenRecord={onOpenRecord} startManad={startQuery.get("manad")} />}
+
+      {!telia && <>
       <div className="utf__filter">
         <FilterPills
           active={period}
@@ -632,6 +645,7 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
           </>)}
         </section>
       )}
+      </>}
     </div>
   );
 }
