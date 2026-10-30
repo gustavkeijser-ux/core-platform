@@ -16,6 +16,7 @@ import { startaSynligPoll } from "@/lib/synligPoll";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { FeedbackPage } from "@/components/FeedbackPage";
 import { ObjectListPage } from "@/components/ObjectListPage";
+import { KoncernmoderRegister } from "@/components/KoncernmoderRegister";
 import { D2DLagenheterPage } from "@/components/D2DLagenheterPage";
 import { RecordDrawer } from "@/components/RecordDrawer";
 import { D2DSellerApp } from "@/components/D2DSellerApp";
@@ -56,7 +57,8 @@ type View =
   | { kind: "feedback" }
   | { kind: "settings"; tab: SettingsTab }
   | { kind: "fmo" }
-  | { kind: "leveransoversikt" };
+  | { kind: "leveransoversikt" }
+  | { kind: "km" };
 
 /** URL → vy. Okänt/tomt → översikten. */
 function viewFromSegs(segs: string[]): View {
@@ -82,7 +84,9 @@ function viewFromSegs(segs: string[]): View {
     case "feedback": return { kind: "feedback" };
     case "fmo": return { kind: "fmo" };
     case "leveransoversikt": return { kind: "leveransoversikt" };
-    case "list": if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
+    // Koncernmödrar: registret med utdelning (mockupen 30 okt) ersätter den generiska listan.
+    case "koncernmodrar": return { kind: "km" };
+    case "list": if (segs[1] === "koncernmoder") return { kind: "km" }; if (segs[1]) return { kind: "list", objectType: segs[1] }; break;
   }
   return { kind: "dashboard" };
 }
@@ -97,6 +101,7 @@ const segsFromView = (v: View): string[] =>
   : v.kind === "case" ? ["arende", v.id]
   : v.kind === "newcase" ? ["nytt-arende"]
   : v.kind === "settings" ? ["installningar", v.tab]
+  : v.kind === "km" ? ["koncernmodrar"]
   : [v.kind];
 
 export default function App() {
@@ -326,6 +331,7 @@ export default function App() {
     : view?.kind === "settings" ? (SETTINGS_TABS.find((t) => t.key === view.tab)?.sub ?? "")
     : view?.kind === "fmo" ? "Fastigheter som skickats på FMO-check"
     : view?.kind === "leveransoversikt" ? "Projektplanen per fastighetsägare"
+    : view?.kind === "km" ? "Registret: här läses kunder in, kompletteras och delas ut till säljare"
     : tenantName;
 
   // Feedbackknappen: menyns moduler, och den man står i (förval).
@@ -337,6 +343,7 @@ export default function App() {
   ]));
   const fbCurrent =
     view?.kind === "list" ? (listDef?.labelPlural ?? "Annat")
+    : view?.kind === "km" ? "Koncernmödrar"
     : view?.kind === "dashboard" ? "Översikt"
     : view?.kind === "tasks" ? "Mina uppgifter"
     : view?.kind === "settings" ? (view.tab === "import" ? "Import" : view.tab === "m365" ? "Microsoft 365" : view.tab === "priser" ? "Door2Door" : "Inställningar")
@@ -407,6 +414,7 @@ export default function App() {
           : view?.kind === "settings" ? "__settings__"
           : view?.kind === "fmo" ? "__fmo__"
           : view?.kind === "leveransoversikt" ? "__leveransoversikt__"
+          : view?.kind === "km" ? "__km__"
           : null
         }
         onSelect={(key) =>
@@ -427,6 +435,7 @@ export default function App() {
             : key === "__feedback__" ? { kind: "feedback" }
             : key === "__fmo__" ? { kind: "fmo" }
             : key === "__leveransoversikt__" ? { kind: "leveransoversikt" }
+            : key === "__km__" || key === "koncernmoder" ? { kind: "km" }
             : { kind: "list", objectType: key }
           )
         }
@@ -466,6 +475,7 @@ export default function App() {
                 : view?.kind === "settings" ? "Inställningar"
                 : view?.kind === "fmo" ? "FMO-check"
                 : view?.kind === "leveransoversikt" ? "Leveransöversikt"
+                : view?.kind === "km" ? "Koncernmödrar"
                 : ""}
             </h1>
             <div className="topbar__sub">{subtitle}</div>
@@ -549,6 +559,10 @@ export default function App() {
         )}
         {view?.kind === "fmo" && <FmoPage />}
 
+        {view?.kind === "km" && objectDefFor("koncernmoder") && (
+          <KoncernmoderRegister key="km" objectDef={objectDefFor("koncernmoder")!} onOpenRecord={openRecord} reloadKey={listReloadKey} />
+        )}
+
         {/* Leveransöversikt: samma leveranser som Projektplanen, som kort per fastighetsägare. */}
         {view?.kind === "leveransoversikt" && objectDefFor("delivery") && (
           <ObjectListPage
@@ -596,7 +610,7 @@ export default function App() {
             recordId={openRecordId}
             objectDefFor={objectDefFor}
             onClose={() => goBack(() => setOpenRecordId(null))}
-            onOpenList={(key) => navigate(["list", key])}
+            onOpenList={(key) => navigate(key === "__km__" || key === "koncernmoder" ? ["koncernmodrar"] : ["list", key])}
             onSaved={() => {
               setListReloadKey((k) => k + 1);
             }}
