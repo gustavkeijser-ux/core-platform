@@ -67,7 +67,7 @@ export function PenTabell({ rader, medKoncern }: { rader: PenRad[]; medKoncern?:
               <td data-label="Fastighet" className="rtable__title">{r.fastighet}</td>
               {medKoncern && <td data-label="Koncernmoder">{r.koncernmoder ?? <span className="pen__sub">–</span>}</td>}
               <td data-label="HC" className="pen__num">{r.hc?.toLocaleString("sv-SE") ?? "–"}</td>
-              {PEN_MATT.map(([k]) => <td key={k} data-label={k} className="pen__num">{pctStr(r[k] as number | null)}</td>)}
+              {PEN_MATT.map(([k, lbl]) => <td key={k} data-label={lbl} className="pen__num">{pctStr(r[k] as number | null)}</td>)}
               <td data-label="Avtal" className="pen__avtal">
                 {(r.avtal ?? []).map((a, i) => (
                   <span key={i} className="pen__chip" title={[a.typ, a.kollektiv_bb && `Kollektivt BB: ${a.kollektiv_bb}`, a.kollektiv_iptv && `Kollektiv TV: ${a.kollektiv_iptv}`].filter(Boolean).join(" · ")}>
