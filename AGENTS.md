@@ -29,17 +29,18 @@ Varje agent ändrar bara i sitt område. Behöver du ändra något som ägs av n
 
 ## 3. Arbetsflöde
 
-1. **Kodförrådet:** `https://github.com/gustavkeijser-ux/core-platform`. Vi jobbar i grenen **`staging`** (testmiljön, se 3b) — aldrig i `main`. Klona till t.ex. `~/work/core-platform`, kör `npm ci`. Hämta alltid färskt före en ändring: `git fetch -q && git checkout -q -B staging origin/staging`.
+1. **Kodförrådet:** `https://github.com/gustavkeijser-ux/core-platform`. **Varje uppgift görs i en egen gren** `uppgift-<id>` som utgår från `main` (se 3b) — aldrig direkt i `staging` eller `main`. Klona till t.ex. `~/work/core-platform`, kör `npm ci`. Hämta alltid färskt före en uppgift: `git fetch -q && git checkout -q -B uppgift-<id> origin/main`.
 2. **Ändra lokalt**, kontrollera:
    - Frontend: `node_modules/.bin/tsc --noEmit -p tsconfig.json`
    - Edge function: kopiera filen, byt `jsr:` mot `npm:` i importerna, kör `deno check`.
    - UI: skärmdump i Playwright (Chromium finns i `/opt/pw-browsers/chromium`) i 1280 och 390 px.
 3. **Pusha** (det finns ingen git-push härifrån — vi går via GitHubs webbeditor i Claude-appens inbyggda webbläsare, där Gustav är inloggad):
    - `python3 verktyg/gh_push.py e <sökväg> "<meddelande>" /tmp/p1.js` (ändrad fil) eller `n` (ny fil).
-   - Öppna `https://github.com/gustavkeijser-ux/core-platform/edit/staging/<sökväg>` (ändrad) eller `.../new/staging/<katalog>` (ny) och kör innehållet i `/tmp/p1.js` med webbläsarens JavaScript-verktyg. Svaret ska vara `ok <längd>`.
+   - Öppna `https://github.com/gustavkeijser-ux/core-platform/edit/uppgift-<id>/<sökväg>` (ändrad) eller `.../new/uppgift-<id>/<katalog>` (ny) och kör innehållet i `/tmp/p1.js` med webbläsarens JavaScript-verktyg. Svaret ska vara `ok <längd>`.
+   - Ändrar du en fil som du redan pushat i samma uppgift: jämför mot grenen, inte main — `OLD=<(git show origin/uppgift-<id>:<sökväg>) python3 verktyg/gh_push.py e …`.
    - Felet `len …` betyder att filen ändrats på GitHub sedan du hämtade (en annan agent hann före). Hämta om, gör om ändringen, generera nytt skript. Skriv aldrig över.
-   - Verifiera: `git fetch -q && git show origin/staging:<sökväg> | cmp -s - <sökväg> && echo OK`.
-   - Kontrollera bygget på `https://github.com/gustavkeijser-ux/core-platform/actions` (raderna `.Box-row`, aria-label "completed successfully"). Varje push till `staging` byggs till test.crm.connectestate.se ("Testmiljön (staging)"). `main` är låst: bara Gustav publicerar dit.
+   - Verifiera: `git fetch -q && git show origin/uppgift-<id>:<sökväg> | cmp -s - <sökväg> && echo OK`.
+   - Kontrollera bygget på `https://github.com/gustavkeijser-ux/core-platform/actions` (raderna `.Box-row`, aria-label "completed successfully"). Varje push till en uppgiftsgren slås automatiskt ihop med `staging` ("Uppgift till testmiljön") och testmiljön byggs om ("Testmiljön (staging)"). Misslyckas sammanslagningen krockar uppgiften med något annat i testmiljön: lös det i grenen och pusha igen. `main` är låst: bara Gustav publicerar dit.
 4. **Supabase** (via Supabase-verktygen): ändringar görs i testgrenen **`sdidcwxezkkksheqguot`**. Riktiga projektet `gpxwfboyjwcaqeinxxwr` får bara läsfrågor (se 3b).
    - **Migrationsfiler döps efter tid**, inte löpnummer: `supabase/migrations/AAAAMMDD_HHMM_<omrade>_<vad>.sql` (t.ex. `20261006_1405_leverans_portar.sql`). Då krockar två agenter aldrig. Filerna `0001–0069` är historik.
    - Kör SQL med `execute_sql`. `apply_migration` och långa skript kan hänga (särskilt `DROP`): använd `create or replace` (även `create or replace trigger`), dela upp i mindre delar, och undvik `DROP`. Hänger en `UPDATE` med långa texter: skicka texten base64-kodad, `convert_from(decode('…','base64'),'UTF8')`.
@@ -55,14 +56,18 @@ Varje agent ändrar bara i sitt område. Behöver du ändra något som ägs av n
 5. **Skriv i `ANDRINGSLOGG.md`** (se nästa avsnitt) och pusha den sist.
 6. **Svara Gustav kort:** vad som ändrats, vad det gav (siffror om det finns), och om något väntar på honom.
 
-## 3b. Testmiljön (gäller alltid, sedan 29 okt 2026)
+## 3b. Testmiljön och uppgifter (gäller alltid)
 
-Vi jobbar i en testmiljö och Gustav väljer när något publiceras till riktiga CRM:et.
+Vi jobbar i en testmiljö. Gustav provar varje uppgift där och **publicerar eller nekar den för sig** under Inställningar → Publicera i riktiga CRM:et.
 
-- **Grenar:** `staging` = testmiljön (test.crm.connectestate.se), `main` = riktiga CRM:et. Agenter pushar **bara till `staging`**: hämta med `git fetch -q && git checkout -q -B staging origin/staging`, öppna `…/edit/staging/<sökväg>` resp. `…/new/staging/<katalog>`, verifiera mot `origin/staging`. Pusha aldrig till `main`.
-- **Databas:** testdatabasen är Supabase-grenen "Test", projekt-id `sdidcwxezkkksheqguot`. `execute_sql` mot testgrenen för att prova; mot riktiga databasen bara läsfrågor. **Varje databasändring sparas som migreringsfil** i `supabase/migrations/` (namnregeln ovan). Filen körs automatiskt mot testdatabasen när den pushas till `staging`, och mot riktiga databasen när Gustav publicerar. Skriv migreringar så att de går att köra på en databas där ändringen inte redan gjorts (de körs exakt en gång per databas; vilka som körts står i `ce_drift.migreringar`).
-- **Edge functions:** deploya till testgrenen (`sdidcwxezkkksheqguot`). Testgrenen saknar riktiga CRM:ets hemligheter, så funktioner som mejlar, når Scrive eller Microsoft 365 kan inte provas fullt ut där. Efter att Gustav publicerat deployas samma kod till riktiga projektet — bara när Gustav ber om det.
-- **Publicera (bara Gustav):** Inställningar → Publicera i riktiga CRM:et (eller GitHub → Pull requests → `staging` → `main` → Merge). Då körs nya migreringar mot riktiga databasen (`verktyg/kor_migreringar.sh`, stoppar vid första fel) och riktiga sidan byggs. Agenter publicerar aldrig: avsluta med att ändringen ligger i testmiljön och väntar på Gustavs godkännande.
+- **En uppgift = en gren.** Allt du gör för en beställning från Gustav (kod, migreringar, edge functions) hör till samma uppgift. Namn: `uppgift-<id>` där `<id>` är `AAAAMMDD-HHMM-kort-namn` (små bokstäver, siffror och bindestreck, t.ex. `uppgift-20261030-1405-bekraftad-salj`). Gör flera saker? En gren per sak Gustav ska kunna godkänna för sig.
+- **Skapa grenen** från `main`: öppna `https://github.com/gustavkeijser-ux/core-platform/branches`, klicka **New branch**, skriv namnet, välj källa `main`, klicka **Create new branch**. Kontrollera med `git ls-remote origin uppgift-<id>`.
+- **Första filen i grenen** är `uppgifter/<id>.md` (kopiera `uppgifter/MALL.md`): `titel`, `omrade`, `bestallare`, `testlank` (adress i test.crm.connectestate.se där ändringen syns) och en sammanfattning på svenska. Det är det Gustav ser på Publicera-sidan, och sammanfattningen blir raden i `ANDRINGSLOGG.md` när uppgiften publiceras. Uppdatera filen om uppgiften ändrar karaktär.
+- **Pusha aldrig till `staging` eller `main`.** Uppgiftsgrenen hamnar i testmiljön automatiskt. Ändringar som görs direkt i `staging` går inte att publicera.
+- **Grenar:** `staging` = testmiljön (test.crm.connectestate.se, alla uppgifter som väntar eller nekats), `main` = riktiga CRM:et (bara publicerade uppgifter). Ändringar i `.github/workflows/` kan inte läggas in i testmiljön automatiskt — be Gustav.
+- **Databas:** testdatabasen är Supabase-grenen "Test", projekt-id `sdidcwxezkkksheqguot`. `execute_sql` mot testgrenen för att prova; mot riktiga databasen bara läsfrågor. **Varje databasändring sparas som migreringsfil** i uppgiftens gren (`supabase/migrations/`, namnregeln ovan). Filen körs automatiskt mot testdatabasen när uppgiften läggs in i testmiljön, och mot riktiga databasen när Gustav publicerar uppgiften. Skriv migreringar så att de går att köra på en databas där ändringen inte redan gjorts (de körs exakt en gång per databas; vilka som körts står i `ce_drift.migreringar`). En migrering får inte bygga på en annan uppgifts opublicerade migrering.
+- **Edge functions:** deploya till testgrenen (`sdidcwxezkkksheqguot`). Testgrenen saknar riktiga CRM:ets hemligheter, så funktioner som mejlar, når Scrive eller Microsoft 365 kan inte provas fullt ut där. Efter att Gustav publicerat uppgiften deployas samma kod till riktiga projektet — bara när Gustav ber om det.
+- **Publicera eller neka (bara Gustav):** Inställningar → Publicera. Publicera = uppgiftens gren slås ihop med `main` (nya migreringar körs mot riktiga databasen, stoppar vid första fel, sedan byggs riktiga sidan), loggraden skrivs och grenen tas bort. Neka = grenen döps om till `nekad-<id>`; den ligger kvar i testmiljön men publiceras aldrig (kan ångras). Agenter publicerar och nekar aldrig: avsluta med att uppgiften ligger i testmiljön och väntar på Gustavs godkännande.
 - **Synka testmiljön:** Actions → "Synka testmiljön" → Run workflow → skriv `SYNKA`. Kopierar riktiga databasen (inkl. inloggningar) till test; opublicerade migreringar körs om. Schemalagda jobb, Vault, Storage-filer och funktionshemligheter följer inte med, så testmiljön skickar aldrig mejl.
 - Testmiljön innehåller riktiga personuppgifter — samma försiktighet som i riktiga CRM:et.
 
@@ -70,7 +75,7 @@ Vi jobbar i en testmiljö och Gustav väljer när något publiceras till riktiga
 
 `ANDRINGSLOGG.md` är systemets minne. Ingen agent minns andra chattar — det som inte står i loggen har inte hänt.
 
-- Lägg till **en rad per avslutad ändring, överst** under dagens datum (nyast först).
-- Format: `- [Område] Vad som ändrats och varför. Filer: … DB: … Väntar: …` (utelämna delar som inte finns).
-- Pusha loggen med `gh_push.py e ANDRINGSLOGG.md`. Får du `len …`: hämta om, lägg till din rad igen, försök igen.
+- **Raden skrivs automatiskt när Gustav publicerar en uppgift**, från sammanfattningen i `uppgifter/<id>.md`. Skriv därför inte själv i `ANDRINGSLOGG.md` i en vanlig uppgift — det ger krockar mellan uppgifterna.
+- Sammanfattningen ska fungera som loggrad: vad som ändrats och varför, gärna `Filer: … DB: … Väntar: …` (utelämna delar som inte finns).
+- Undantag: Master håller loggen ren (öppna punkter, dubbletter) i en egen uppgift.
 - Lägg även till under **Öppna punkter** sådant som väntar på Gustav eller en annan agent, och stryk det som blivit klart.
