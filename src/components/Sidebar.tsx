@@ -46,10 +46,10 @@ type Props = {
 };
 
 /** Vad varje arbetsvy visar i menyn. Admin (och ingen vy) visar allt. */
-const VY_MENY: Record<Exclude<Arbetsvy, "admin">, { grupper: string[]; arenden: boolean; register: boolean }> = {
-  fastighetssaljare: { grupper: ["salj"], arenden: false, register: true },
-  d2d: { grupper: ["d2d"], arenden: false, register: false },
-  leverans: { grupper: ["leverans"], arenden: true, register: true },
+const VY_MENY: Record<Exclude<Arbetsvy, "admin">, { sektioner: string[]; arenden: boolean }> = {
+  fastighetssaljare: { sektioner: ["salj", "processer", "register"], arenden: false },
+  d2d: { sektioner: ["d2d"], arenden: false },
+  leverans: { sektioner: ["processer", "register"], arenden: true },
 };
 
 function initialer(namn: string) {
@@ -57,7 +57,39 @@ function initialer(namn: string) {
   return ((delar[0]?.[0] ?? "") + (delar[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
-/* ── Menygrupper ─────────────────────────────────────────────────────── */
+/* ── Menyn (mockupen "koncernmoder, affär och leverans", 30 okt 2026) ──────
+   ARBETSYTA (Översikt, Mina uppgifter) · SÄLJ · PROCESSER · REGISTER som platta
+   sektioner; Door to door ligger kvar som utfällbar grupp. Ett menyval med
+   `obj` visas bara när användaren får läsa den objekttypen. */
+
+type MenuItem = { key: string; label?: string; obj?: string; admin?: boolean };
+type MenuSection = { id: string; label: string; items: MenuItem[] };
+
+const SEKTIONER: MenuSection[] = [
+  { id: "salj", label: "Sälj", items: [
+    { key: "__km__", label: "Koncernmödrar", obj: "koncernmoder" },
+    { key: "deal", label: "Affärer" },
+    { key: "uppstartsmote" },
+  ] },
+  { id: "processer", label: "Processer", items: [
+    { key: "onboarding" },
+    { key: "delivery", label: "Leverans" },
+    { key: "__leveransoversikt__", label: "Leveransöversikt", obj: "delivery" },
+    { key: "flit_sdu" },
+    { key: "appleverans" },
+    { key: "hyresforhandling" },
+    { key: "__fmo__", label: "FMO Check", obj: "deal", admin: true },
+  ] },
+  { id: "register", label: "Register", items: [
+    { key: "property" },
+    { key: "contact" },
+    { key: "agreement" },
+    { key: "direktagt_bolag" },
+    { key: "forvaltningsbolag" },
+    { key: "partner" },
+    { key: "customer" },
+  ] },
+];
 
 type MenuGroup = {
   id: string;
@@ -68,32 +100,6 @@ type MenuGroup = {
 };
 
 const MENU_GROUPS: MenuGroup[] = [
-  {
-    id: "salj",
-    label: "Säljprocess",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 12l4-4 3 3 5-6" />
-        <path d="M10 5h4v4" />
-      </svg>
-    ),
-    keys: [
-      "forvaltningsbolag", "koncernmoder", "direktagt_bolag", "property", "deal", "__fmo__", "uppstartsmote", "hyresforhandling",
-    ],
-  },
-  {
-    id: "leverans",
-    label: "Leveransprocess",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M1 3h9v7H1z" />
-        <path d="M10 6h3l2 3v4h-5" />
-        <circle cx="4" cy="13" r="1.5" />
-        <circle cx="12" cy="13" r="1.5" />
-      </svg>
-    ),
-    keys: ["onboarding", "delivery", "flit_sdu", "appleverans"],
-  },
   {
     id: "d2d",
     label: "Door to door",
@@ -107,12 +113,11 @@ const MENU_GROUPS: MenuGroup[] = [
   },
 ];
 
-/** Register (Förslag B punkt 6): kunder, kontakter, avtal och partners —
- *  det man slår upp, skilt från det man arbetar med. */
-const REGISTER_KEYS = ["customer", "contact", "agreement", "partner"];
-
-/** Nycklar som inte grupperas utan visas fristående */
-const GROUPED_KEYS = new Set([...MENU_GROUPS.flatMap((g) => g.keys), ...REGISTER_KEYS]);
+/** Nycklar som visas i sektionerna eller grupperna; övriga objekt hamnar sist under Register. */
+const GROUPED_KEYS = new Set([
+  ...MENU_GROUPS.flatMap((g) => g.keys),
+  ...SEKTIONER.flatMap((s) => s.items.map((i) => i.obj ?? i.key)),
+]);
 
 /** Färdiga ärendevyer överst i menyn (ÄRENDEN). Märket visar antal. */
 const CASE_VIEWS: Array<{ key: string; label: string; count?: string; alert?: boolean }> = [
@@ -238,6 +243,46 @@ const ICONS: Record<string, JSX.Element> = {
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
     </svg>
   ),
+  __km__: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 14V5l4-2.5L10 5v9" />
+      <path d="M10 8h4v6" />
+      <path d="M5 8h2M5 11h2M12 11h.5" />
+    </svg>
+  ),
+  uppstartsmote: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="12" height="11" rx="1.5" />
+      <path d="M2 7h12M5.5 1.5v3M10.5 1.5v3" />
+    </svg>
+  ),
+  onboarding: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 8h8M7 4l4 4-4 4" />
+      <path d="M12 2.5h2v11h-2" />
+    </svg>
+  ),
+  hyresforhandling: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12l4-4 3 3 5-6" />
+      <path d="M11 5h3v3" />
+      <path d="M2 14h12" />
+    </svg>
+  ),
+  __fmo__: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="6" />
+      <path d="M5.5 8.5l1.8 1.8 3.4-4" />
+    </svg>
+  ),
+  __leveransoversikt__: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.5" y="2" width="5.5" height="5" rx="1" />
+      <rect x="9" y="2" width="5.5" height="5" rx="1" />
+      <rect x="1.5" y="9" width="5.5" height="5" rx="1" />
+      <rect x="9" y="9" width="5.5" height="5" rx="1" />
+    </svg>
+  ),
   support_case: (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 3h12a1 1 0 011 1v6a1 1 0 01-1 1H5l-3 3V4a1 1 0 011-1z" />
@@ -346,18 +391,16 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
   }
 
   const vyMeny = arbetsvy && arbetsvy !== "admin" ? VY_MENY[arbetsvy] : null;
-  const visaGrupp = (id: string) => !vyMeny || vyMeny.grupper.includes(id);
+  const visaSektion = (id: string) => !vyMeny || vyMeny.sektioner.includes(id);
   const visaArenden = !vyMeny || vyMeny.arenden;
-  const visaRegister = !vyMeny || vyMeny.register;
-  // En vy med en enda grupp: håll den utfälld, så man slipper klicka.
-  const ensamGrupp = vyMeny && vyMeny.grupper.length === 1 && !vyMeny.arenden ? vyMeny.grupper[0] : null;
+  // D2D-vyn har bara den gruppen: håll den utfälld, så man slipper klicka.
+  const ensamGrupp = vyMeny && vyMeny.sektioner.length === 1 && vyMeny.sektioner[0] === "d2d" ? "d2d" : null;
 
   // Objektmap för snabb lookup
   const objMap = new Map(objects.map((o) => [o.key, o]));
 
-  // Fristående objekt (inte i någon grupp eller i Register)
+  // Objekt som inte finns i någon sektion eller grupp hamnar sist under Register.
   const standalone = objects.filter((o) => !GROUPED_KEYS.has(o.key) && !OWN_VIEW.has(o.key));
-  const registerItems = REGISTER_KEYS.map((k) => objMap.get(k)).filter(Boolean) as ObjectDef[];
 
   // Om activeKey finns i en grupp, se till att den gruppen är expanderad
   // (vid mount och vid navigation)
@@ -419,57 +462,78 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           <VyValjare vyer={arbetsvyer!} vald={arbetsvy ?? null} onValj={(v) => onValjArbetsvy?.(v)} />
         )}
         <nav className="sidebar__nav">
+        <div className="sidebar__section-label">Arbetsyta</div>
         {item("__dashboard__", "Översikt", ICONS.__dashboard__)}
         {item("__tasks__", "Mina uppgifter", ICONS.__tasks__)}
 
-        <div className="sidebar__section-label">Moduler</div>
-
-        {/* ÄRENDEN — allt som är arbete, överst under Översikt (Förslag B, punkt 6).
-         *  Fälls ut/ihop som övriga moduler. */}
-        {canCases && visaArenden && (() => {
-          const caseActive = (activeKey ?? "").startsWith("__cases_") || activeKey === "__newcase__";
-          const isOpen = !!expanded.arenden || caseActive;
-          const forsenade = caseCounts?.overdue ?? 0;
+        {/* SÄLJ · PROCESSER · REGISTER — platta sektioner enligt mockupen. */}
+        {SEKTIONER.map((sek) => {
+          if (!visaSektion(sek.id)) return null;
+          const rader = sek.items.filter((it) => {
+            if (it.admin && !isAdmin) return false;
+            const objKey = it.obj ?? it.key;
+            return objKey.startsWith("__") ? true : objMap.has(objKey);
+          });
+          const extra = sek.id === "register" ? standalone : [];
+          const arendenHar = sek.id === "processer" && canCases && visaArenden;
+          if (rader.length === 0 && extra.length === 0 && !arendenHar) return null;
           return (
-            <div className="sidebar__group">
-              <button
-                className="sidebar__item sidebar__item--group"
-                aria-expanded={isOpen}
-                onClick={() => toggle("arenden")}
-              >
-                {ICONS.support_case}
-                <span className="sidebar__label">Ärenden</span>
-                {!isOpen && forsenade > 0 && <span className="sidebar__badge sidebar__badge--alert" title="Försenade">{forsenade}</span>}
-                <Chevron open={isOpen} />
-              </button>
-              {isOpen && (
-                <div className="sidebar__children">
-                  {CASE_VIEWS.map((v) => {
-                    const n = v.count ? caseCounts?.[v.count] : undefined;
-                    return (
-                      <button key={v.key} className="sidebar__item sidebar__item--child"
-                        aria-current={activeKey === `__cases_${v.key}__`}
-                        onClick={() => selectAndClose(`__cases_${v.key}__`)}>
-                        <span className="sidebar__label">{v.label}</span>
-                        {!!n && <span className={`sidebar__badge${v.alert ? " sidebar__badge--alert" : ""}`}>{n}</span>}
-                      </button>
-                    );
-                  })}
-                  <button className="sidebar__item sidebar__item--child sidebar__item--create" aria-current={activeKey === "__newcase__"}
-                    onClick={() => selectAndClose("__newcase__")}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-                    <span className="sidebar__label">Skapa ärende</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <Fragment key={sek.id}>
+              <div className="sidebar__section-label">{sek.label}</div>
+              {rader.map((it) => {
+                const obj = objMap.get(it.obj ?? it.key);
+                const label = it.label ?? obj?.labelPlural ?? it.key;
+                const icon = ICONS[it.key] ?? ICONS[it.obj ?? ""] ?? fallbackIcon();
+                return item(it.key, label, icon);
+              })}
+              {extra.map((o) => item(o.key, o.labelPlural, ICONS[o.key] ?? fallbackIcon()))}
+              {/* ÄRENDEN — under Processer, fälls ut/ihop som förut. */}
+              {arendenHar && (() => {
+                const caseActive = (activeKey ?? "").startsWith("__cases_") || activeKey === "__newcase__";
+                const isOpen = !!expanded.arenden || caseActive;
+                const forsenade = caseCounts?.overdue ?? 0;
+                return (
+                  <div className="sidebar__group">
+                    <button
+                      className="sidebar__item sidebar__item--group"
+                      aria-expanded={isOpen}
+                      onClick={() => toggle("arenden")}
+                    >
+                      {ICONS.support_case}
+                      <span className="sidebar__label">Ärenden</span>
+                      {!isOpen && forsenade > 0 && <span className="sidebar__badge sidebar__badge--alert" title="Försenade">{forsenade}</span>}
+                      <Chevron open={isOpen} />
+                    </button>
+                    {isOpen && (
+                      <div className="sidebar__children">
+                        {CASE_VIEWS.map((v) => {
+                          const n = v.count ? caseCounts?.[v.count] : undefined;
+                          return (
+                            <button key={v.key} className="sidebar__item sidebar__item--child"
+                              aria-current={activeKey === `__cases_${v.key}__`}
+                              onClick={() => selectAndClose(`__cases_${v.key}__`)}>
+                              <span className="sidebar__label">{v.label}</span>
+                              {!!n && <span className={`sidebar__badge${v.alert ? " sidebar__badge--alert" : ""}`}>{n}</span>}
+                            </button>
+                          );
+                        })}
+                        <button className="sidebar__item sidebar__item--child sidebar__item--create" aria-current={activeKey === "__newcase__"}
+                          onClick={() => selectAndClose("__newcase__")}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                          <span className="sidebar__label">Skapa ärende</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </Fragment>
           );
-        })()}
+        })}
 
-
-        {/* Grupperade sektioner */}
+        {/* Door to door — utfällbar grupp som förut */}
         {MENU_GROUPS.map((group) => {
-          if (!visaGrupp(group.id)) return null;
+          if (!visaSektion(group.id)) return null;
           const isOpen = !!expanded[group.id] || ensamGrupp === group.id;
           const groupObjects = group.keys
             .map((k) => objMap.get(k))
@@ -480,7 +544,9 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           if (groupObjects.length === 0) return null;
 
           return (
-            <div key={group.id} className="sidebar__group">
+            <Fragment key={group.id}>
+            <div className="sidebar__section-label">{group.label}</div>
+            <div className="sidebar__group">
               <button
                 className="sidebar__item sidebar__item--group"
                 aria-expanded={isOpen}
@@ -569,38 +635,14 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                           <span className="sidebar__badge" title="Signerade avtal som ska beställas i VT">{vtOppna}</span>
                         )}
                       </button>
-                      {/* Leveransöversikt (kort per fastighetsägare) direkt under Projektplanen */}
-                      {o.key === "delivery" && (
-                        <button
-                          className="sidebar__item sidebar__item--child"
-                          aria-current={activeKey === "__leveransoversikt__"}
-                          onClick={() => selectAndClose("__leveransoversikt__")}
-                        >
-                          Leveransöversikt
-                        </button>
-                      )}
-                      {/* FMO-check direkt under Affärer (administratörer) */}
-                      {o.key === "deal" && isAdmin && (
-                        <button
-                          className="sidebar__item sidebar__item--child"
-                          aria-current={activeKey === "__fmo__"}
-                          onClick={() => selectAndClose("__fmo__")}
-                        >
-                          FMO-check
-                        </button>
-                      )}
                     </Fragment>
                   ))}
                 </div>
               )}
             </div>
+            </Fragment>
           );
         })}
-
-        {/* REGISTER — kunder, kontakter, avtal och partners. */}
-        {visaRegister && (registerItems.length > 0 || standalone.length > 0) && <div className="sidebar__section-label">Register</div>}
-        {visaRegister && registerItems.map((o) => item(o.key, o.labelPlural, ICONS[o.key] ?? ICONS.contact))}
-        {visaRegister && standalone.map((o) => item(o.key, o.labelPlural, ICONS[o.key] ?? fallbackIcon()))}
 
         {/* ADMINISTRATION */}
         <div className="sidebar__section-label">Administration</div>
