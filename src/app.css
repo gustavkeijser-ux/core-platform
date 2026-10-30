@@ -4870,6 +4870,32 @@ kbd {
 .tlgh__tabell th { color: var(--ink-muted); font-weight: 500; }
 .tlgh__tom, .tlgh__kalla { color: var(--ink-muted); font-size: var(--text-sm); }
 
+/* ── Penetration (Telia) — flik på koncernmoder/D2D-projekt och avsnitt i Utfall ── */
+.pen { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.pen__tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--sp-2); }
+.pen__tile { background: var(--surface-sunk); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-3); display: flex; flex-direction: column; min-width: 0; }
+.pen__tile b { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.pen__tile span { font-size: var(--text-sm); color: var(--ink-muted); }
+.pen__tile--tom b { color: var(--ink-faint); }
+.pen__tiles--small .pen__tile b { font-size: var(--text-lg); }
+.pen__ingress { margin: 0; color: var(--ink-soft); font-size: var(--text-sm); }
+.pen__num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pen__sub { color: var(--ink-faint); }
+.pen__avtal { display: flex; flex-wrap: wrap; gap: 4px; }
+.pen__chip { display: inline-flex; align-items: baseline; gap: 4px; background: var(--surface-sunk); border-radius: 999px; padding: 1px 8px; font-size: var(--text-xs); white-space: nowrap; }
+.pen__chip small { color: var(--ink-muted); }
+.pen__tabell th.pen__num { text-align: right; }
+.pen__projekt { color: var(--ink-faint); font-size: var(--text-xs); margin-left: 6px; }
+.imp__pen { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-2); }
+.imp__pen-datum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); }
+.imp__pen-datum .input { max-width: 180px; }
+@media (max-width: 640px) {
+  .pen__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pen__tiles .pen__tile:first-child { grid-column: 1 / -1; }
+  .pen__tabell td.pen__num { text-align: left; }
+  .pen__avtal { justify-content: flex-start; }
+}
+
 /* ── Door to door → Avtal ── */
 .d2davt__sok { max-width: 260px; }
 .d2davt__tal { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--sp-3); }
