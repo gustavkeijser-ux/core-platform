@@ -1606,3 +1606,60 @@
 .d2d-bekr__hint { margin: 0; font-size: var(--text-sm); color: var(--ink-muted); }
 .d2d-bekr__falt { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--sp-2) var(--sp-3); }
 .d2d-bekr__brist { margin: 0; font-size: var(--text-sm); color: var(--danger-ink); font-weight: 600; }
+
+/* ── Utfall → Telia-avstämning (D2DTeliaAvstamning.tsx) ──────────────────── */
+.tav { display: grid; gap: var(--sp-4); min-width: 0; }
+.tav > *, .tav .utf__sek > * { min-width: 0; max-width: 100%; }
+.tav__topp { align-items: center; }
+.tav__manad { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.tav__manadnamn { margin-left: var(--sp-2); text-transform: capitalize; white-space: nowrap; }
+.tav__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
+.tav__tiles-fot { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--ink-faint); }
+.tav__tile b { font-size: var(--text-xl); }
+.tav__varde { display: inline-grid; gap: 2px; line-height: 1.15; }
+.tav__varde b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.tav__varde small { font-size: var(--text-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tav__diff { margin-left: 6px; font-weight: 700; color: var(--ink-faint); }
+.tav__diff--upp { color: var(--ok-ink); }
+.tav__diff--ner { color: var(--danger-ink); }
+.tav__tabell th { white-space: nowrap; }
+.tav__tabell td { vertical-align: top; }
+.tav__kund { display: block; margin-top: 2px; padding: 0; border: 0; background: none; color: var(--brand); font: inherit; font-size: var(--text-xs); cursor: pointer; text-align: left; }
+.tav__kund:hover { text-decoration: underline; }
+.tav__filinfo { font-size: var(--text-sm); color: var(--ink-muted); }
+.tav__filinfo--saknas { color: var(--warn-ink); font-weight: 600; }
+.tav__filrad { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: flex-end; }
+.tav__manadval { display: grid; gap: 4px; font-size: var(--text-sm); color: var(--ink-muted); }
+.tav__ok { color: var(--ok-ink); font-size: var(--text-sm); font-weight: 600; }
+.tav__sok { min-width: 220px; }
+.tav__dim { display: block; color: var(--ink-faint); font-size: var(--text-xs); }
+.tav__cell { display: block; min-width: 0; }
+.tav__cell span.tav__dim + span { margin-top: 2px; }
+.tav__lank { padding: 0; border: 0; background: none; color: var(--brand); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+.tav__lank:hover { text-decoration: underline; }
+.tav__avvikelse { display: block; margin-top: 4px; font-size: var(--text-xs); color: var(--danger-ink); max-width: 28ch; }
+.tav__kat--matchad { --pill: var(--hue-green); }
+.tav__kat--endast_saljare { --pill: var(--hue-amber); }
+.tav__kat--endast_telia { --pill: var(--hue-blue); }
+.tav__kat--avvikande { --pill: var(--hue-red); }
+.tav__utr--oppen { --pill: var(--hue-amber); }
+.tav__utr--utredd_korrekt { --pill: var(--hue-green); }
+.tav__utr--utredd_rattad { --pill: var(--hue-blue); }
+.tav__utred { display: grid; gap: 4px; min-width: 180px; }
+.tav__difftabell td { vertical-align: top; }
+.tav__mina .tav__tiles--mina { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.tav__kpi { display: grid; gap: 2px; }
+.tav__kpi .tav__varde b { font-size: var(--text-xl); color: var(--brand); }
+@media (max-width: 640px) {
+  .tav__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tav__mina .tav__tiles--mina { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tav__sok { min-width: 0; width: 100%; }
+  .tav__avvikelse { max-width: none; }
+  .tav__utred { min-width: 0; }
+  .tav .utf__filter > .filter-pills { flex: 1 1 100%; min-width: 0; }
+  .tav .utf__sekhuvud { min-width: 0; }
+  .tav .utf__sekhuvud > * { max-width: 100%; }
+  .tav__manadnamn { white-space: nowrap; }
+  .tav__cell { display: grid; justify-items: end; gap: 2px; min-width: 0; }
+  .tav__cell .tav__dim, .tav__cell .tav__avvikelse { text-align: right; }
+}
