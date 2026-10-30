@@ -3,22 +3,29 @@ import { supabase } from "@/integrations/supabase/client";
 import "@/styles/publicera.css";
 
 /* =============================================================================
-   Inställningar → Publicera. Visar det som gjorts i testmiljön (grenen staging)
-   men inte publicerats, och publicerar det till riktiga CRM:et med en knapp.
+   Inställningar → Publicera. Varje uppgift som gjorts i testmiljön visas för sig
+   och Gustav publicerar eller nekar den. "Visa" öppnar uppgiften i testmiljön.
    Allt mot GitHub sker i edge function "publicera" (token ligger där, aldrig här).
-   Publiceringen startar bygget av riktiga CRM:et: nya databasändringar körs mot
+   En publicering startar bygget av riktiga CRM:et: nya databasändringar körs mot
    riktiga databasen först, sedan byggs sidan (några minuter).
    ========================================================================== */
 
 type Korning = { status: string; slutsats: string | null; tid: string; url: string; titel: string } | null;
+type Uppgift = {
+  id: string; titel: string; omrade: string; bestallare: string; testlank: string; sammanfattning: string;
+  antal: number; skapad: string | null; senast: string | null; av: string | null; filer: number;
+  migreringar: string[]; funktioner: string[]; testmiljo: "ja" | "pagar" | "krock"; testUrl: string | null;
+};
+type Nekad = { id: string; titel: string; omrade: string; testlank: string };
+type Andring = { sha: string; meddelande: string; tid: string };
 type Status = {
-  andringar: Array<{ sha: string; meddelande: string; tid: string; av: string | null }>;
-  antal: number; migreringar: string[]; funktioner: string[]; filer: number; riktigaFore: number;
-  bygge: Korning; testbygge: Korning; kanPublicera: boolean;
+  uppgifter: Uppgift[]; nekade: Nekad[];
+  aldre: { antal: number; andringar: Andring[]; migreringar: string[]; funktioner: string[] } | null;
+  okopplade: Andring[]; bygge: Korning; testbygge: Korning; kanPublicera: boolean;
 };
 
-async function anropa<T>(action: string): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("publicera", { body: { action } });
+async function anropa<T>(action: string, uppgift?: string): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("publicera", { body: { action, uppgift } });
   if (error) {
     let j: { error?: string } | null = null;
     try { j = await (error as { context?: Response }).context?.json(); } catch { /* */ }
@@ -43,12 +50,69 @@ function Bygge({ namn, k }: { namn: string; k: Korning }) {
   );
 }
 
+type Fraga = { id: string; typ: "publicera" | "neka" } | null;
+
+function UppgiftKort({ u, kan, busy, fraga, setFraga, gor }: {
+  u: Uppgift; kan: boolean; busy: boolean; fraga: Fraga;
+  setFraga: (f: Fraga) => void; gor: (typ: "publicera" | "neka", id: string) => void;
+}) {
+  const fragar = fraga?.id === u.id ? fraga.typ : null;
+  return (
+    <li className="card pub__uppgift">
+      <div className="pub__uppgift-huvud">
+        <div className="pub__uppgift-titel">
+          <strong>{u.titel}</strong>
+          <span className="pub__sub">
+            {[u.omrade, u.bestallare && `beställd av ${u.bestallare}`, tid(u.senast)].filter(Boolean).join(" · ")}
+          </span>
+        </div>
+        <a className="btn btn--ghost btn--sm" href={u.testlank} target="_blank" rel="noreferrer">Visa</a>
+      </div>
+      {u.sammanfattning && <p className="pub__text">{u.sammanfattning}</p>}
+      <div className="pub__chips">
+        {u.testmiljo === "ja" && <span className="pub__chip pub__chip--ok">I testmiljön</span>}
+        {u.testmiljo === "pagar" && <span className="pub__chip pub__chip--pagar">Läggs in i testmiljön…</span>}
+        {u.testmiljo === "krock" && (
+          <a className="pub__chip pub__chip--fel" href={u.testUrl ?? "#"} target="_blank" rel="noreferrer">Kom inte in i testmiljön (krock)</a>
+        )}
+        {u.migreringar.length > 0 && <span className="pub__chip pub__chip--pagar">Ändrar databasen</span>}
+        {u.funktioner.length > 0 && <span className="pub__chip">Serverfunktion: {u.funktioner.join(", ")}</span>}
+      </div>
+      {u.funktioner.length > 0 && (
+        <p className="pub__sub">Serverfunktioner följer inte med knappen — be agenten lägga ut dem i riktiga CRM:et efter publiceringen.</p>
+      )}
+      {kan && (fragar ? (
+        <div className={`pub__bekrafta${fragar === "neka" ? " pub__bekrafta--neka" : ""}`}>
+          <span>
+            {fragar === "publicera"
+              ? `Publicera "${u.titel}" till riktiga CRM:et nu?${u.migreringar.length ? " Databasändringen körs mot riktiga databasen." : ""}`
+              : `Neka "${u.titel}"? Den publiceras inte men ligger kvar i testmiljön. Du kan ångra.`}
+          </span>
+          <div className="pub__knappar">
+            <button type="button" className={`btn ${fragar === "publicera" ? "btn--brand" : "btn--danger"}`} disabled={busy} onClick={() => gor(fragar, u.id)}>
+              {busy ? "Arbetar…" : fragar === "publicera" ? "Ja, publicera" : "Ja, neka"}
+            </button>
+            <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setFraga(null)}>Avbryt</button>
+          </div>
+        </div>
+      ) : (
+        <div className="pub__knappar">
+          <button type="button" className="btn btn--brand" disabled={busy || u.testmiljo !== "ja"} onClick={() => setFraga({ id: u.id, typ: "publicera" })}>Publicera</button>
+          <button type="button" className="btn btn--danger" disabled={busy} onClick={() => setFraga({ id: u.id, typ: "neka" })}>Neka</button>
+        </div>
+      ))}
+    </li>
+  );
+}
+
 export function PubliceraPage() {
   const [st, setSt] = useState<Status | null>(null);
   const [fel, setFel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [bekrafta, setBekrafta] = useState(false);
+  const [fraga, setFraga] = useState<Fraga>(null);
+  const [aldreFraga, setAldreFraga] = useState(false);
   const [klart, setKlart] = useState<string | null>(null);
+  const [visaNekade, setVisaNekade] = useState(false);
 
   const ladda = useCallback(async () => {
     try { setSt(await anropa<Status>("status")); setFel(null); }
@@ -56,31 +120,39 @@ export function PubliceraPage() {
   }, []);
   useEffect(() => { void ladda(); }, [ladda]);
 
-  // Medan ett bygge pågår: uppdatera var 10:e sekund.
+  // Medan ett bygge pågår eller något läggs in i testmiljön: uppdatera var 10:e sekund.
   const pagar = st?.bygge?.status && st.bygge.status !== "completed";
+  const testPagar = st?.uppgifter.some((u) => u.testmiljo === "pagar");
   useEffect(() => {
-    if (!pagar && !klart) return;
+    if (!pagar && !testPagar && !klart) return;
     const t = window.setInterval(() => { void ladda(); }, 10000);
     return () => window.clearInterval(t);
-  }, [pagar, klart, ladda]);
+  }, [pagar, testPagar, klart, ladda]);
 
-  const publicera = async () => {
+  const kor = async (action: string, id: string | undefined, text: (r: { titel?: string; varning?: string | null; meddelande?: string; publicerat?: boolean }) => string) => {
     setBusy(true); setFel(null);
     try {
-      const r = await anropa<{ publicerat: boolean; meddelande?: string }>("publicera");
-      setKlart(r.publicerat ? "Publicerat. Riktiga CRM:et byggs nu — det tar några minuter." : (r.meddelande ?? "Inget att publicera."));
-      setBekrafta(false);
-      window.setTimeout(() => { void ladda(); }, 4000);
+      const r = await anropa<{ titel?: string; varning?: string | null; meddelande?: string; publicerat?: boolean }>(action, id);
+      setKlart(text(r) + (r.varning ? ` ${r.varning}` : ""));
+      setFraga(null); setAldreFraga(false);
+      await ladda();
     } catch (e) { setFel(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
+  const gor = (typ: "publicera" | "neka", id: string) => {
+    const titel = st?.uppgifter.find((u) => u.id === id)?.titel ?? id;
+    void kor(typ, id, () => typ === "publicera"
+      ? `"${titel}" är publicerad. Riktiga CRM:et byggs nu — det tar några minuter.`
+      : `"${titel}" är nekad.`);
+  };
 
+  const kan = !!st?.kanPublicera;
   return (
     <div className="pub">
       <div className="pub__head">
         <div>
           <h2>Publicera</h2>
-          <p className="pub__sub">Det som gjorts i testmiljön (test.crm.connectestate.se) men ännu inte finns i riktiga CRM:et.</p>
+          <p className="pub__sub">Uppgifter som gjorts i testmiljön (test.crm.connectestate.se). Prova med Visa, publicera eller neka var för sig.</p>
         </div>
         <button type="button" className="btn btn--ghost btn--sm" onClick={() => void ladda()} disabled={busy}>Uppdatera</button>
       </div>
@@ -91,51 +163,85 @@ export function PubliceraPage() {
 
       {st && (
         <>
-          <section className="card pub__kort">
-            <div className="pub__rad">
-              <strong>{st.antal === 0 ? "Allt är publicerat" : `${st.antal} opublicerade ändringar`}</strong>
-              {st.antal > 0 && <span className="pub__sub">{st.filer} filer</span>}
-            </div>
-            {st.riktigaFore > 0 && (
-              <p className="pub__varning">Riktiga CRM:et har {st.riktigaFore} ändringar som inte finns i testmiljön. De ligger kvar vid publicering.</p>
-            )}
-            {st.andringar.length > 0 && (
+          {pagar && <p className="pub__varning">Riktiga CRM:et byggs just nu. Vänta tills bygget är klart innan du publicerar nästa.</p>}
+
+          {st.uppgifter.length === 0 && !st.aldre && (
+            <section className="card pub__kort"><strong>Inget väntar på godkännande</strong></section>
+          )}
+
+          {st.uppgifter.length > 0 && (
+            <ul className="pub__uppgifter">
+              {st.uppgifter.map((u) => (
+                <UppgiftKort key={u.id} u={u} kan={kan} busy={busy || !!pagar} fraga={fraga} setFraga={setFraga} gor={gor} />
+              ))}
+            </ul>
+          )}
+
+          {st.aldre && (
+            <section className="card pub__kort">
+              <div className="pub__rad">
+                <strong>Ändringar gjorda före uppgifterna ({st.aldre.antal})</strong>
+                <a className="btn btn--ghost btn--sm" href="https://test.crm.connectestate.se" target="_blank" rel="noreferrer">Visa</a>
+              </div>
+              <p className="pub__sub">Gjordes direkt i testmiljön innan uppgifterna fanns och kan bara publiceras tillsammans.</p>
               <ul className="pub__lista">
-                {st.andringar.map((a) => (
-                  <li key={a.sha}><span>{a.meddelande}</span><span className="pub__sub">{tid(a.tid)}{a.av ? ` · ${a.av}` : ""}</span></li>
+                {st.aldre.andringar.map((a) => (
+                  <li key={a.sha}><span>{a.meddelande}</span><span className="pub__sub">{tid(a.tid)}</span></li>
                 ))}
               </ul>
-            )}
-            {st.migreringar.length > 0 && (
-              <div className="pub__del">
-                <strong>Databasändringar ({st.migreringar.length})</strong>
-                <p className="pub__sub">Körs mot riktiga databasen innan sidan byggs. Misslyckas en publiceras ingenting.</p>
-                <ul className="pub__filer">{st.migreringar.map((m) => <li key={m}>{m}</li>)}</ul>
-              </div>
-            )}
-            {st.funktioner.length > 0 && (
-              <div className="pub__del">
-                <strong>Serverfunktioner ({st.funktioner.join(", ")})</strong>
-                <p className="pub__sub">Följer inte med knappen — be agenten deploya dem till riktiga CRM:et efter publiceringen.</p>
-              </div>
-            )}
-
-            {st.antal > 0 && (st.kanPublicera ? (
-              !bekrafta ? (
-                <button type="button" className="btn btn--brand pub__knapp" disabled={busy || !!pagar} onClick={() => setBekrafta(true)}>
-                  {pagar ? "Ett bygge pågår…" : "Publicera till riktiga CRM:et"}
-                </button>
-              ) : (
+              {st.aldre.migreringar.length > 0 && <span className="pub__chip pub__chip--pagar">Ändrar databasen ({st.aldre.migreringar.length})</span>}
+              {kan && (aldreFraga ? (
                 <div className="pub__bekrafta">
-                  <span>Publicera {st.antal} ändringar till riktiga CRM:et nu?</span>
+                  <span>Publicera alla {st.aldre.antal} ändringar till riktiga CRM:et nu?</span>
                   <div className="pub__knappar">
-                    <button type="button" className="btn btn--brand" disabled={busy} onClick={() => void publicera()}>{busy ? "Publicerar…" : "Ja, publicera"}</button>
-                    <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setBekrafta(false)}>Avbryt</button>
+                    <button type="button" className="btn btn--brand" disabled={busy} onClick={() => void kor("publicera_aldre", undefined, (r) => r.publicerat ? "Publicerat. Riktiga CRM:et byggs nu — det tar några minuter." : (r.meddelande ?? "Inget att publicera."))}>
+                      {busy ? "Arbetar…" : "Ja, publicera"}
+                    </button>
+                    <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setAldreFraga(false)}>Avbryt</button>
                   </div>
                 </div>
-              )
-            ) : <p className="pub__sub">Bara Gustav kan publicera.</p>)}
-          </section>
+              ) : (
+                <button type="button" className="btn btn--brand pub__knapp" disabled={busy || !!pagar} onClick={() => setAldreFraga(true)}>Publicera alla</button>
+              ))}
+            </section>
+          )}
+
+          {st.okopplade.length > 0 && (
+            <section className="card pub__kort">
+              <strong>I testmiljön men utanför uppgifterna ({st.okopplade.length})</strong>
+              <p className="pub__varning">Gjordes direkt i testmiljön och kan inte publiceras härifrån. Be agenten göra om dem som en uppgift.</p>
+              <ul className="pub__lista">
+                {st.okopplade.map((a) => (
+                  <li key={a.sha}><span>{a.meddelande}</span><span className="pub__sub">{tid(a.tid)}</span></li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {st.nekade.length > 0 && (
+            <section className="card pub__kort">
+              <button type="button" className="pub__fallut" onClick={() => setVisaNekade((v) => !v)} aria-expanded={visaNekade}>
+                <strong>Nekade ({st.nekade.length})</strong><span aria-hidden>{visaNekade ? "▾" : "▸"}</span>
+              </button>
+              {visaNekade && (
+                <ul className="pub__lista">
+                  {st.nekade.map((n) => (
+                    <li key={n.id}>
+                      <span>{n.titel}{n.omrade ? <span className="pub__sub"> · {n.omrade}</span> : null}</span>
+                      <span className="pub__knappar">
+                        <a className="btn btn--ghost btn--sm" href={n.testlank} target="_blank" rel="noreferrer">Visa</a>
+                        {kan && (
+                          <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => void kor("angra_neka", n.id, () => `"${n.titel}" väntar på godkännande igen.`)}>Ångra</button>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {!kan && <p className="pub__sub">Bara Gustav kan publicera eller neka.</p>}
 
           <section className="card pub__kort">
             <strong>Senaste byggen</strong>
