@@ -4,6 +4,7 @@ import { startaSynligPoll } from "@/lib/synligPoll";
 import { skrivXlsx, laddaNed } from "@/lib/xlsxSkriv";
 import { byggUtfallRapport, lasVtExport, type RapportData } from "@/lib/d2dUtfallRapport";
 import { FilterPills, SkeletonRows } from "./PageChrome";
+import { PenTiles, PenTabell, usePenetration, datumStr, pctStr, PEN_MATT, type PenSumma } from "./PenetrationTab";
 import "@/styles/d2d.css";
 
 /* =============================================================================
@@ -201,6 +202,20 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
   /** När siffrorna senast hämtades (visas vid filtren). */
   const [hamtad, setHamtad] = useState<Date | null>(null);
 
+  // Telias penetration (Inställningar → Import): per projekt när inget projekt är valt,
+  // annars projektets fastigheter. Oberoende av period och säljare.
+  type PenProjekt = PenSumma & { id: string; title: string | null; status: string | null };
+  const [penProjekt, setPenProjekt] = useState<{ projekt: PenProjekt[]; totalt: PenSumma | null; matdatum: string | null } | null>(null);
+  useEffect(() => {
+    let on = true;
+    supabase.rpc("d2d_penetration_projekt").then(({ data, error }) => {
+      if (!on || error) return;
+      setPenProjekt(data as { projekt: PenProjekt[]; totalt: PenSumma | null; matdatum: string | null });
+    });
+    return () => { on = false; };
+  }, []);
+  const { svar: penValt } = usePenetration(projekt || null);
+
   // Alla tre flikarna hämtas på en gång, så att byte av flik går direkt.
   // Siffrorna uppdateras löpande: var 2:a minut medan sidan syns och direkt när
   // man kommer tillbaka till fliken. Bara första hämtningen efter ett filterbyte
@@ -358,6 +373,39 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
 
       {u && u.besok === 0 && (
         <div className="card utf__tom">Inga besök i det här urvalet. Ej knackade dörrar räknas inte.</div>
+      )}
+
+      {u && (projekt ? (penValt && penValt.summa && penValt.summa.fastigheter > 0) : (penProjekt && penProjekt.projekt.some((p) => p.fastigheter > 0))) && (
+        <section className="card utf__sek pen">
+          <h2>Penetration enligt Telia {(() => { const d = projekt ? penValt?.summa?.matdatum : penProjekt?.matdatum; return d ? <span className="utf__snitt">mätt {datumStr(d)}</span> : null; })()}</h2>
+          {projekt && penValt?.summa ? (<>
+            <PenTiles s={penValt.summa} />
+            <p className="utf__ingress">
+              Projektets {penValt.summa.fastigheter} {penValt.summa.fastigheter === 1 ? "fastighet" : "fastigheter"} i Telias penetrationsfil, viktat med antal hushåll.
+              Oberoende av period och säljare — det är läget i Telias nät, inte D2D-knackningarna.
+            </p>
+            <PenTabell rader={penValt.rader} />
+          </>) : penProjekt && (<>
+            {penProjekt.totalt && penProjekt.totalt.fastigheter > 0 && <PenTiles s={penProjekt.totalt} />}
+            <p className="utf__ingress">Alla fastigheter som ligger i ett D2D-projekt, viktat med antal hushåll. Välj ett projekt ovan för att se fastigheterna.</p>
+            <div className="rtable-scroll">
+              <table className="rtable pen__tabell">
+                <thead><tr><th>Projekt</th><th className="pen__num">Fastigheter</th><th className="pen__num">HC</th>
+                  {PEN_MATT.map(([k, lbl, titel]) => <th key={k} className="pen__num" title={titel}>{lbl}</th>)}</tr></thead>
+                <tbody>
+                  {penProjekt.projekt.filter((p) => p.fastigheter > 0).map((p) => (
+                    <tr key={p.id} className="rtable__row rtable__row--click" onClick={() => setProjekt(p.id)} title="Visa projektets fastigheter">
+                      <td data-label="Projekt" className="rtable__title">{p.title ?? "Namnlöst projekt"}{p.status && p.status !== "aktiv" && <span className="pen__projekt">{p.status}</span>}</td>
+                      <td data-label="Fastigheter" className="pen__num">{p.fastigheter}</td>
+                      <td data-label="HC" className="pen__num">{p.hc.toLocaleString("sv-SE")}</td>
+                      {PEN_MATT.map(([k]) => <td key={k} data-label={k} className="pen__num">{pctStr(p[k] as number | null)}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>)}
+        </section>
       )}
 
       {u && u.besok > 0 && (<>
