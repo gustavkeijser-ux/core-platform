@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { startaSynligPoll } from "@/lib/synligPoll";
 import "@/styles/d2d.css";
 import { BlitzPinnar, usePinnOversikt } from "./D2DLon";
+import { MinaNyckeltal } from "./D2DTeliaAvstamning";
 import { MinaAnger } from "./D2DAnger";
 import { ProfilRad, SaljarProfil, Fyrverkeri, manadsPlacering } from "./D2DProfil";
 
@@ -303,6 +304,9 @@ export function D2DDashboard({ minId }: { minId: string | null }) {
 
       {/* Ånger — säljarens egna (admin/kundtjänst: alla per säljare). */}
       <MinaAnger minId={minId} />
+
+      {/* Säljarens nyckeltal den här månaden mot förra (pinnar, snitt, hitrate, Telia) */}
+      <MinaNyckeltal minId={minId} />
 
       {/* Förra månadens toppsäljare */}
       {hall.forraVinnare.length > 0 && (
