@@ -1,0 +1,89 @@
+/* =============================================================================
+   Säljflödet: koncernmödrar (register + registerkort), affär och
+   affärsmöjlighet — enligt mockupen "koncernmoder, affär och leverans".
+   Bara variabler ur tokens.css (designsystemet Fas 3).
+   ========================================================================== */
+
+.salj-intro { color: var(--ink-soft); font-size: var(--text-base); margin: 0 0 var(--sp-4); }
+.salj-fotnot { color: var(--ink-faint); font-size: var(--text-xs); margin: var(--sp-3) 0 0; }
+.salj-dim { color: var(--ink-faint); }
+.salj-register__card { padding: var(--sp-2) var(--sp-2) var(--sp-1); }
+.salj-register__card .filter-pills { padding: var(--sp-2) var(--sp-2) var(--sp-3); }
+.salj-register__card .pager { padding: var(--sp-3) var(--sp-3) var(--sp-2); }
+.salj-register__cb { width: 36px; text-align: center; }
+.salj-register__cb input { width: 16px; height: 16px; accent-color: var(--brand); }
+.salj-register__namn { font-weight: 600; color: var(--ink); }
+.salj-register__namn:hover { color: var(--brand); }
+.salj-register__tabell td { white-space: nowrap; }
+.salj-register__tabell td:nth-child(2) { white-space: normal; min-width: 180px; }
+.salj-register__tabell td:nth-child(4) { white-space: normal; }
+
+/* Pills: samma färgspråk som status-pill (bär aldrig status med färg ensam — ordet följer med). */
+.salj-pill {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: var(--r-pill); padding: 3px 10px;
+  font-size: 11px; font-weight: 700; line-height: 1.4; white-space: nowrap;
+  background: var(--neutral-pill); color: var(--neutral-ink);
+}
+.salj-pill--ok { background: var(--ok-soft); color: var(--ok-ink); }
+.salj-pill--warn { background: var(--warn-soft); color: var(--warn-ink); }
+.salj-pill--info { background: var(--info-soft); color: var(--info-ink); }
+.salj-pill--danger { background: var(--danger-soft); color: var(--danger-ink); }
+.salj-pill--grey { background: var(--neutral-pill); color: var(--neutral-ink); }
+.salj-pill--brand { background: var(--brand-tint); color: var(--brand-ink); }
+
+/* Utdelningsraden (mörk rad ovanför tabellen) */
+.salj-delaut { margin: 0 var(--sp-2) var(--sp-3); }
+.salj-delaut__falt { display: flex; align-items: center; gap: 6px; font-family: var(--font-body); font-weight: 500; font-size: var(--text-sm); color: #fff; }
+.salj-delaut__falt .input { min-height: 34px; padding: 4px 10px; font-size: var(--text-sm); width: auto; }
+.salj-delaut__knapp { background: #fff; color: #14213D; border: 0; font-weight: 700; }
+.salj-delaut__knapp:hover { background: var(--teal-50); }
+.salj-notis { margin: 0 var(--sp-2) var(--sp-3); padding: 10px 14px; border-radius: var(--r-box); font-size: var(--text-sm); }
+.salj-notis--ok { background: var(--ok-soft); color: var(--ok-ink); }
+.salj-notis--warn { background: var(--warn-soft); color: var(--warn-ink); }
+.salj-notis--info { background: var(--info-soft); color: var(--info-ink); }
+
+/* ── Postsidor (registerkort, affär, möjlighet) ─────────────────────────── */
+.salj-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.salj-head__text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.salj-head__title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.salj-head__title h1 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 24px; color: var(--ink); line-height: 1.2; }
+.salj-head__sub { font-size: var(--text-sm); color: var(--ink-muted); }
+.salj-head__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.salj-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); align-items: start; }
+.salj-grid--2 { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.salj-card { padding: var(--sp-5); margin: 0 !important; }
+.salj-card__head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.salj-card__title { font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--ink); }
+.salj-card__sub { font-size: var(--text-xs); color: var(--ink-faint); margin-top: 2px; }
+.salj-kv { display: grid; grid-template-columns: minmax(120px, 40%) 1fr; gap: 8px 12px; font-size: var(--text-sm); }
+.salj-kv dt { color: var(--ink-faint); margin: 0; }
+.salj-kv dd { color: var(--ink); margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.salj-kv dd .input { width: 100%; }
+.salj-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.salj-lista li { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); padding: 9px 0; border-bottom: 1px solid var(--divider-soft); font-size: var(--text-sm); }
+.salj-lista li:last-child { border-bottom: 0; }
+.salj-lista__meta { color: var(--ink-faint); font-size: var(--text-xs); white-space: nowrap; }
+.salj-check { display: flex; flex-direction: column; gap: 8px; }
+.salj-check__rad { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); color: var(--ink); }
+.salj-check__ikon { width: 22px; height: 22px; border-radius: var(--r-pill); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; flex: none; }
+.salj-check__ikon--ok { background: var(--ok-soft); color: var(--ok-ink); }
+.salj-check__ikon--warn { background: var(--warn-soft); color: var(--warn-ink); }
+.salj-varning { padding: 10px 14px; border-radius: var(--r-box); background: var(--warn-soft); color: var(--warn-ink); font-size: var(--text-sm); margin-bottom: var(--sp-4); }
+.salj-lank { background: none; border: 0; padding: 0; color: var(--brand); cursor: pointer; font: inherit; font-size: var(--text-sm); font-weight: 600; text-align: left; }
+.salj-lank:hover { text-decoration: underline; }
+.salj-tom { color: var(--ink-faint); font-size: var(--text-sm); }
+.salj-spar { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-3); font-size: var(--text-xs); color: var(--ink-faint); }
+
+@media (max-width: 640px) {
+  .salj-register__tabell td.salj-register__cb { justify-content: flex-start; }
+  .salj-register__tabell td.salj-register__cb::before { content: none; }
+  .salj-register__tabell td:nth-child(2) { min-width: 0; }
+}
+@media (max-width: 860px) {
+  .salj-grid, .salj-grid--2 { grid-template-columns: 1fr; }
+  .salj-head__title h1 { font-size: 20px; }
+  .salj-delaut__falt { width: 100%; justify-content: space-between; }
+  .salj-delaut__falt .input { flex: 1; }
+  .salj-kv { grid-template-columns: 1fr; gap: 2px 0; }
+  .salj-kv dt { margin-top: 8px; }
+}
