@@ -15,6 +15,7 @@ import { LyftAffarTab } from "./LyftAffarTab";
 import { DealFollowUp } from "./DealFollowUp";
 import { FmoTab } from "./FmoTab";
 import { TeliaLagenheterTab } from "./TeliaLagenheterTab";
+import { PenetrationTab } from "./PenetrationTab";
 import { LagenhetForm } from "./D2DSellerApp";
 
 /** Fält som styrs via egen UI på affärskortet, inte via det generiska formuläret. */
@@ -101,6 +102,8 @@ const SECTION_LABELS: Record<string, string> = {
   teknik: "Teknik och nät",
   resurser: "Resurser",
   uppfoljning: "Uppföljning",
+  // Telias penetration (importeras under Inställningar → Import)
+  penetration: "Penetration (Telia)",
 };
 
 type FieldGroup = { section: string | null; label: string | null; fields: FieldDef[] };
@@ -155,6 +158,12 @@ function buildTabs(objectDef: ObjectDef): TabDef[] {
   if (["delivery", "koncernmoder", "direktagt_bolag"].includes(objectDef.key)) {
     const idx = tabs.findIndex((t) => t.key === "att_gora");
     tabs.splice(idx >= 0 ? idx : tabs.length, 0, { key: "telia_lgh", label: "Lägenheter" });
+  }
+
+  // Telias penetration per fastighet, summerad på koncernmodern och D2D-projektet.
+  if (["koncernmoder", "d2d_projekt"].includes(objectDef.key)) {
+    const idx = tabs.findIndex((t) => t.key === "att_gora");
+    tabs.splice(idx >= 0 ? idx : tabs.length, 0, { key: "penetration", label: "Penetration" });
   }
 
   const seen = new Set<string>();
@@ -766,6 +775,9 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
 
     // Lägenheter (Telias adresslista)
     if (activeTab === "telia_lgh" && record) return <TeliaLagenheterTab recordId={record.id} />;
+
+    // Penetration (Telia)
+    if (activeTab === "penetration" && record) return <PenetrationTab recordId={record.id} />;
 
     // Att göra
     if (activeTab === "att_gora" && record) return <TaskTab recordId={record.id} />;
