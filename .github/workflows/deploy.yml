@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Två publiceringar tätt efter varandra körs i tur och ordning (aldrig två migreringskörningar samtidigt).
+concurrency:
+  group: riktiga-crm
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest

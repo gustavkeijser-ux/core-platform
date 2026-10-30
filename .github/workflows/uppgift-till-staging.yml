@@ -1,0 +1,45 @@
+name: Uppgift till testmiljön
+
+# Varje uppgift görs i en egen gren "uppgift-<id>" som utgår från main (AGENTS.md 3b).
+# När grenen pushas slås den ihop med staging och testmiljön byggs om, så att
+# uppgiften går att prova på test.crm.connectestate.se. Gustav publicerar eller
+# nekar den sedan under Inställningar → Publicera i riktiga CRM:et.
+
+on:
+  push:
+    branches: ["uppgift-**"]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: uppgift-till-staging
+  cancel-in-progress: false
+
+jobs:
+  till-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (staging)
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+          fetch-depth: 0
+
+      - name: Slå ihop uppgiften med staging
+        run: |
+          git config user.name "Testmiljön"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$GITHUB_REF_NAME"
+          if ! git merge --no-ff --no-edit -m "Testmiljö: $GITHUB_REF_NAME" "origin/$GITHUB_REF_NAME"; then
+            git merge --abort || true
+            echo "::error::Uppgiften krockar med något i testmiljön. Uppdatera grenen $GITHUB_REF_NAME från staging/main och pusha igen."
+            exit 1
+          fi
+          git push origin HEAD:staging
+
+      - name: Bygg testmiljön
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-staging.yml --ref staging

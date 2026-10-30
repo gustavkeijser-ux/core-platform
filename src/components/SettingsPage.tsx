@@ -24,7 +24,7 @@ export const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; sub: string
   { key: "leaddesk", label: "LeadDesk", sub: "Telefonpanelen: inloggningsadress, ring direkt och skärmpop", admin: true },
   { key: "priser", label: "Priser (D2D)", sub: "Priser och villkor för alla avtalsförslag i D2D", admin: true },
   { key: "import", label: "Import", sub: "Läs in data från fil" },
-  { key: "publicera", label: "Publicera", sub: "För över det som gjorts i testmiljön till riktiga CRM:et", admin: true },
+  { key: "publicera", label: "Publicera", sub: "Godkänn eller neka det som gjorts i testmiljön", admin: true },
 ];
 
 export function isSettingsTab(s: string | undefined): s is SettingsTab {
