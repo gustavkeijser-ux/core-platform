@@ -17,6 +17,7 @@ import { FmoTab } from "./FmoTab";
 import { TeliaLagenheterTab } from "./TeliaLagenheterTab";
 import { PenetrationTab } from "./PenetrationTab";
 import { LagenhetForm } from "./D2DSellerApp";
+import { KoncernmoderKort } from "./KoncernmoderKort";
 
 /** Fält som styrs via egen UI på affärskortet, inte via det generiska formuläret. */
 const DEAL_CUSTOM_FIELDS = new Set([
@@ -391,6 +392,9 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
 
   // ── Fältkonfigurator
   const [showFieldConfig, setShowFieldConfig] = useState(false);
+  // Koncernmoder, affär och affärsmöjlighet har egna sidor (mockupen 30 okt);
+  // "Alla fält" visar det generiska fältformuläret i stället.
+  const [visaFalt, setVisaFalt] = useState(false);
 
   // ── Checklistor: statusordning + varning för obligatoriska punkter
   // get_metadata levererar statusar i sort_order, så indexet ÄR ordningen.
@@ -934,6 +938,20 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
           />
         </div>
       </div>
+    );
+  }
+
+  // Koncernmoder: registerkortet enligt mockupen.
+  if (isPage && record && resolvedDef.key === "koncernmoder" && !visaFalt) {
+    return (
+      <KoncernmoderKort
+        record={record}
+        objectDef={resolvedDef}
+        onOpenRecord={(id) => onNavigate?.(id)}
+        onOpenList={() => (onOpenList ? onOpenList("__km__") : onClose())}
+        onSaved={(row) => { setLoadedRecord(row); setData({ ...row.data }); onSaved(row); }}
+        onVisaFalt={() => setVisaFalt(true)}
+      />
     );
   }
 
