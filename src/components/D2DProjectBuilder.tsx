@@ -779,8 +779,12 @@ function lagLabel(r: RecordRow): string {
   const nr = String(d.gatunummer ?? "").trim();
   const ing = String(d.ingang ?? "").trim();
   const lgh = String(r.title ?? d.name ?? "").trim();
-  // Radhus/småhus där "lägenheten" är husnumret (t.ex. 60A) — visa inte numret två gånger.
-  if (lgh && nr && lgh.startsWith(nr)) return [gata, lgh].filter(Boolean).join(" ");
+  // Radhus/småhus där "lägenheten" är husnumret (t.ex. 60 eller 60A) — visa inte
+  // numret två gånger. Bara när lägenhetsnumret ÄR husnumret (ev. med bokstav),
+  // inte när det råkar börja på samma siffra (gatunummer 1, lgh 1101).
+  if (lgh && nr && new RegExp(`^${nr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s?[A-Za-z]?$`).test(lgh)) {
+    return [gata, lgh].filter(Boolean).join(" ");
+  }
   const adr = [gata, nr + (ing ? " " + ing : "")].filter(Boolean).join(" ");
   return lgh ? `${adr} · lgh ${lgh}` : adr || "Adress";
 }
