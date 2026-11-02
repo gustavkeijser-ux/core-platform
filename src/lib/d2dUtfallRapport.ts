@@ -14,7 +14,7 @@
  * ordernummer, datum, status, tjänster, adress och VT-säljar-id.
  */
 import { lasXlsx } from "./xlsx";
-import type { Cell, SkrivBlad } from "./xlsxSkriv";
+import type { Cell, Diagram, SkrivBlad } from "./xlsxSkriv";
 
 export type RapportLgh = {
   id: string; gata: string | null; nummer: string | null; ingang: string | null; lgh: string | null;
@@ -346,56 +346,81 @@ const diffPE = (a: number | null, b: number | null): Cell => (a != null && b != 
 const snittC = (v: number | null): Cell => (v == null ? "–" : { tal: v, dec: 2 });
 const procC = (v: number | null): Cell => (v == null ? "–" : { procent: v });
 
+/** De tre grupperna i månadsrapporten (Gustav 2 nov: "dela upp sålda och scrive – samt en summerad"). */
+const GRUPPER: Array<{ namn: string; urval: (l: RapportLgh) => boolean; text: string }> = [
+  { namn: "Sålda", urval: (l) => l.saldIPeriod, text: "status Såld med säljdatum i månaden" },
+  { namn: "Scrive", urval: (l) => l.signeradIPeriod, text: "Scrive-avtal signerade i månaden" },
+  { namn: "Summerat", urval: (l) => l.saldIPeriod || l.signeradIPeriod, text: "såld eller signerad – en kund räknas en gång" },
+];
+
 /** Bladen Månadsrapport, Veckor och Säljare. `data` är månaden, `fg` föregående månad (samma filter). */
 export function byggManadsrapport(manad: string, data: RapportData, fg: RapportData): SkrivBlad[] {
   const { fran, till } = manadGranser(manad);
-  const nu = kunder(data), forra = kunder(fg);
-  const N = nyckeltal(nu), F = nyckeltal(forra);
+  const alla = kunder(data), allaForra = kunder(fg);
   const fgManad = foregaendeManad(manad);
+  const G = GRUPPER.map((g) => ({ ...g, nu: alla.filter(g.urval), forra: allaForra.filter(g.urval) }));
+  const sumG = G[2];
 
-  // Veckor: ISO-veckor som rör månaden, avgränsade till månadens dagar.
-  const veckor = new Map<string, { vecka: number; fran: string; till: string; rader: RapportLgh[] }>();
+  // Veckor: ISO-veckor som rör månaden, avgränsade till månadens dagar. Sålda räknas på säljdatumet,
+  // Scrive på signeringsdatumet; i Summerat gäller säljdatumet om kunden är Såld, annars signeringsdatumet.
+  type Vecka = { vecka: number; fran: string; till: string };
+  const veckor = new Map<string, Vecka>();
   for (let dag = fran; dag <= till; dag = plusDagar(dag, 1)) {
     const { vecka, mandag } = isoVecka(dag);
-    const v = veckor.get(mandag) ?? { vecka, fran: dag, till: dag, rader: [] };
+    const v = veckor.get(mandag) ?? { vecka, fran: dag, till: dag };
     v.till = dag; veckor.set(mandag, v);
   }
-  for (const l of nu) {
-    const dt = kundDatum(l);
-    if (!dt) continue;
-    const { mandag } = isoVecka(lokalDag(dt));
-    veckor.get(mandag)?.rader.push(l);
-  }
-  const veckoLista = [...veckor.values()].sort((a, b) => a.fran.localeCompare(b.fran));
-  const veckoRader: Cell[][] = veckoLista.map((v, i) => {
-    const k = nyckeltal(v.rader);
+  const veckoLista = [...veckor.entries()].sort((a, b) => a[1].fran.localeCompare(b[1].fran));
+  const veckaFor = (l: RapportLgh, g: string) => {
+    const dt = g === "Sålda" ? l.saldTid : g === "Scrive" ? l.signerad : kundDatum(l);
+    return dt ? isoVecka(lokalDag(dt)).mandag : null;
+  };
+  const veckoRaderFor = (g: typeof G[number]): Cell[][] => veckoLista.map(([mandag, v], i) => {
+    const k = nyckeltal(g.nu.filter((l) => veckaFor(l, g.namn) === mandag));
     return [`Vecka ${i + 1} (v. ${v.vecka})`, `${kortDatum(v.fran)} – ${kortDatum(v.till)}`, k.kunder, k.tjanster, k.bredband,
       snittC(k.snitt), procC(k.attach), k.tillagg, { tal: k.pinnar, dec: 1 }];
   });
-  const veckoBlad: SkrivBlad = {
-    namn: "Veckor",
-    rader: [
-      ["Vecka", "Dagar", "Antal kunder", "Total försäljning (tjänster)", "Antal bredband", "Snitt tjänster/kund", "Attach rate", "Bredbandskunder med tillägg", "Pinnar"],
-      ...veckoRader,
-      ["Hela månaden", `${kortDatum(fran)} – ${kortDatum(till)}`, N.kunder, N.tjanster, N.bredband, snittC(N.snitt), procC(N.attach), N.tillagg, { tal: N.pinnar, dec: 1 }],
-      [],
-      ["Veckorna är kalenderveckor (måndag–söndag) avgränsade till månaden; kunden räknas på säljdatumet, eller signeringsdatumet om den bara signerat i Scrive."],
-      ["Attach rate = andel bredbandskunder som köpt minst en tilläggstjänst (TV utöver Start/Bas, mobil, streaming, sport eller trygghet)."],
-    ],
-    bredd: [20, 16, 14, 26, 16, 18, 12, 26, 10],
-    diagram: [
-      { typ: "stapel", titel: `Veckovis utveckling ${manadNamn(manad)} – kunder, tjänster och bredband`, katKol: 0,
-        serier: [{ kol: 2 }, { kol: 3 }, { kol: 4 }], radFran: 1, radTill: veckoRader.length, kol: 0, rad: veckoRader.length + 6, breddKol: 5, hojdRad: 18 },
-      { typ: "linje", titel: "Snitt tjänster per kund per vecka", katKol: 0,
-        serier: [{ kol: 5 }], radFran: 1, radTill: veckoRader.length, kol: 5, rad: veckoRader.length + 6, breddKol: 3, hojdRad: 18 },
-      { typ: "linje", titel: "Attach rate per vecka", katKol: 0, procent: true,
-        serier: [{ kol: 6 }], radFran: 1, radTill: veckoRader.length, kol: 8, rad: veckoRader.length + 6, breddKol: 3, hojdRad: 18 },
-    ],
+  const helaRad = (g: typeof G[number]): Cell[] => {
+    const N = nyckeltal(g.nu);
+    return [`Hela månaden – ${g.namn}`, `${kortDatum(fran)} – ${kortDatum(till)}`, N.kunder, N.tjanster, N.bredband, snittC(N.snitt), procC(N.attach), N.tillagg, { tal: N.pinnar, dec: 1 }];
   };
+  const VECKO_RUBRIK: Cell[] = ["Vecka", "Dagar", "Antal kunder", "Total försäljning (tjänster)", "Antal bredband", "Snitt tjänster/kund", "Attach rate", "Bredbandskunder med tillägg", "Pinnar"];
+  const nV = veckoLista.length;
+  const blockH = nV + 4; // fet rubrik + kolumnrubrik + veckor + hela månaden + blankrad
+  const veckoRader: Cell[][] = [];
+  const veckoDiagram: Diagram[] = [];
+  const veckoBlock: Record<string, Cell[][]> = {};
+  G.forEach((g, gi) => {
+    const start = gi * blockH; // 0-baserad rad för gruppens feta rubrik
+    const rader = veckoRaderFor(g);
+    veckoBlock[g.namn] = rader;
+    veckoRader.push([{ fet: `${g.namn} – ${g.text}` }], VECKO_RUBRIK, ...rader, helaRad(g), []);
+    // start = fet-rubrik, start+1 = kolumnrubrik, start+2 … start+1+nV = veckorna
+    veckoDiagram.push({ typ: "stapel", titel: `${g.namn}: kunder, tjänster och bredband per vecka`, katKol: 0,
+      serier: [{ kol: 2 }, { kol: 3 }, { kol: 4 }], rubrikRad: start + 1, radFran: start + 2, radTill: start + 1 + nV,
+      kol: 10, rad: start, breddKol: 5, hojdRad: blockH });
+  });
+  // Jämförelsediagram: kunder per vecka för de tre grupperna, på en egen liten tabell under blocken.
+  const jamfStart = veckoRader.length;
+  veckoRader.push([{ fet: "Kunder per vecka – jämförelse" }], ["Vecka", "Dagar", "Sålda", "Scrive", "Summerat"],
+    ...veckoLista.map(([, v], i): Cell[] => [`Vecka ${i + 1} (v. ${v.vecka})`, `${kortDatum(v.fran)} – ${kortDatum(v.till)}`,
+      veckoBlock.Sålda[i][2], veckoBlock.Scrive[i][2], veckoBlock.Summerat[i][2]]),
+    [],
+    ["Veckorna är kalenderveckor (måndag–söndag) avgränsade till månaden. Sålda räknas på säljdatumet, Scrive på signeringsdatumet; Summerat på säljdatumet om kunden är Såld, annars signeringsdatumet."],
+    ["Attach rate = andel bredbandskunder som köpt minst en tilläggstjänst (TV utöver Start/Bas, mobil, streaming, sport eller trygghet)."]);
+  veckoDiagram.push(
+    { typ: "stapel", titel: "Kunder per vecka – Sålda, Scrive och Summerat", katKol: 0, serier: [{ kol: 2 }, { kol: 3 }, { kol: 4 }],
+      rubrikRad: jamfStart + 1, radFran: jamfStart + 2, radTill: jamfStart + 1 + nV, kol: 10, rad: jamfStart, breddKol: 5, hojdRad: nV + 10 },
+    { typ: "linje", titel: "Summerat: snitt tjänster per kund per vecka", katKol: 0, serier: [{ kol: 5 }],
+      rubrikRad: 2 * blockH + 1, radFran: 2 * blockH + 2, radTill: 2 * blockH + 1 + nV, kol: 15, rad: 0, breddKol: 4, hojdRad: 16 },
+    { typ: "linje", titel: "Summerat: attach rate per vecka", katKol: 0, procent: true, serier: [{ kol: 6 }],
+      rubrikRad: 2 * blockH + 1, radFran: 2 * blockH + 2, radTill: 2 * blockH + 1 + nV, kol: 15, rad: 17, breddKol: 4, hojdRad: 16 },
+  );
+  const veckoBlad: SkrivBlad = { namn: "Veckor", rader: veckoRader, rubrik: false, bredd: [26, 16, 14, 26, 16, 18, 12, 26, 10], diagram: veckoDiagram };
 
-  // Säljare: egna affärer (affärer via kundtjänst på egen rad), månaden mot föregående.
+  // Säljare: egna affärer (affärer via kundtjänst på egen rad), månaden mot föregående, per grupp.
   const namnAv = (l: RapportLgh) => l.saljare ?? "Saknar säljare";
-  const personer = [...new Set([...nu, ...forra].filter((l) => !via(l)).map(namnAv))].sort((a, b) => a.localeCompare(b, "sv"));
+  const personer = [...new Set([...alla, ...allaForra].filter((l) => !via(l)).map(namnAv))].sort((a, b) => a.localeCompare(b, "sv"));
   const egna = (r: RapportLgh[], p: string) => r.filter((l) => namnAv(l) === p && !via(l));
   const saljRad = (namn: string, a: RapportLgh[], b: RapportLgh[]): Cell[] => {
     const A = nyckeltal(a), B = nyckeltal(b);
@@ -403,59 +428,67 @@ export function byggManadsrapport(manad: string, data: RapportData, fg: RapportD
       B.kunder, B.tjanster, snittC(B.snitt), procC(B.attach),
       diffTal(A.kunder, B.kunder), diffTal(A.tjanster, B.tjanster), diffSnitt(A.snitt, B.snitt), diffPE(A.attach, B.attach)];
   };
-  const ktNu = nu.filter(via), ktForra = forra.filter(via);
-  const saljRader = personer.map((p) => saljRad(p, egna(nu, p), egna(forra, p)));
-  const saljBlad: SkrivBlad = {
-    namn: "Säljare",
-    rader: [
-      ["Säljare", "Kunder", "Tjänster", "Bredband", "Snitt tjänster/kund", "Attach rate", "Pinnar",
-        `Kunder ${fgManad}`, `Tjänster ${fgManad}`, `Snitt ${fgManad}`, `Attach rate ${fgManad}`,
-        "Δ kunder", "Δ tjänster", "Δ snitt", "Δ attach rate (p.e.)"],
-      ...saljRader,
+  const SALJ_RUBRIK: Cell[] = ["Säljare", "Kunder", "Tjänster", "Bredband", "Snitt tjänster/kund", "Attach rate", "Pinnar",
+    `Kunder ${fgManad}`, `Tjänster ${fgManad}`, `Snitt ${fgManad}`, `Attach rate ${fgManad}`,
+    "Δ kunder", "Δ tjänster", "Δ snitt", "Δ attach rate (p.e.)"];
+  const saljRader: Cell[][] = [];
+  const saljDiagram: Diagram[] = [];
+  const saljBlock: Record<string, Cell[][]> = {};
+  for (const g of G) {
+    const rader = personer.map((p) => saljRad(p, egna(g.nu, p), egna(g.forra, p)));
+    saljBlock[g.namn] = rader;
+    const ktNu = g.nu.filter(via), ktForra = g.forra.filter(via);
+    const start = saljRader.length;
+    saljRader.push([{ fet: `${g.namn} – ${g.text}` }], SALJ_RUBRIK, ...rader,
       ...(ktNu.length || ktForra.length ? [saljRad("Kundtjänst", ktNu, ktForra)] : []),
-      saljRad("Totalt", nu, forra),
-      [],
-      ["Per säljare räknas säljarens egna affärer; affärer via kundtjänst ligger på raden Kundtjänst. Δ = månaden jämfört med föregående månad; attach rate i procentenheter."],
-    ],
-    bredd: [24, 10, 10, 10, 18, 12, 10, 16, 16, 16, 18, 10, 10, 10, 20],
-    diagram: [
-      { typ: "stapel", titel: "Kunder per säljare – månaden mot föregående", katKol: 0, serier: [{ kol: 1 }, { kol: 7 }],
-        radFran: 1, radTill: Math.max(1, saljRader.length), kol: 0, rad: saljRader.length + 6, breddKol: 6, hojdRad: 18 },
-    ],
-  };
+      saljRad(`Totalt ${g.namn}`, g.nu, g.forra), []);
+    saljDiagram.push({ typ: "stapel", titel: `${g.namn}: kunder per säljare – månaden mot föregående`, katKol: 0,
+      serier: [{ kol: 1 }, { kol: 7 }], rubrikRad: start + 1, radFran: start + 2, radTill: start + 1 + Math.max(1, rader.length),
+      kol: 16, rad: start, breddKol: 6, hojdRad: rader.length + 5 });
+  }
+  saljRader.push(["Per säljare räknas säljarens egna affärer; affärer via kundtjänst ligger på raden Kundtjänst. Δ = månaden jämfört med föregående månad; attach rate i procentenheter."]);
+  const saljBlad: SkrivBlad = { namn: "Säljare", rader: saljRader, rubrik: false, bredd: [26, 10, 10, 10, 18, 12, 10, 16, 16, 16, 18, 10, 10, 10, 20], diagram: saljDiagram };
 
-  // Månadsrapport: nyckeltal mot föregående månad + veckotabellen i kort form.
+  // Månadsrapport: nyckeltal mot föregående månad per grupp + veckotabell och säljare i kort form.
   const rad = (kpi: string, inneh: string, a: Cell, b: Cell, d: Cell, dp: Cell): Cell[] => [kpi, inneh, a, b, d, dp];
+  const kpiBlock = (g: typeof G[number]): Cell[][] => {
+    const N = nyckeltal(g.nu), F = nyckeltal(g.forra);
+    return [
+      [{ fet: `${g.namn} – ${g.text}` }],
+      [{ fet: "KPI" }, { fet: "Innehåll" }, { fet: manadNamn(manad) }, { fet: manadNamn(fgManad) }, { fet: "Förändring" }, { fet: "Förändring %" }],
+      rad("Total försäljning", "Totalt antal sålda tjänster (avtal)", N.tjanster, F.tjanster, diffTal(N.tjanster, F.tjanster), diffProc(N.tjanster, F.tjanster)),
+      rad("Snitt", "Genomsnittligt antal tjänster per kund", snittC(N.snitt), snittC(F.snitt), diffSnitt(N.snitt, F.snitt), N.snitt != null && F.snitt ? { procent: (N.snitt - F.snitt) / F.snitt } : "–"),
+      rad("Attach rate", "Andel bredbandskunder som köpt minst en tilläggstjänst (förändring i procentenheter)", procC(N.attach), procC(F.attach), diffPE(N.attach, F.attach), N.attach != null && F.attach ? { procent: (N.attach - F.attach) / F.attach } : "–"),
+      rad("Antal bredband", "Kunder med bredbandsabonnemang", N.bredband, F.bredband, diffTal(N.bredband, F.bredband), diffProc(N.bredband, F.bredband)),
+      rad("Antal kunder", g.namn === "Sålda" ? "Kunder med status Såld" : g.namn === "Scrive" ? "Kunder som signerat i Scrive" : "Sålda eller Scrive-signerade kunder", N.kunder, F.kunder, diffTal(N.kunder, F.kunder), diffProc(N.kunder, F.kunder)),
+      rad("Bredbandskunder med tillägg", "Antal bredbandskunder som köpt minst en tilläggstjänst", N.tillagg, F.tillagg, diffTal(N.tillagg, F.tillagg), diffProc(N.tillagg, F.tillagg)),
+      rad("Pinnar", "Före 80/20-delning med kundtjänst", { tal: N.pinnar, dec: 1 }, { tal: F.pinnar, dec: 1 }, { tal: N.pinnar - F.pinnar, dec: 1 }, diffProc(N.pinnar, F.pinnar)),
+      [],
+    ];
+  };
   const sum: Cell[][] = [
     [{ fet: `Månadsrapport Door to door – ${manadNamn(manad)}` }],
     ["Period", `${fran} – ${till}`, "", "", "", ""],
     ["Jämförs med", manadNamn(fgManad)],
     ["Skapad", new Date().toLocaleString("sv-SE", { timeZone: "Europe/Stockholm" })],
     [],
-    [{ fet: "KPI" }, { fet: "Innehåll" }, { fet: manadNamn(manad) }, { fet: manadNamn(fgManad) }, { fet: "Förändring" }, { fet: "Förändring %" }],
-    rad("Total försäljning", "Totalt antal sålda tjänster (avtal)", N.tjanster, F.tjanster, diffTal(N.tjanster, F.tjanster), diffProc(N.tjanster, F.tjanster)),
-    rad("Snitt", "Genomsnittligt antal tjänster per kund", snittC(N.snitt), snittC(F.snitt), diffSnitt(N.snitt, F.snitt), N.snitt != null && F.snitt ? { procent: (N.snitt - F.snitt) / F.snitt } : "–"),
-    rad("Attach rate", "Andel bredbandskunder som köpt minst en tilläggstjänst (förändring i procentenheter)", procC(N.attach), procC(F.attach), diffPE(N.attach, F.attach), N.attach != null && F.attach ? { procent: (N.attach - F.attach) / F.attach } : "–"),
-    rad("Antal bredband", "Kunder med bredbandsabonnemang", N.bredband, F.bredband, diffTal(N.bredband, F.bredband), diffProc(N.bredband, F.bredband)),
-    rad("Antal kunder", "Sålda eller Scrive-signerade kunder", N.kunder, F.kunder, diffTal(N.kunder, F.kunder), diffProc(N.kunder, F.kunder)),
-    rad("Bredbandskunder med tillägg", "Antal bredbandskunder som köpt minst en tilläggstjänst", N.tillagg, F.tillagg, diffTal(N.tillagg, F.tillagg), diffProc(N.tillagg, F.tillagg)),
-    rad("Pinnar", "Före 80/20-delning med kundtjänst", { tal: N.pinnar, dec: 1 }, { tal: F.pinnar, dec: 1 }, { tal: N.pinnar - F.pinnar, dec: 1 }, diffProc(N.pinnar, F.pinnar)),
-    [],
+    ...G.flatMap(kpiBlock),
     [{ fet: "Veckovis utveckling" }, "", "", "", "", ""],
-    [{ fet: "Vecka" }, { fet: "Dagar" }, { fet: "Kunder" }, { fet: "Tjänster" }, { fet: "Snitt" }, { fet: "Attach rate" }],
-    ...veckoRader.map((r): Cell[] => [r[0], r[1], r[2], r[3], r[5], r[6]]),
-    [],
-    [{ fet: "Säljare" }, "", { fet: "Kunder" }, { fet: "Tjänster" }, { fet: "Snitt" }, { fet: "Attach rate" }],
-    ...saljRader.map((r): Cell[] => [r[0], "", r[1], r[2], r[4], r[5]]),
-    [],
-    ["Kund = såld eller Scrive-signerad i månaden (räknas en gång). Diagrammen finns på bladen Veckor och Säljare; detaljer per kund på Sålda och Scrive."],
+    [{ fet: "Vecka" }, { fet: "Dagar" }, { fet: "Kunder Sålda" }, { fet: "Kunder Scrive" }, { fet: "Kunder Summerat" }, { fet: "Tjänster Summerat" }, { fet: "Snitt Summerat" }, { fet: "Attach rate Summerat" }],
   ];
-  const veckoStart = 16; // raden för första veckan i `sum` (0-baserat)
+  const veckoStart = sum.length;
+  sum.push(...veckoLista.map(([, v], i): Cell[] => [`Vecka ${i + 1} (v. ${v.vecka})`, `${kortDatum(v.fran)} – ${kortDatum(v.till)}`,
+    veckoBlock.Sålda[i][2], veckoBlock.Scrive[i][2], veckoBlock.Summerat[i][2], veckoBlock.Summerat[i][3], veckoBlock.Summerat[i][5], veckoBlock.Summerat[i][6]]));
+  sum.push([],
+    [{ fet: "Säljare" }, "", { fet: "Kunder Sålda" }, { fet: "Kunder Scrive" }, { fet: "Kunder Summerat" }, { fet: "Tjänster Summerat" }, { fet: "Snitt Summerat" }, { fet: "Attach rate Summerat" }],
+    ...personer.map((p, i): Cell[] => [p, "", saljBlock.Sålda[i][1], saljBlock.Scrive[i][1], saljBlock.Summerat[i][1], saljBlock.Summerat[i][2], saljBlock.Summerat[i][4], saljBlock.Summerat[i][5]]),
+    [],
+    ["Sålda = status Såld med säljdatum i månaden. Scrive = signerade i månaden. Summerat = såld eller signerad, en kund räknas en gång. Diagrammen finns på bladen Veckor och Säljare; detaljer per kund på Sålda och Scrive."]);
   const sumBlad: SkrivBlad = {
-    namn: "Månadsrapport", rader: sum, rubrik: false, bredd: [30, 52, 18, 18, 14, 14],
+    namn: "Månadsrapport", rader: sum, rubrik: false, bredd: [30, 52, 18, 18, 18, 18, 14, 20],
     diagram: [
-      { typ: "stapel", titel: "Kunder och tjänster per vecka", katKol: 0, serier: [{ kol: 2 }, { kol: 3 }],
-        radFran: veckoStart, radTill: veckoStart + veckoRader.length - 1, kol: 6, rad: 5, breddKol: 6, hojdRad: 16 },
+      { typ: "stapel", titel: "Kunder per vecka – Sålda, Scrive och Summerat", katKol: 0, serier: [{ kol: 2 }, { kol: 3 }, { kol: 4 }],
+        rubrikRad: veckoStart - 1, radFran: veckoStart, radTill: veckoStart + nV - 1, kol: 8, rad: 5, breddKol: 7, hojdRad: 18 },
     ],
   };
   return [sumBlad, veckoBlad, saljBlad];
