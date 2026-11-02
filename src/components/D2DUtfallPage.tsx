@@ -410,7 +410,7 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
                 <strong>Månadsrapport</strong>
                 <span className="formfield__help">
                   Nyckeltal för månaden jämfört med föregående månad (total försäljning, snitt, attach rate, bredband, kunder),
-                  veckoutveckling med diagram och resultat per säljare — plus bladen ovan för månaden. Projekt- och säljarfiltret ovan gäller; VT-filen används om den är vald.
+                  veckoutveckling med diagram och resultat per säljare — uppdelat på Sålda, Scrive och Summerat — plus bladen ovan för månaden. Projekt- och säljarfiltret ovan gäller; VT-filen används om den är vald.
                 </span>
               </div>
               <label className="utf__manad-valj">
