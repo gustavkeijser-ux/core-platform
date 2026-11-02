@@ -1,0 +1,7 @@
+---
+titel: Månadsrapporten uppdelad på Sålda, Scrive och Summerat
+omrade: D2D
+bestallare: Gustav
+testlank: https://test.crm.connectestate.se/#/d2dutfall
+---
+Månadsrapporten (Door to door → Utfall → Excel-rapport → Hämta månadsrapport) visar nu varje del i tre block (Gustav 2 nov: "dela upp sålda och scrive – samt en summerad"): **Sålda** (status Såld med säljdatum i månaden), **Scrive** (Scrive-avtal signerade i månaden) och **Summerat** (såld eller signerad, en kund räknas en gång). Bladet Månadsrapport har nyckeltalstabellen mot föregående månad per block, en veckotabell med kunder per grupp och en säljartabell med kunder per grupp (+ diagram kunder per vecka för de tre). Bladet Veckor har ett block per grupp med eget stapeldiagram, en jämförelsetabell kunder per vecka med diagram, samt linjediagram snitt och attach rate (Summerat). Bladet Säljare har ett block per grupp med eget diagram. Sålda räknas på säljdatumet, Scrive på signeringsdatumet; Summerat på säljdatumet om kunden är Såld, annars signeringsdatumet. Oktober i riktiga databasen: Sålda 236 kunder / 427 tjänster / snitt 1,81 / attach 44 %; Scrive 62 / 98 / 1,58 / 43 %; Summerat 298 / 525 / 1,76 / 44 %. Testat: tsc, filen byggd med riktig oktober-/septemberdata och kontrollerad i openpyxl och LibreOffice (diagrammens cellreferenser pekar rätt). Prova: Utfall → Excel-rapport → oktober 2026 → Hämta månadsrapport. Filer: `lib/d2dUtfallRapport.ts` (`byggManadsrapport`, `GRUPPER`), `D2DUtfallPage.tsx` (hjälptext).
