@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { startaSynligPoll } from "@/lib/synligPoll";
 import { skrivXlsx, laddaNed } from "@/lib/xlsxSkriv";
-import { byggUtfallRapport, lasVtExport, type RapportData } from "@/lib/d2dUtfallRapport";
+import { byggUtfallRapport, byggManadsrapport, lasVtExport, manadGranser, foregaendeManad, type RapportData } from "@/lib/d2dUtfallRapport";
 import { FilterPills, SkeletonRows } from "./PageChrome";
 import { PenTiles, PenTabell, usePenetration, datumStr, pctStr, PEN_MATT, type PenSumma } from "./PenetrationTab";
 import { D2DTeliaAvstamning } from "./D2DTeliaAvstamning";
@@ -206,6 +206,35 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
     }
   }
 
+  // Månadsrapport: en kalendermånad jämförd med föregående, veckoutveckling och per säljare (Gustav 2 nov).
+  const [rapportManad, setRapportManad] = useState(() => {
+    const d = new Date(); d.setDate(0); // föregående månad – den man oftast rapporterar
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [manadBusy, setManadBusy] = useState(false);
+  async function hamtaManadsrapport() {
+    if (!/^\d{4}-\d{2}$/.test(rapportManad)) { setRapportFel("Välj en månad."); return; }
+    setManadBusy(true); setRapportFel(null);
+    try {
+      const vt = vtFil ? await lasVtExport(vtFil) : null;
+      const hamta = async (m: string) => {
+        const { fran: f, till: t } = manadGranser(m);
+        const { data, error } = await supabase.rpc("d2d_utfall_rapport", {
+          p_fran: f, p_till: t, p_projekt: projekt || null, p_saljare: saljare || null,
+        });
+        if (error) throw new Error(error.message);
+        return data as RapportData;
+      };
+      const [nu, forra] = await Promise.all([hamta(rapportManad), hamta(foregaendeManad(rapportManad))]);
+      const blad = [...byggManadsrapport(rapportManad, nu, forra), ...byggUtfallRapport(nu, vt, vtFil?.name)];
+      laddaNed(skrivXlsx(blad), `Manadsrapport_D2D_${rapportManad}.xlsx`);
+    } catch (e) {
+      setRapportFel(e instanceof Error ? e.message : "Kunde inte skapa månadsrapporten.");
+    } finally {
+      setManadBusy(false);
+    }
+  }
+
   /** När siffrorna senast hämtades (visas vid filtren). */
   const [hamtad, setHamtad] = useState<Date | null>(null);
 
@@ -373,9 +402,26 @@ export function D2DUtfallPage({ onOpenRecord }: { onOpenRecord: (id: string) => 
                 {vtFil ? `Matchas mot ${vtFil.name} på adress och lägenhet.` : "Utan fil blir kolumnen Godkänd i VT tom."} Personnummer i filen läses inte in.
               </small>
             </label>
-            <button type="button" className="btn btn--brand" disabled={rapportBusy} onClick={hamtaRapport}>
+            <button type="button" className="btn btn--brand" disabled={rapportBusy || manadBusy} onClick={hamtaRapport}>
               {rapportBusy ? "Skapar…" : "Hämta Excel"}
             </button>
+            <div className="utf__manad">
+              <div className="utf__rapport-text">
+                <strong>Månadsrapport</strong>
+                <span className="formfield__help">
+                  Nyckeltal för månaden jämfört med föregående månad (total försäljning, snitt, attach rate, bredband, kunder),
+                  veckoutveckling med diagram och resultat per säljare — plus bladen ovan för månaden. Projekt- och säljarfiltret ovan gäller; VT-filen används om den är vald.
+                </span>
+              </div>
+              <label className="utf__manad-valj">
+                <span>Månad</span>
+                <input type="month" className="input input--sm" aria-label="Månad för månadsrapporten" value={rapportManad}
+                  max={dagStr(new Date()).slice(0, 7)} onChange={(e) => setRapportManad(e.target.value)} />
+              </label>
+              <button type="button" className="btn btn--brand" disabled={rapportBusy || manadBusy} onClick={hamtaManadsrapport}>
+                {manadBusy ? "Skapar…" : "Hämta månadsrapport"}
+              </button>
+            </div>
             {rapportFel && <div className="formfield__error">{rapportFel}</div>}
           </section>
         );
