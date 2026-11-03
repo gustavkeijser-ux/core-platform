@@ -1,5 +1,6 @@
 import "@/styles/d2d.css";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRoute, navigate, goBack } from "@/lib/route";
 import { rememberRow, useReturnToRow } from "@/lib/returnRow";
 import { supabase } from "@/integrations/supabase/client";
@@ -1396,10 +1397,12 @@ function fastighetRubrik(f: RecordRow): { rubrik: string; under: string | null }
 }
 
 function FastighetRow({
-  fastighet, sellers, statusar, summa, grannar, onChanged, onRemove,
+  fastighet, sellers, statusar, summa, grannar, onChanged, onRemove, onFokus,
 }: {
   fastighet: FastRow; sellers: SellerOption[]; statusar: SaljStatus[]; summa?: StatusSumma;
   grannar?: Granne[] | null; onChanged: () => void; onRemove: () => void;
+  /** Kartan: klick på namnet visar huset på kartan. */
+  onFokus?: () => void;
 }) {
   const [open, setOpen] = useState<"none" | "addresses" | "assign" | "info">("none");
   const [turordning, setTurordning] = useState(String((fastighet.data as Record<string, unknown>).turordning ?? ""));
@@ -1449,7 +1452,9 @@ function FastighetRow({
           aria-label="Turordning"
         />
         <div className="d2dpb-rad__namn">
-          <strong>{rubrik.rubrik}</strong>
+          {onFokus
+            ? <button type="button" className="d2dpb-rad__fokus" onClick={onFokus} title="Visa på kartan"><strong>{rubrik.rubrik}</strong></button>
+            : <strong>{rubrik.rubrik}</strong>}
           <span>{[rubrik.under, `${fastighet._addrCount} adresser`].filter(Boolean).join(" · ")}</span>
           <span className={`d2dpb-rad__saljare${assignment.length ? "" : " d2dpb-rad__saljare--ingen"}`}
             title={assignment.map((x) => `${namn(x.user_id)} ${x.procent} %`).join(", ")}>
@@ -1651,9 +1656,13 @@ const PROJEKT_KOLUMNER = [
  * kartan på Door to door → Karta; då väljs fastigheterna på kartan i stället för
  * i leveranslistan, och kartsektionen och tillbakaknappen döljs.
  */
-export function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord, inbaddad = false, reloadKey = 0, onAndrat }: {
+export function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord, inbaddad = false, reloadKey = 0, onAndrat, platser, onFokus }: {
   projektId: string; onBack: () => void; deliveryDef?: ObjectDef; onOpenRecord?: (id: string) => void;
   inbaddad?: boolean; reloadKey?: number; onAndrat?: () => void;
+  /** Kartan: rendera översikten (rubrik, nyckeltal, säljstatus) och fastighetslistan
+   *  i egna platser på sidan i stället för i flödet. */
+  platser?: { topp?: HTMLElement | null; fastigheter?: HTMLElement | null };
+  onFokus?: (fastighetId: string) => void;
 }) {
   const [project, setProject] = useState<RecordRow | null>(null);
   const [fastigheter, setFastigheter] = useState<FastRow[]>([]);
@@ -1808,6 +1817,9 @@ export function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord, in
   if (!project) return <div className="d2d-empty">Projektet hittades inte.</div>;
 
   const data = project.data as Record<string, unknown>;
+  // Kartan ger egna platser för delar av vyn; annars renderas de i flödet.
+  const iPlats = (plats: HTMLElement | null | undefined, innehall: React.ReactNode) =>
+    plats ? createPortal(innehall, plats) : innehall;
 
   const grannar = narmasteGrannar(fastigheter);
   const harLage = fastigheter.filter((f) => punktFor(f)).length;
@@ -1838,6 +1850,7 @@ export function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord, in
         </button>
       </TopbarActions>
 
+      {iPlats(platser?.topp, <>
       <div className="d2dpb-crumb">
         {!inbaddad && <button type="button" className="btn btn--ghost btn--sm" onClick={onBack}>← Alla projekt</button>}
         <h2 className="d2dpb-crumb__title">{project.title ?? "Projekt"}</h2>
@@ -1865,6 +1878,9 @@ export function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord, in
         </section>
       )}
 
+      </>)}
+
+      {iPlats(platser?.fastigheter, <>
       <section className="card d2dpb-sek d2dpb-sek--tabell">
         <div className="d2dpb-sek__head">
           <h2>Fastigheter <span className="d2dpb-sek__antal">{fastigheter.length}</span></h2>
@@ -1898,6 +1914,7 @@ export function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord, in
                 grannar={grannar.get(f.id)}
                 onChanged={load}
                 onRemove={() => removeFastighet(f.id)}
+                onFokus={onFokus ? () => onFokus(f.id) : undefined}
               />
             ))}
           </div>
@@ -1910,6 +1927,8 @@ export function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord, in
           />
         )}
       </section>
+
+      </>)}
 
       {deliveryDef && !inbaddad && (
         <section className="card d2dpb-sek d2dpb-leveranser">
