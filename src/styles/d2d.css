@@ -1723,3 +1723,125 @@
   .d2dpb-delning__verktyg { flex-wrap: wrap; }
   .d2dpb-delning__verktyg .input { flex: 1 1 100%; }
 }
+
+/* =============================================================================
+   Door to door → Karta (D2DKarta.tsx)
+   Utfallsfärgerna skiljer sig i ljushet, inte bara kulör, så en smal tårtbit
+   går att läsa. De är kartans egna och ligger därför här, inte i tokens.css.
+   ============================================================================= */
+.d2dk {
+  --d2dk-salt: #1E8E4E;      /* Sålt — mörk mättad grön */
+  --d2dk-telia: #A63A9E;     /* Aktiv med Telia — plommonmagenta */
+  --d2dk-annan: #8FBE86;     /* Kall kund — salvia */
+  --d2dk-ater: #E4A230;      /* Återkoppling — bärnsten */
+  --d2dk-ej: #C24A3E;        /* Ej säljbar — tegel */
+  --d2dk-okant: #B9C6D3;     /* Ej kontaktad / okänt — sval grå */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: var(--sp-4);
+  height: calc(100vh - 140px);
+  min-height: 520px;
+}
+.d2dk-s { fill: var(--d2dk-salt); background: var(--d2dk-salt); }
+.d2dk-t { fill: var(--d2dk-telia); background: var(--d2dk-telia); }
+.d2dk-a { fill: var(--d2dk-annan); background: var(--d2dk-annan); }
+.d2dk-r { fill: var(--d2dk-ater); background: var(--d2dk-ater); }
+.d2dk-x { fill: var(--d2dk-ej); background: var(--d2dk-ej); }
+.d2dk-e { fill: var(--d2dk-okant); background: var(--d2dk-okant); }
+.d2dk .q1 { background: color-mix(in srgb, var(--hue-red) 75%, var(--surface)); }
+.d2dk .q2 { background: color-mix(in srgb, var(--hue-orange) 70%, var(--surface)); }
+.d2dk .q3 { background: color-mix(in srgb, var(--hue-slate) 45%, var(--surface)); }
+.d2dk .q4 { background: color-mix(in srgb, var(--hue-green) 60%, var(--surface)); }
+.d2dk .q5 { background: color-mix(in srgb, var(--hue-green) 95%, var(--ink)); }
+
+.d2dk-karta-wrap { position: relative; min-height: 0; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--border); }
+.d2dk-karta { position: absolute; inset: 0; background: var(--surface-sunk); }
+.d2dk-niva, .d2dk-legend {
+  position: absolute; z-index: 500; background: var(--surface); color: var(--ink);
+  border-radius: var(--r-md); box-shadow: var(--shadow-sm); font-size: var(--text-xs);
+}
+.d2dk-niva { top: var(--sp-3); right: var(--sp-3); padding: 4px 10px; font-weight: 600; }
+.d2dk-legend { left: var(--sp-3); bottom: var(--sp-3); padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100% - 24px); }
+.d2dk-legend span, .d2dk-stapel__leg span { display: inline-flex; align-items: center; gap: 5px; }
+.d2dk-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* Markörerna: lagret byts helt vid nivåbyte, inga dolda markörer tar emot klick. */
+.d2dk-ikon { background: none; border: 0; }
+.d2dk-m { position: relative; display: grid; place-items: center; cursor: pointer; }
+.d2dk-m svg { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), var(--shadow-sm); }
+.d2dk-m .d2dk-q { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), var(--shadow-sm); }
+.d2dk-m b {
+  position: relative; font-size: 11px; font-weight: 700; line-height: 1; padding: 2px 4px;
+  border-radius: var(--r-pill); background: var(--surface); color: var(--ink);
+}
+.d2dk-m:hover svg, .d2dk-m:hover .d2dk-q { box-shadow: 0 0 0 3px var(--brand), var(--shadow-md); }
+
+.d2dk-panel { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding-right: 2px; }
+.d2dk-lage { display: flex; background: var(--surface-sunk); border-radius: var(--r-pill); padding: 3px; }
+.d2dk-lage button {
+  flex: 1; border: 0; background: none; padding: 7px 10px; border-radius: var(--r-pill);
+  font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--ink-muted); cursor: pointer;
+}
+.d2dk-lage button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+.d2dk-hjalp { margin: 0; font-size: var(--text-xs); color: var(--ink-muted); }
+.d2dk-tom { font-size: var(--text-sm); color: var(--ink-muted); padding: var(--sp-2) 0; }
+.d2dk-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); }
+.d2dk-tiles > div { background: var(--surface-alt); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); }
+.d2dk-tiles b { display: block; font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
+.d2dk-tiles span { font-size: var(--text-xs); color: var(--ink-muted); }
+.d2dk-filter { display: flex; flex-direction: column; gap: var(--sp-2); }
+.d2dk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.d2dk-chip {
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink-soft);
+  border-radius: var(--r-pill); padding: 4px 10px; font: inherit; font-size: var(--text-xs); cursor: pointer;
+}
+.d2dk-chip.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); font-weight: 600; }
+.d2dk-rad { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.d2dk-rad label { display: flex; flex-direction: column; gap: 3px; font-size: var(--text-xs); color: var(--ink-muted); }
+
+.d2dk-sek { border-top: 1px solid var(--divider); padding-top: var(--sp-3); }
+.d2dk-sek h3, .d2dk-kort h3 { margin: 0 0 4px; font-size: var(--text-base); }
+.d2dk-sek__knapp { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; }
+.d2dk-lista { list-style: none; margin: var(--sp-2) 0 0; padding: 0; counter-reset: d2dk; }
+.d2dk-lista li { counter-increment: d2dk; }
+.d2dk-lista button {
+  width: 100%; display: grid; grid-template-columns: 22px 1fr auto; grid-template-rows: auto auto; column-gap: var(--sp-2);
+  text-align: left; border: 0; background: none; padding: 7px 4px; border-radius: var(--r-sm); font: inherit; color: var(--ink); cursor: pointer;
+}
+.d2dk-lista button::before { content: counter(d2dk); grid-row: 1 / 3; color: var(--ink-faint); font-size: var(--text-xs); padding-top: 2px; }
+.d2dk-lista button:hover { background: var(--overlay-hover); }
+.d2dk-lista__namn { font-weight: 600; font-size: var(--text-sm); }
+.d2dk-lista__sub { grid-column: 2; font-size: var(--text-xs); color: var(--ink-muted); }
+.d2dk-lista b { grid-column: 3; grid-row: 1 / 3; align-self: center; font-variant-numeric: tabular-nums; }
+.d2dk-kval { list-style: none; margin: var(--sp-2) 0; padding: 0; font-size: var(--text-sm); }
+.d2dk-kval li { display: flex; flex-wrap: wrap; justify-content: space-between; padding: 3px 0; }
+.d2dk-kval__rader { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 6px; }
+.d2dk-kval__rader button, .d2dk-kval__rader span {
+  border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-pill);
+  padding: 2px 8px; font: inherit; font-size: var(--text-xs); color: var(--ink-soft); cursor: pointer;
+}
+.d2dk-import input { display: none; }
+.d2dk-import { display: inline-block; margin-top: var(--sp-2); cursor: pointer; }
+.d2dk-version { font-size: 10px; color: var(--ink-faint); text-align: right; padding-bottom: var(--sp-2); }
+
+.d2dk-kort { padding: var(--sp-4); }
+.d2dk-kort__head { display: flex; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.d2dk-kort__sub { font-size: var(--text-xs); color: var(--ink-muted); }
+.d2dk-kort h4 { margin: var(--sp-3) 0 4px; font-size: var(--text-sm); }
+.d2dk-delar { list-style: none; margin: 0; padding: 0; font-size: var(--text-sm); }
+.d2dk-delar li { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--divider-soft); }
+.d2dk-delar li b { font-variant-numeric: tabular-nums; }
+.d2dk-delar li.upp b { color: var(--ok-ink); }
+.d2dk-delar li.ner b { color: var(--danger-ink); }
+.d2dk-fakta { display: grid; grid-template-columns: auto 1fr; gap: 3px var(--sp-3); margin: var(--sp-3) 0 0; font-size: var(--text-sm); }
+.d2dk-fakta dt { color: var(--ink-muted); }
+.d2dk-fakta dd { margin: 0; }
+.d2dk-stapel { display: flex; height: 10px; border-radius: var(--r-pill); overflow: hidden; gap: 1px; }
+.d2dk-stapel__leg { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: var(--text-xs); color: var(--ink-soft); }
+.d2dk-kort__knappar { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .d2dk { grid-template-columns: 1fr; height: auto; }
+  .d2dk-karta-wrap { height: 60vh; min-height: 340px; }
+  .d2dk-panel { overflow: visible; }
+}
