@@ -32,6 +32,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 ## 2026-11-03
 
 - [D2D] Kirunagatan 98 lgh 1701 såld av kundtjänst: [D2D] Kirunagatan 98 lgh 1701 (Vällingby) rättad: såld 2026-11-03 av enbart kundtjänst, inte delad med eller tilldelad någon dörrsäljare (kundtjänst-markeringen borttagen, säljdatum flyttat från 27 okt). DB: 20261103_1200_d2d_kirunagatan_kundtjanst. Publicerad av gustav@connectestate.se (uppgift 20261103-1200-kirunagatan-kundtjanst).
+- [D2D] Kirunagatan 98 lgh 1701 såld av kundtjänst: [D2D] Kirunagatan 98 lgh 1701 (Vällingby) rättad: såld 2026-11-03 av enbart kundtjänst, inte delad med eller tilldelad någon dörrsäljare (kundtjänst-markeringen borttagen, säljdatum flyttat från 27 okt). DB: 20261103_1200_d2d_kirunagatan_kundtjanst. Publicerad av gustav@connectestate.se (uppgift 20261103-1200-kirunagatan-kundtjanst).
 
 ## 2026-11-02
 
