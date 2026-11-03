@@ -11,7 +11,6 @@ import { prisKategorier } from "./D2DAvtal";
 import { saldaTjanster } from "@/lib/d2dPris";
 import { RecordDrawer } from "./RecordDrawer";
 import { KanbanBoard } from "./KanbanBoard";
-import { LeveransKort } from "./LeveransKort";
 import { LeveransAgareKort, hamtaAgareOversikt, agareFilter, gruppNyckel, type AgareGrupp } from "./LeveransAgareKort";
 import { LeveransFastighetslista, hamtaFastighetslista, type FastighetRad } from "./LeveransFastighetslista";
 import { ColumnConfigPanel } from "./ColumnConfigPanel";
@@ -187,6 +186,9 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   const [levVy, setLevVy] = useState<"koncern" | "fastigheter">(saved.levVy ?? "koncern");
   const [fastRader, setFastRader] = useState<FastighetRad[]>([]);
   const visarFastigheter = mode === "kort" && levVy === "fastigheter";
+  // En koncernmoders fastigheter visas i samma tabell som "Alla fastigheter"
+  // (samma data och fält, så ändringar syns i båda vyerna).
+  const visarKmTabell = mode === "kort" && !!agare && !visarFastigheter;
   const visarAgare = mode === "kort" && !agare && !visarFastigheter;
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(saved.page ?? 0);
@@ -357,9 +359,10 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
     setLoading(true);
     setError(null);
     try {
-      if (visarFastigheter) {
+      if (visarFastigheter || visarKmTabell) {
         const f: RecordFilter[] = [...allFilters];
         if (status) f.push({ field: "__status", op: "eq", value: status });
+        if (visarKmTabell) f.push(agareFilter(agare));
         const rader = await hamtaFastighetslista(search || undefined, f);
         setFastRader(rader);
         setTotal(rader.length);
@@ -386,7 +389,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       setItems(res.items);
       setTotal(res.total);
     } catch (e) {
-      setError(e instanceof DataError || (e instanceof Error && (visarAgare || visarFastigheter)) ? (e as Error).message : "Kunde inte hämta listan.");
+      setError(e instanceof DataError || (e instanceof Error && (visarAgare || visarFastigheter || visarKmTabell)) ? (e as Error).message : "Kunde inte hämta listan.");
     } finally {
       setLoading(false);
     }
@@ -903,33 +906,16 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
                 grupper={grupper}
                 loading={loading}
                 onOpen={(g) => {
-                  setItems([]); setTotal(0); setPage(0);
+                  setItems([]); setFastRader([]); setTotal(0); setPage(0);
                   setAgareNamn(g.kund ?? "Ingen kund kopplad"); setAgarePost(g.post_id); setAgare(gruppNyckel(g));
                   window.scrollTo({ top: 0 });
                 }}
               />
       )}
 
-      {!error && visarFastigheter && (
-        loading && fastRader.length === 0
-          ? <div className="card"><SkeletonRows /></div>
-          : fastRader.length === 0
-            ? <div className="card"><EmptyState kind={filtered ? "filtered" : undefined} title={filtered ? "Inga träffar" : `Inga ${plural} än`}
-                text={filtered ? "Inget matchar sökningen eller filtren. Rensa dem för att se alla." : "Projektplanen är tom."} /></div>
-            : <LeveransFastighetslista
-                rader={fastRader}
-                loading={loading}
-                onOpen={openRow}
-                kanAndra={objectDef.can.update}
-                onRadAndrad={(id, andring) => setFastRader((rs) => rs.map((r) => (r.id === id
-                  ? { ...r, ...andring, detalj: andring.detalj ? { ...(r.detalj ?? {}), ...andring.detalj } : r.detalj }
-                  : r)))}
-              />
-      )}
-
-      {!error && mode === "kort" && agare && !visarFastigheter && (
+      {!error && visarKmTabell && (
         <div className="lev-agare-rubrik">
-          <button className="btn btn--ghost btn--sm" onClick={() => { setPage(0); setAgare(""); }}>← Alla fastighetsägare</button>
+          <button className="btn btn--ghost btn--sm" onClick={() => { setPage(0); setFastRader([]); setAgare(""); }}>← Alla koncernmödrar</button>
           <h2 className="lev-agare-rubrik__titel">{agareNamn || "Leveranser"}</h2>
           {!loading && <span className="lev-agare-rubrik__antal">{total} {total === 1 ? "fastighet" : "fastigheter"}</span>}
           {agarePost && (
@@ -940,23 +926,26 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         </div>
       )}
 
-      {!error && mode === "kort" && agare && !visarFastigheter && (
-        loading && items.length === 0
+      {!error && (visarFastigheter || visarKmTabell) && (
+        loading && fastRader.length === 0
           ? <div className="card"><SkeletonRows /></div>
-          : items.length === 0
+          : fastRader.length === 0
             ? <div className="card"><EmptyState kind={filtered ? "filtered" : undefined} title={filtered ? "Inga träffar" : `Inga ${plural} än`}
-                text={filtered ? "Inget matchar sökningen eller filtren. Rensa dem för att se alla." : "Lägg till den första för att komma igång."} /></div>
-            : <LeveransKort
-                objectDef={objectDef}
-                items={items}
+                text={filtered ? "Inget matchar sökningen eller filtren. Rensa dem för att se alla." : "Projektplanen är tom."} /></div>
+            : <LeveransFastighetslista
+                key={visarKmTabell ? `km:${agare}` : "alla"}
+                filterNyckel={visarKmTabell ? "lev-fl:kolumnfilter:km" : undefined}
+                rader={fastRader}
                 loading={loading}
                 onOpen={openRow}
-                onDelete={objectDef.can.delete ? onDelete : undefined}
-                returnRow={returnRow}
+                kanAndra={objectDef.can.update}
+                onRadAndrad={(id, andring) => setFastRader((rs) => rs.map((r) => (r.id === id
+                  ? { ...r, ...andring, detalj: andring.detalj ? { ...(r.detalj ?? {}), ...andring.detalj } : r.detalj }
+                  : r)))}
               />
       )}
 
-      {(mode === "list" || (mode === "kort" && !!agare && !visarFastigheter)) && !error && total > 0 && (
+      {mode === "list" && !error && total > 0 && (
         <Pager page={page} pageSize={PAGE_SIZE} total={total} unit={plural} onPage={setPage} />
       )}
 
