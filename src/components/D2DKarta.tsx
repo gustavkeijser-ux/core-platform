@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { lasXlsx, bladnamn, tillObjekt } from "@/lib/xlsx";
 import { useRoute, navigate } from "@/lib/route";
-import { createRecord, removeRelation, DataError } from "@/lib/data";
-import { ProjectDetail, d2dProjektLeveranser, d2dLaggTillLeveranser } from "./D2DProjectBuilder";
+import { createRecord, removeRelation, listSellers, d2dSetAssignment, DataError, type SellerOption } from "@/lib/data";
+import { ProjectDetail, AssignmentEditor, d2dProjektLeveranser, d2dLaggTillLeveranser, type Assignment } from "./D2DProjectBuilder";
 import "@/styles/d2d.css";
 
 /* =============================================================================
@@ -22,10 +22,12 @@ import "@/styles/d2d.css";
    lägg till hus (ett i taget eller ett helt område) och tilldela säljare i
    projektet som visas under kartan (samma vy som Door to door → Projekt).
    Husen läggs till via leveransen, så hus som bara finns i Masterlistan kan
-   inte väljas förrän de finns i projektplanen.
+   inte väljas förrän de finns i projektplanen. Säljare tilldelas direkt i
+   husets kort: en säljare sparas direkt (100 %), flera säljare öppnar en
+   popup där adresserna fördelas.
    ============================================================================= */
 
-const VERSION = "Karta 1.1 · 2026-11-03";
+const VERSION = "Karta 1.2 · 2026-11-03";
 
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
@@ -309,6 +311,11 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const [projFel, setProjFel] = useState<string | null>(null);
   const [nyttNamn, setNyttNamn] = useState<string | null>(null);
   const [baraProjekt, setBaraProjekt] = useState(false);
+  const [saljare, setSaljare] = useState<SellerOption[]>([]);
+  // Projektets fastigheter: id → tilldelning (säljare och ev. manuell fördelning per adress).
+  const [tilldelning, setTilldelning] = useState<Map<string, Tilldelning>>(new Map());
+  // Popupen för flera säljare.
+  const [fleraSaljare, setFleraSaljare] = useState<{ fastId: string; rubrik: string; forvalda: string[] } | null>(null);
 
   const mapEl = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletAny>(null);
@@ -333,9 +340,35 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   useEffect(() => { laddaProjektLista().catch(() => {}); }, []);
 
   async function laddaProjektHus() {
-    setLevTillFast(projektId ? await d2dProjektLeveranser(projektId).catch(() => new Map()) : new Map());
+    const karta: Map<string, string> = projektId ? await d2dProjektLeveranser(projektId).catch(() => new Map()) : new Map();
+    setLevTillFast(karta);
+    const ids = [...karta.values()];
+    const ny = new Map<string, Tilldelning>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: rader } = await supabase.from("records").select("id,data").in("id", ids.slice(i, i + 200));
+      for (const rad of (rader ?? []) as Array<{ id: string; data: Record<string, unknown> }>) {
+        ny.set(rad.id, {
+          saljare: (rad.data.saljartilldelning as Assignment[] | undefined) ?? [],
+          manuell: (rad.data.manuell_tilldelning as Record<string, string> | undefined) ?? null,
+        });
+      }
+    }
+    setTilldelning(ny);
   }
-  useEffect(() => { setProjFel(null); setBaraProjekt(false); laddaProjektHus(); }, [projektId]);
+  useEffect(() => { setProjFel(null); setBaraProjekt(false); setFleraSaljare(null); laddaProjektHus(); }, [projektId]);
+  useEffect(() => { if (projektId && saljare.length === 0) listSellers().then(setSaljare).catch(() => {}); }, [projektId]);
+
+  /** En säljare får alla adresser i huset (100 %). */
+  async function tilldelaEn(fastId: string, userId: string) {
+    setProjFel(null);
+    try {
+      await d2dSetAssignment(fastId, [{ user_id: userId, procent: 100 }]);
+    } catch (e) {
+      setProjFel(e instanceof DataError ? e.message : "Kunde inte tilldela säljaren.");
+    }
+    await laddaProjektHus();
+    setProjKey((k) => k + 1);
+  }
 
   const iProjekt = (h: KartHus) => !!h.levId && levTillFast.has(h.levId);
 
@@ -493,6 +526,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const valtHus = valt ? data?.fastigheter.find((h) => h.id === valt) ?? null : null;
   const projHus = useMemo(() => (data?.fastigheter ?? []).filter(iProjekt), [data, levTillFast]);
   const projNamn = projektLista.find((p) => p.id === projektId)?.title ?? "Projekt";
+  const utanSaljare = [...levTillFast.values()].filter((id) => !(tilldelning.get(id)?.saljare.length)).length;
   useEffect(() => { if (valt) kortRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [valt]);
 
   async function importera(fil: File | null) {
@@ -559,11 +593,12 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
                 <>
                   <div className="d2dk-projekt__sum">
                     <b>{projNamn}</b>: {heltal(projHus.length)} hus · {heltal(projHus.reduce((s, h) => s + h.lgh, 0))} lgh · {heltal(projHus.reduce((s, h) => s + h.effektiva, 0))} effektiva dörrar
+                    {utanSaljare > 0 && <span className="d2dk-projekt__varning"> · {utanSaljare} hus utan säljare</span>}
                   </div>
                   <label className="d2dk-projekt__bara">
                     <input type="checkbox" checked={baraProjekt} onChange={(e) => setBaraProjekt(e.target.checked)} /> Visa bara projektets hus
                   </label>
-                  <p className="d2dk-hjalp">Klicka på ett hus och välj Lägg till, eller lägg till ett helt område med + i listan nedan. Tilldela säljare under kartan.</p>
+                  <p className="d2dk-hjalp">Klicka på ett hus och välj Lägg till, eller lägg till ett helt område med + i listan nedan. Tilldela säljare i husets kort.</p>
                 </>
               )}
               {arbetar && <div className="d2dk-arbetar">{arbetar}</div>}
@@ -611,6 +646,17 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
             {valtHus && <Fastighetskort h={valtHus} idag={idag} onStang={() => setValt(null)} onOpenRecord={onOpenRecord}
               projekt={projektId ? { namn: projNamn, iProjekt: iProjekt(valtHus), arbetar: !!arbetar,
                 onLaggTill: () => laggTill([valtHus]), onTaBort: () => taBort(valtHus) } : null}
+              tilldela={(() => {
+                const fastId = valtHus.levId ? levTillFast.get(valtHus.levId) : undefined;
+                if (!projektId || !fastId) return null;
+                const nu = (tilldelning.get(fastId)?.saljare ?? []).map((a) => a.user_id);
+                return {
+                  saljare, nu,
+                  onEn: (id: string) => tilldelaEn(fastId, id),
+                  onFlera: (extra?: string) => setFleraSaljare({ fastId, rubrik: valtHus.beteckning ?? "Fastighet",
+                    forvalda: [...nu, ...(extra && !nu.includes(extra) ? [extra] : [])] }),
+                };
+              })()}
               onVisa={() => valtHus.lat != null && mapRef.current?.setView([valtHus.lat, valtHus.lon], 16)} />}
 
             <section className="d2dk-sek">
@@ -679,6 +725,28 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
         )}
       </aside>
     </div>
+    {fleraSaljare && (
+      <div className="overlay d2dk-overlay" onMouseDown={(e) => e.target === e.currentTarget && setFleraSaljare(null)}>
+        <div className="d2dk-dialog" role="dialog" aria-modal="true" aria-label={`Fördela adresser i ${fleraSaljare.rubrik}`}>
+          <div className="d2dk-dialog__head">
+            <div>
+              <h3>Fördela adresser — {fleraSaljare.rubrik}</h3>
+              <p className="d2dk-hjalp">Lägg till säljarna och bocka i vilka adresser var och en ska ha. Spara, så delas de ut när projektet godkänns (direkt om det redan är godkänt).</p>
+            </div>
+            <button className="close-btn" onClick={() => setFleraSaljare(null)} aria-label="Stäng">×</button>
+          </div>
+          <AssignmentEditor
+            key={fleraSaljare.fastId + fleraSaljare.forvalda.join(",")}
+            fastighetId={fleraSaljare.fastId}
+            sellers={saljare}
+            initial={tilldelning.get(fleraSaljare.fastId)?.saljare ?? []}
+            manuell={tilldelning.get(fleraSaljare.fastId)?.manuell ?? null}
+            forvalda={fleraSaljare.forvalda}
+            onSaved={() => { laddaProjektHus(); setProjKey((k) => k + 1); }}
+          />
+        </div>
+      </div>
+    )}
     {projektId && (
       <div className="d2dk-projektdetalj">
         <ProjectDetail projektId={projektId} inbaddad reloadKey={projKey} onAndrat={laddaProjektHus} onOpenRecord={onOpenRecord}
@@ -689,11 +757,43 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   );
 }
 
+type Tilldelning = { saljare: Assignment[]; manuell: Record<string, string> | null };
 type KortProjekt = { namn: string; iProjekt: boolean; arbetar: boolean; onLaggTill: () => void; onTaBort: () => void };
+type KortTilldela = { saljare: SellerOption[]; nu: string[]; onEn: (id: string) => void; onFlera: (extra?: string) => void };
 
-function Fastighetskort({ h, idag, onStang, onVisa, onOpenRecord, projekt }: {
+/** Säljare på huset: en säljare sparas direkt, fler öppnar popupen med adresserna. */
+function SaljarVal({ t }: { t: KortTilldela }) {
+  const namn = (id: string) => t.saljare.find((s) => s.id === id)?.name ?? "Säljare";
+  const ovriga = t.saljare.filter((s) => !t.nu.includes(s.id));
+  return (
+    <div className="d2dk-saljare">
+      <h4>Säljare</h4>
+      {t.nu.length > 0
+        ? <div className="d2dk-saljare__namn">{t.nu.map(namn).join(", ")}{t.nu.length === 1 ? " · alla adresser" : " · adresserna fördelade"}</div>
+        : <div className="d2dk-saljare__namn d2dk-saljare__namn--ingen">Ingen säljare tilldelad</div>}
+      <div className="d2dk-saljare__rad">
+        {t.nu.length <= 1 && (
+          <select className="input" value="" onChange={(e) => e.target.value && t.onEn(e.target.value)} aria-label="Tilldela en säljare">
+            <option value="">{t.nu.length ? "Byt säljare…" : "Tilldela säljare…"}</option>
+            {ovriga.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+        {t.nu.length >= 1 && (
+          <select className="input" value="" onChange={(e) => e.target.value && t.onFlera(e.target.value)} aria-label="Lägg till ytterligare en säljare">
+            <option value="">+ Fler säljare…</option>
+            {ovriga.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+        {t.nu.length > 1 && <button className="btn btn--ghost btn--sm" onClick={() => t.onFlera()}>Ändra fördelning</button>}
+      </div>
+      {t.saljare.length === 0 && <p className="d2dk-hjalp">Laddar säljare…</p>}
+    </div>
+  );
+}
+
+function Fastighetskort({ h, idag, onStang, onVisa, onOpenRecord, projekt, tilldela }: {
   h: KartHus; idag: string; onStang: () => void; onVisa: () => void; onOpenRecord?: (id: string) => void;
-  projekt?: KortProjekt | null;
+  projekt?: KortProjekt | null; tilldela?: KortTilldela | null;
 }) {
   const tot = KAT.reduce((s, k) => s + h.utfall[k.k], 0);
   return (
@@ -739,6 +839,8 @@ function Fastighetskort({ h, idag, onStang, onVisa, onOpenRecord, projekt }: {
           </div>
         </>
       )}
+
+      {tilldela && <SaljarVal t={tilldela} />}
 
       <div className="d2dk-kort__knappar">
         {projekt && (h.levId
