@@ -1894,12 +1894,38 @@
 .d2dk-dialog .d2dpb-assign__sellers { flex-wrap: wrap; }
 .d2dk-dialog .d2dpb-assign__add { max-width: 100%; min-width: 0; }
 
-/* Karta med valt projekt: översikten ovanför kartan, bredare panel med fastighetslistan. */
-.d2dk-topp { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
-.d2dk-topp:empty { display: none; }
-.d2dk-topp .d2dpb-crumb { margin: 0; }
-.d2dk-topp .d2dpb-sek { margin: 0; }
-.d2dk.d2dk--projekt { grid-template-columns: minmax(0, 1fr) minmax(520px, 46%); }
+/* Karta med valt projekt: översikten och fastighetslistan är bubblor ovanpå kartan.
+   Kartan behåller sin storlek; lagret släpper igenom klick utom på bubblorna. */
+.d2dk-lager {
+  position: absolute; inset: var(--sp-3) var(--sp-3) var(--sp-3) 56px; z-index: 600;
+  display: flex; flex-direction: column; gap: var(--sp-3); pointer-events: none; min-height: 0;
+}
+.d2dk-bubbla {
+  pointer-events: auto; position: relative; min-width: 0;
+  background: color-mix(in srgb, var(--surface) 96%, transparent); border: 1px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-lg); backdrop-filter: blur(6px);
+}
+.d2dk-bubbla__vaxla {
+  position: absolute; top: 8px; right: 10px; z-index: 1; border: 1px solid var(--border); background: var(--surface);
+  border-radius: var(--r-pill); padding: 3px 10px; font: inherit; font-size: var(--text-xs); font-weight: 600; color: var(--ink-soft); cursor: pointer;
+}
+.d2dk-bubbla.is-hopfalld { align-self: flex-end; background: none; border: 0; box-shadow: none; backdrop-filter: none; }
+.d2dk-bubbla.is-hopfalld .d2dk-bubbla__vaxla { position: static; box-shadow: var(--shadow-sm); }
+.d2dk-bubbla--topp { flex-shrink: 0; padding: var(--sp-3) var(--sp-4); max-height: 45%; overflow-y: auto; }
+.d2dk-bubbla--topp.is-hopfalld { padding: 0; }
+.d2dk-bubbla--lista { align-self: flex-end; width: min(540px, 62%); flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.d2dk-bubbla--lista.is-hopfalld { flex: 0 0 auto; width: auto; overflow: visible; }
+/* Översikten kompakt: rubrik, nyckeltal och säljstatus på liten yta. */
+.d2dk-topp { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.d2dk-topp .d2dpb-crumb { margin: 0; padding-right: 120px; }
+.d2dk-topp .d2dpb-crumb__title { font-size: var(--text-lg); }
+.d2dk-topp .d2dpb-tiles { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: var(--sp-2); margin: 0; }
+.d2dk-topp .d2dpb-tile { padding: 6px var(--sp-3); gap: 0; }
+.d2dk-topp .d2dpb-tile b { font-size: var(--text-lg); }
+.d2dk-topp .d2dpb-tile span { font-size: var(--text-xs); }
+.d2dk-topp .d2dpb-sek { margin: 0; padding: 0; border: 0; box-shadow: none; background: none; }
+.d2dk-topp .d2dpb-sek__head h2 { font-size: var(--text-sm); }
+.d2dk-topp .d2dpb-legend { font-size: var(--text-xs); }
 .d2dk-fastlista:empty { display: none; }
 .d2dk-fastlista .d2dpb-sek { margin: 0; padding: 0; overflow: hidden; }
 .d2dk-fastlista .d2dpb-sek__head { padding: var(--sp-3) var(--sp-4); }
@@ -1917,6 +1943,14 @@
 .d2dpb-rad__fokus { border: 0; background: none; padding: 0; font: inherit; text-align: left; cursor: pointer; min-width: 0; color: inherit; }
 .d2dpb-rad__fokus strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .d2dpb-rad__fokus:hover strong { color: var(--brand-ink); text-decoration: underline; }
+.d2dk-fastlista .d2dpb-sek { border: 0; box-shadow: none; background: none; }
+.d2dk-fastlista .d2dpb-sek__head { padding-right: 150px; }
+/* Mobil: inga lager över kartan, bubblorna läggs under den. */
 @media (max-width: 900px) {
-  .d2dk.d2dk--projekt { grid-template-columns: 1fr; }
+  .d2dk-karta-wrap:has(.d2dk-lager) { overflow: visible; height: auto; border: 0; }
+  .d2dk-karta-wrap:has(.d2dk-lager) .d2dk-karta { position: relative; height: 60vh; min-height: 340px; border-radius: var(--r-lg); border: 1px solid var(--border); }
+  .d2dk-karta-wrap:has(.d2dk-lager) .d2dk-legend { bottom: auto; top: calc(60vh - 44px); }
+  .d2dk-lager { position: static; inset: auto; padding: var(--sp-3) 0 0; pointer-events: auto; }
+  .d2dk-bubbla--topp { max-height: none; }
+  .d2dk-bubbla--lista { width: 100%; align-self: stretch; }
 }
