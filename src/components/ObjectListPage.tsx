@@ -11,7 +11,8 @@ import { prisKategorier } from "./D2DAvtal";
 import { saldaTjanster } from "@/lib/d2dPris";
 import { RecordDrawer } from "./RecordDrawer";
 import { KanbanBoard } from "./KanbanBoard";
-import { LeveransAgareKort, hamtaAgareOversikt, agareFilter, gruppNyckel, type AgareGrupp } from "./LeveransAgareKort";
+import { hamtaAgareOversikt, agareFilter, gruppNyckel, INGEN_AGARE, type AgareGrupp } from "./LeveransAgareKort";
+import { LeveransKmLista } from "./LeveransKmLista";
 import { LeveransFastighetslista, hamtaFastighetslista, type FastighetRad } from "./LeveransFastighetslista";
 import { ColumnConfigPanel } from "./ColumnConfigPanel";
 import { FilterBar } from "./FilterBar";
@@ -362,8 +363,10 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       if (visarFastigheter || visarKmTabell) {
         const f: RecordFilter[] = [...allFilters];
         if (status) f.push({ field: "__status", op: "eq", value: status });
-        if (visarKmTabell) f.push(agareFilter(agare));
-        const rader = await hamtaFastighetslista(search || undefined, f);
+        // Fastigheter utan kopplad Kund: hämta alla och välj ut dem här.
+        if (visarKmTabell && agare !== INGEN_AGARE) f.push(agareFilter(agare));
+        const alla = await hamtaFastighetslista(search || undefined, f);
+        const rader = visarKmTabell && agare === INGEN_AGARE ? alla.filter((r) => !r.kund_id) : alla;
         setFastRader(rader);
         setTotal(rader.length);
         return;
@@ -371,8 +374,13 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       if (mode === "kort" && !agare) {
         const f: RecordFilter[] = [...allFilters];
         if (status) f.push({ field: "__status", op: "eq", value: status });
-        const g = await hamtaAgareOversikt(search || undefined, f);
+        // Koncernmödrarna som rader: grupperna + fastigheterna (för summeringen).
+        const [g, rader] = await Promise.all([
+          hamtaAgareOversikt(search || undefined, f),
+          hamtaFastighetslista(search || undefined, f),
+        ]);
         setGrupper(g);
+        setFastRader(rader);
         setTotal(g.reduce((n, x) => n + x.antal, 0));
         return;
       }
@@ -901,10 +909,12 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
           : grupper.length === 0
             ? <div className="card"><EmptyState kind={filtered ? "filtered" : undefined} title={filtered ? "Inga träffar" : `Inga ${plural} än`}
                 text={filtered ? "Inget matchar sökningen eller filtren. Rensa dem för att se alla." : "Lägg till den första för att komma igång."} /></div>
-            : <LeveransAgareKort
+            : <LeveransKmLista
                 objectDef={objectDef}
                 grupper={grupper}
+                rader={fastRader}
                 loading={loading}
+                onOpenPost={(id) => onOpenRecord(id)}
                 onOpen={(g) => {
                   setItems([]); setFastRader([]); setTotal(0); setPage(0);
                   setAgareNamn(g.kund ?? "Ingen kund kopplad"); setAgarePost(g.post_id); setAgare(gruppNyckel(g));
