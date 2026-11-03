@@ -113,7 +113,7 @@ function layoutFor(r: FastighetRad): ChkLayout | null {
 }
 
 /** Fastighetens checklista i visningsordning. */
-function punkter(r: FastighetRad): Punkt[] {
+export function punkter(r: FastighetRad): Punkt[] {
   const d = r.detalj ?? {};
   const l = layoutFor(r);
   const std = (key: string): Punkt => ({ key, label: STD_ETIKETT.get(key) ?? key, klar: d[key] === true, egen: false });
@@ -149,20 +149,47 @@ function tal(v: unknown): number | null {
 }
 /** Högst två CE-leveransansvariga per fastighet (fälten ce_ansvarig, ce_ansvarig_2). */
 const MAX_ANSVARIGA = 2;
-const ansvarigNamn = (r: FastighetRad) => (r.ce_ansvariga ?? []).map((id) => getUserName(id)).join(", ");
+export const ansvarigNamn = (r: FastighetRad) => (r.ce_ansvariga ?? []).map((id) => getUserName(id)).join(", ");
 
-function klara(r: FastighetRad): number {
+/** Avisering: Avi 1 ska alltid gå ut först, sedan Avi 2 och Avi 3. */
+export const AVI_NYCKLAR = ["chk_avi_1", "chk_avi_2", "chk_avi_3"] as const;
+export type AviLage = {
+  /** Nästa avi som ska gå ut (1–3), null om alla är klara eller fastigheten inte har några. */
+  nasta: number | null;
+  /** Någon avi är ibockad fast en tidigare saknas. */
+  felOrdning: boolean;
+  /** Fastigheten har minst en avi i sin checklista. */
+  harAvi: boolean;
+};
+export function aviLage(r: FastighetRad): AviLage {
+  const lista = punkter(r);
+  const finns = AVI_NYCKLAR.map((k) => lista.find((p) => p.key === k));
+  let nasta: number | null = null;
+  let felOrdning = false;
+  finns.forEach((p, i) => {
+    if (!p) return;
+    if (!p.klar && nasta === null) nasta = i + 1;
+    if (p.klar && nasta !== null) felOrdning = true;
+  });
+  return { nasta, felOrdning, harAvi: finns.some(Boolean) };
+}
+export function aviText(a: AviLage): string {
+  if (!a.harAvi) return "";
+  return a.nasta ? `Avi ${a.nasta} saknas` : "Alla aviserade";
+}
+
+export function klara(r: FastighetRad): number {
   return punkter(r).filter((p) => p.klar).length;
 }
 const tom = <span className="lev-fl__tom">–</span>;
 
-type Kol = {
+export type Kol<T = FastighetRad> = {
   key: string;
   label: string;
   /** Värde att sortera på. */
-  sort: (r: FastighetRad) => string | number | null;
+  sort: (r: T) => string | number | null;
   /** Värdet som visas i filterlistan ("" = tomt). */
-  varde: (r: FastighetRad) => string;
+  varde: (r: T) => string;
   num?: boolean;
 };
 
@@ -180,6 +207,7 @@ const KOLUMNER: Kol[] = [
   { key: "sc", label: "SC", sort: (r) => tal(r.sc_portar), varde: (r) => txt(tal(r.sc_portar)), num: true },
   { key: "fbl", label: "FBL", sort: (r) => r.fbl, varde: (r) => datum(r.fbl) ?? "" },
   { key: "kundklar", label: "Kundklar", sort: (r) => r.kundklar_ce ?? r.kundklar, varde: (r) => datum(r.kundklar_ce ?? r.kundklar) ?? "" },
+  { key: "avi", label: "Avisering", sort: (r) => { const a = aviLage(r); return a.harAvi ? (a.nasta ?? 9) : null; }, varde: (r) => aviText(aviLage(r)) },
   { key: "telia", label: "Status Telia", sort: (r) => r.telia_status, varde: (r) => txt(r.telia_status) },
   { key: "leverans", label: "Ska levereras", sort: (r) => r.leverans, varde: (r) => txt(r.leverans) },
   { key: "ko", label: "Befintlig KO", sort: (r) => r.bef_ko, varde: (r) => txt(r.bef_ko) },
@@ -191,14 +219,14 @@ const KOLUMNER: Kol[] = [
 ];
 
 const jamfor = new Intl.Collator("sv", { numeric: true, sensitivity: "base" });
-const TOMT = "(Tomma)";
+export const TOMT = "(Tomma)";
 const FILTER_NYCKEL = "lev-fl:kolumnfilter";
 
-type Sort = { key: string; dir: 1 | -1 } | null;
-type Filter = Record<string, string[]>;
+export type Sort = { key: string; dir: 1 | -1 } | null;
+export type Filter = Record<string, string[]>;
 
-function jamforSort(kol: Kol, dir: 1 | -1) {
-  return (a: FastighetRad, b: FastighetRad) => {
+export function jamforSort<T>(kol: Kol<T>, dir: 1 | -1) {
+  return (a: T, b: T) => {
     const va = kol.sort(a), vb = kol.sort(b);
     // Tomma värden alltid sist.
     if (va === null || va === "") return vb === null || vb === "" ? 0 : 1;
@@ -208,7 +236,7 @@ function jamforSort(kol: Kol, dir: 1 | -1) {
   };
 }
 
-function FilterIkon() {
+export function FilterIkon() {
   return (
     <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
       <path d="M2 3h12l-4.6 5.6V13l-2.8 1.4V8.6z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
@@ -217,12 +245,12 @@ function FilterIkon() {
 }
 
 /** Filtermenyn för en kolumn (som i Excel): sortera, sök, bocka i värden. */
-function KolumnMeny({
+export function KolumnMeny<T>({
   kol, rader, valda, sort, ankare, onSort, onFilter, onStang,
 }: {
-  kol: Kol;
+  kol: Kol<T>;
   /** Raderna filtrerade på alla ANDRA kolumner (som i Excel). */
-  rader: FastighetRad[];
+  rader: T[];
   valda: string[] | undefined;
   sort: Sort;
   ankare: HTMLElement;
@@ -233,7 +261,7 @@ function KolumnMeny({
   const ref = useRef<HTMLDivElement>(null);
   const [sok, setSok] = useState("");
   const varden = useMemo(() => {
-    const m = new Map<string, { n: number; rad: FastighetRad }>();
+    const m = new Map<string, { n: number; rad: T }>();
     for (const r of rader) {
       const v = kol.varde(r);
       const x = m.get(v);
@@ -332,6 +360,17 @@ function KolumnMeny({
         <button type="button" className="btn btn--brand btn--sm" onClick={verkstall}>OK</button>
       </div>
     </div>
+  );
+}
+
+/** Aviseringsläget som märke: nästa avi som ska ut, eller klart. */
+export function AviCell({ a }: { a: AviLage }) {
+  if (!a.harAvi) return <span className="lev-fl__tom">–</span>;
+  return (
+    <span className="lev-fl__avi">
+      <span className={"lev-fl__avipill" + (a.nasta ? ` is-avi${a.nasta}` : " is-klar")}>{aviText(a)}</span>
+      {a.felOrdning && <span className="lev-fl__avifel" title="En senare avi är ibockad fast en tidigare saknas. Avi 1 ska alltid gå ut först.">Fel ordning</span>}
+    </span>
   );
 }
 
@@ -833,6 +872,7 @@ export function LeveransFastighetslista({
                         </span>
                       )}
                     </div></td>
+                    <td data-label="Avisering"><AviCell a={aviLage(r)} /></td>
                     <td data-label="Status Telia">{r.telia_status ? <span className="lev-fl__status">{r.telia_status}</span> : tom}</td>
                     <td data-label="Ska levereras">{r.leverans ?? tom}</td>
                     <td data-label="Befintlig KO"><div>
