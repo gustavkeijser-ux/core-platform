@@ -444,9 +444,10 @@
   padding: var(--sp-4); background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-sm);
 }
-.lev-fl-detalj__huvud { display: flex; align-items: center; gap: var(--sp-2); }
+.lev-fl-detalj__huvud { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .lev-fl-detalj__huvud .lev-fl-detalj__rubrik { flex: 1 1 auto; }
 .lev-fl-detalj__andra[aria-pressed="true"] { color: var(--brand-ink); }
+.lev-fl-detalj__kopiera { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .lev-fl-detalj__kommentar { width: 100%; min-height: 160px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.5; }
 .lev-fl-detalj__tips { font-size: 11px; color: var(--ink-faint); }
 .lev-fl-detalj__rubrik { margin: 0; font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--ink); }
