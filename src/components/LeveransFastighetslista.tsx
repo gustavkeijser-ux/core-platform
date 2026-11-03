@@ -593,8 +593,10 @@ function RadDetalj({ r, kanAndra, onSpara }: {
 }
 
 export function LeveransFastighetslista({
-  rader, loading, onOpen, onRadAndrad, kanAndra,
+  rader, loading, onOpen, onRadAndrad, kanAndra, filterNyckel = FILTER_NYCKEL,
 }: {
+  /** Var kolumnfiltren sparas (egna för koncernmoderns vy). */
+  filterNyckel?: string;
   rader: FastighetRad[];
   loading: boolean;
   onOpen: (id: string) => void;
@@ -602,7 +604,7 @@ export function LeveransFastighetslista({
   onRadAndrad: (id: string, andring: Partial<FastighetRad>) => void;
   kanAndra: boolean;
 }) {
-  const sparat = useMemo(() => loadListState<{ filter: Filter; sort: Sort }>(FILTER_NYCKEL), []);
+  const sparat = useMemo(() => loadListState<{ filter: Filter; sort: Sort }>(filterNyckel), [filterNyckel]);
   const [sort, setSort] = useState<Sort>(sparat.sort ?? null);
   const [filter, setFilter] = useState<Filter>(sparat.filter ?? {});
   const [sparar, setSparar] = useState<string | null>(null);
@@ -612,7 +614,7 @@ export function LeveransFastighetslista({
   // Laddar användarna (namnen i kolumnen CE-leveransansvarig) och ritar om när de finns.
   const users = useTenantUsers();
 
-  useEffect(() => { saveListState(FILTER_NYCKEL, { filter, sort }); }, [filter, sort]);
+  useEffect(() => { saveListState(filterNyckel, { filter, sort }); }, [filterNyckel, filter, sort]);
 
   // Den expanderade panelen ska ligga i synfältet även när tabellen rullats i sidled.
   const scrollRef = useRef<HTMLDivElement>(null);
