@@ -319,6 +319,45 @@
 .lev-fl-meny__fot { display: flex; justify-content: flex-end; gap: var(--sp-2); }
 .lev-fl-meny__tips { font-size: 11px; color: var(--ink-faint); }
 
+/* Avisering: Avi 1 ska alltid gå ut först, sedan 2 och 3 */
+.lev-fl__avi, .lev-km__avi { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.lev-fl__avipill {
+  display: inline-block; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  font-size: 11px; font-weight: 700; background: var(--neutral-soft); color: var(--ink-soft);
+}
+.lev-fl__avipill.is-avi1 { background: var(--danger-soft); color: var(--danger-ink); }
+.lev-fl__avipill.is-avi2 { background: var(--warn-soft); color: var(--warn-ink); }
+.lev-fl__avipill.is-avi3 { background: var(--info-soft); color: var(--info-ink); }
+.lev-fl__avipill.is-klar { background: var(--ok-soft); color: var(--ok-ink); }
+.lev-fl__avifel {
+  display: inline-block; padding: 1px 6px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--danger-ink); color: var(--danger-ink); font-size: 10px; font-weight: 700;
+}
+
+/* Koncernmödrar som rader (LeveransKmLista.tsx) */
+.lev-km__rad { cursor: pointer; }
+.lev-km__namncell { min-width: 200px; }
+.lev-km__namn { font-weight: 700; color: var(--ink); text-align: left; }
+.lev-km__namn:hover { color: var(--brand-ink); }
+.lev-km__under { display: flex; align-items: center; gap: var(--sp-2); white-space: normal; }
+.lev-km__post {
+  padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  background: var(--info-soft); color: var(--info-ink);
+}
+.lev-km__post.is-avslutad { background: var(--ok-soft); color: var(--ok-ink); }
+.lev-km__postlank { font-size: 11px; font-weight: 600; }
+.lev-km__steg {
+  display: inline-block; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  border: 1.5px solid var(--lev-ram, var(--border)); color: var(--ink-soft);
+  font-size: 11px; font-weight: 700;
+}
+.lev-km__lista { display: flex; flex-direction: column; gap: 1px; color: var(--ink-soft); font-weight: 600; }
+.lev-km__lista span { white-space: nowrap; }
+.lev-km__saknas { color: var(--danger-ink); font-size: 11px; font-weight: 600; }
+.lev-km__chk { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lev-km__chkstapel { display: inline-block; width: 44px; height: 5px; border-radius: 999px; background: var(--neutral-soft); overflow: hidden; }
+.lev-km__chkstapel span { display: block; height: 100%; background: var(--hue-green); }
+
 /* CE-leveransansvarig i cellen */
 .lev-fl__ce { min-width: 140px; }
 .lev-fl__ceknapp {
@@ -443,6 +482,9 @@
   .lev-fl__tabell tr.is-oppen { background: var(--brand-tint); border-bottom: 0; }
   .lev-fl__exp { margin: -3px 0 -3px -6px; justify-self: start; }
   .lev-fl__ceknapp { justify-self: start; margin-left: -8px; }
+  .lev-fl__avi, .lev-km__avi, .lev-km__steg { justify-self: start; }
+  .lev-km__lista { flex-direction: row; flex-wrap: wrap; gap: 0 8px; }
+  .lev-km__chk { justify-self: start; }
   .lev-fl__tabell .lev-fl__ingen td { display: block; padding: var(--sp-5) var(--sp-4); }
   .lev-fl__tabell .lev-fl__ingen td::before { display: none; }
   .lev-fl__scroll { max-height: none; overflow: visible; }
