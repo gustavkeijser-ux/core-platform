@@ -24,10 +24,12 @@ import "@/styles/d2d.css";
    Husen läggs till via leveransen, så hus som bara finns i Masterlistan kan
    inte väljas förrän de finns i projektplanen. Säljare tilldelas direkt i
    husets kort: en säljare sparas direkt (100 %), flera säljare öppnar en
-   popup där adresserna fördelas.
+   popup där adresserna fördelas. Med ett valt projekt ligger projektets
+   översikt (nyckeltal och säljstatus) ovanför kartan och fastighetslistan med
+   säljstatus per fastighet i den breddade panelen till höger.
    ============================================================================= */
 
-const VERSION = "Karta 1.2 · 2026-11-03";
+const VERSION = "Karta 1.3 · 2026-11-03";
 
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
@@ -316,6 +318,9 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const [tilldelning, setTilldelning] = useState<Map<string, Tilldelning>>(new Map());
   // Popupen för flera säljare.
   const [fleraSaljare, setFleraSaljare] = useState<{ fastId: string; rubrik: string; forvalda: string[] } | null>(null);
+  // Platser där projektvyn (ProjectDetail) ritar översikten och fastighetslistan.
+  const [toppPlats, setToppPlats] = useState<HTMLDivElement | null>(null);
+  const [listPlats, setListPlats] = useState<HTMLDivElement | null>(null);
 
   const mapEl = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletAny>(null);
@@ -526,6 +531,14 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const valtHus = valt ? data?.fastigheter.find((h) => h.id === valt) ?? null : null;
   const projHus = useMemo(() => (data?.fastigheter ?? []).filter(iProjekt), [data, levTillFast]);
   const projNamn = projektLista.find((p) => p.id === projektId)?.title ?? "Projekt";
+  /** Klick på en fastighet i listan: visa huset på kartan och öppna kortet. */
+  function fokusera(fastId: string) {
+    const levId = [...levTillFast.entries()].find(([, f]) => f === fastId)?.[0];
+    const h = levId ? data?.fastigheter.find((x) => x.levId === levId) : undefined;
+    if (!h) return;
+    setValt(h.id);
+    if (h.lat != null) mapRef.current?.setView([h.lat, h.lon], Math.max(16, mapRef.current?.getZoom() ?? 16));
+  }
   const utanSaljare = [...levTillFast.values()].filter((id) => !(tilldelning.get(id)?.saljare.length)).length;
   useEffect(() => { if (valt) kortRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [valt]);
 
@@ -555,7 +568,8 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
 
   return (
     <div className="d2dk-sida">
-    <div className="d2dk">
+    {projektId && <div ref={setToppPlats} className="d2dk-topp" />}
+    <div className={`d2dk${projektId ? " d2dk--projekt" : ""}`}>
       <div className="d2dk-karta-wrap">
         <div ref={mapEl} className="d2dk-karta" />
         <div className="d2dk-niva">{NIVAER[niva]?.namn} · zoom {zoom}</div>
@@ -598,12 +612,13 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
                   <label className="d2dk-projekt__bara">
                     <input type="checkbox" checked={baraProjekt} onChange={(e) => setBaraProjekt(e.target.checked)} /> Visa bara projektets hus
                   </label>
-                  <p className="d2dk-hjalp">Klicka på ett hus och välj Lägg till, eller lägg till ett helt område med + i listan nedan. Tilldela säljare i husets kort.</p>
+                  <p className="d2dk-hjalp">Klicka på ett hus och välj Lägg till, eller lägg till ett helt område med + i listan nedan. Tilldela säljare i husets kort eller i listan.</p>
                 </>
               )}
               {arbetar && <div className="d2dk-arbetar">{arbetar}</div>}
               {projFel && <div className="d2d-error">{projFel}</div>}
             </section>
+            {projektId && <div ref={setListPlats} className="d2dk-fastlista" />}
 
             <div className="d2dk-lage" role="tablist">
               <button role="tab" aria-selected={lage === "kvalitet"} className={lage === "kvalitet" ? "on" : ""} onClick={() => setLage("kvalitet")}>Dörrkvalitet</button>
@@ -750,6 +765,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     {projektId && (
       <div className="d2dk-projektdetalj">
         <ProjectDetail projektId={projektId} inbaddad reloadKey={projKey} onAndrat={laddaProjektHus} onOpenRecord={onOpenRecord}
+          platser={{ topp: toppPlats, fastigheter: listPlats }} onFokus={fokusera}
           onBack={() => { setProjekt(null); laddaProjektLista().catch(() => {}); }} />
       </div>
     )}
