@@ -29,9 +29,13 @@ import "@/styles/d2d.css";
    fastighetslistan med säljstatus per fastighet som en bubbla vid kartans
    högra kant. Båda är lager ovanpå kartan (kartan behåller sin storlek) och
    går att fälla ihop.
+
+   "Välj fastigheter på kartan": i väljläget lägger ett klick på en ring till
+   alla hus i ringen i projektet direkt. Vad en ring rymmer beror på zoomnivån
+   (område, delområde, kluster eller ett enskilt hus).
    ============================================================================= */
 
-const VERSION = "Karta 1.4 · 2026-11-03";
+const VERSION = "Karta 1.5 · 2026-11-03";
 
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
@@ -325,6 +329,9 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const [listPlats, setListPlats] = useState<HTMLDivElement | null>(null);
   const [visaOversikt, setVisaOversikt] = useState(true);
   const [visaLista, setVisaLista] = useState(true);
+  const [valjLage, setValjLage] = useState(false);
+  // I väljläget fälls bubblorna ihop så att kartan syns; de kommer tillbaka när man är klar.
+  useEffect(() => { setVisaOversikt(!valjLage); setVisaLista(!valjLage); }, [valjLage]);
 
   const mapEl = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletAny>(null);
@@ -364,7 +371,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     }
     setTilldelning(ny);
   }
-  useEffect(() => { setProjFel(null); setBaraProjekt(false); setFleraSaljare(null); laddaProjektHus(); }, [projektId]);
+  useEffect(() => { setProjFel(null); setBaraProjekt(false); setFleraSaljare(null); setValjLage(false); laddaProjektHus(); }, [projektId]);
   useEffect(() => { if (projektId && saljare.length === 0) listSellers().then(setSaljare).catch(() => {}); }, [projektId]);
 
   /** En säljare får alla adresser i huset (100 %). */
@@ -409,6 +416,26 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     }
     await laddaProjektHus();
     setProjKey((k) => k + 1);
+  }
+
+  /** Väljläget: alla hus i ringen är redan med → fråga om de ska tas bort ur projektet. */
+  async function taBortFlera(hus: KartHus[]) {
+    const fastIds = [...new Set(hus.map((h) => (h.levId ? levTillFast.get(h.levId) : undefined)).filter((x): x is string => !!x))];
+    if (!projektId || fastIds.length === 0) return;
+    if (!confirm(`Alla ${fastIds.length} hus i ringen är redan i projektet. Ta bort dem ur projektet? Lägenheter och tilldelning ligger kvar om du lägger tillbaka dem.`)) return;
+    setProjFel(null);
+    try {
+      for (let i = 0; i < fastIds.length; i++) {
+        setArbetar(`Tar bort ${i + 1} av ${fastIds.length}…`);
+        await removeRelation(fastIds[i], "d2d_fast_projekt", projektId);
+      }
+    } catch (e) {
+      setProjFel(e instanceof DataError ? e.message : "Kunde inte ta bort alla hus.");
+    } finally {
+      setArbetar(null);
+      await laddaProjektHus();
+      setProjKey((k) => k + 1);
+    }
   }
 
   async function skapaProjekt() {
@@ -493,10 +520,23 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
       const { html, d } = markorHtml(a, lage, maxLgh, a.hus.filter(iProjekt).length);
       const m = L.marker([a.lat, a.lon], {
         icon: L.divIcon({ html, className: "d2dk-ikon", iconSize: [d, d], iconAnchor: [d / 2, d / 2] }),
-        title: a.hus.length > 1 ? `${a.namn}: ${a.hus.length} hus, ${a.lgh} lgh` : `${a.namn} (${a.lgh} lgh)`,
+        title: valjLage && projektId
+          ? (a.hus.some((h) => h.levId && !iProjekt(h)) ? `Lägg till ${a.hus.filter((h) => h.levId && !iProjekt(h)).length} hus (${a.namn})` : `${a.namn}: redan i projektet`)
+          : a.hus.length > 1 ? `${a.namn}: ${a.hus.length} hus, ${a.lgh} lgh` : `${a.namn} (${a.lgh} lgh)`,
         keyboard: true,
       });
       m.on("click", () => {
+        // Väljläget: hela ringen läggs till i projektet direkt (eller tas bort om allt redan är med).
+        if (valjLage && projektId) {
+          if (arbetar) return;
+          const nya = a.hus.filter((h) => h.levId && !iProjekt(h));
+          // Många hus på en gång (låg zoom) tar tid: fråga först.
+          if (nya.length > 15 && !confirm(`Lägga till ${nya.length} hus (${a.namn}) i projektet? Det tar en stund. Zooma in för att välja ett mindre område.`)) return;
+          if (nya.length) laggTill(nya);
+          else if (a.hus.some(iProjekt)) taBortFlera(a.hus.filter(iProjekt));
+          else setProjFel("Husen i ringen finns bara i Masterlistan och kan inte läggas till.");
+          return;
+        }
         if (a.hus.length === 1) { setValt(a.hus[0].id); return; }
         if (a.syd === a.nord && a.vast === a.ost) { map.setView([a.lat, a.lon], NIVAER[Math.min(niva + 1, 3)].fran); return; }
         map.fitBounds([[a.syd, a.vast], [a.nord, a.ost]], { padding: [40, 40], maxZoom: NIVAER[Math.min(niva + 1, 3)].till });
@@ -505,7 +545,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     }
     lager.addTo(map);
     lagerRef.current = lager;
-  }, [perNiva, niva, lage, klar, levTillFast]);
+  }, [perNiva, niva, lage, klar, levTillFast, valjLage, arbetar, projektId]);
 
   // Bästa gångavståndsområdena i vyn (klusternivån, celler på ca 1 km).
   const basta = useMemo(() => {
@@ -573,12 +613,18 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   return (
     <div className="d2dk-sida">
     <div className={`d2dk${projektId ? " d2dk--projekt" : ""}`}>
-      <div className="d2dk-karta-wrap">
+      <div className={`d2dk-karta-wrap${valjLage && projektId ? " is-valj" : ""}`}>
         <div ref={mapEl} className="d2dk-karta" />
+        {projektId && valjLage && (
+          <div className="d2dk-valjbanner" role="status">
+            <span><b>Välj fastigheter:</b> klicka på en ring ({NIVAER[niva]?.namn.toLowerCase()}){arbetar ? ` · ${arbetar}` : ""}</span>
+            <button type="button" className="btn btn--sm btn--brand" onClick={() => setValjLage(false)}>Klar</button>
+          </div>
+        )}
         {!projektId && <div className="d2dk-niva">{NIVAER[niva]?.namn} · zoom {zoom}</div>}
         {projektId && (
           // Lager ovanpå kartan. Själva lagret släpper igenom klick till kartan, bara bubblorna tar emot dem.
-          <div className="d2dk-lager">
+          <div className={`d2dk-lager${valjLage ? " d2dk-lager--valj" : ""}`}>
             <div className={`d2dk-bubbla d2dk-bubbla--topp${visaOversikt ? "" : " is-hopfalld"}`}>
               <button type="button" className="d2dk-bubbla__vaxla" onClick={() => setVisaOversikt((v) => !v)}
                 aria-expanded={visaOversikt}>{visaOversikt ? "Dölj översikt" : "Visa översikt"}</button>
@@ -627,6 +673,11 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
                     <b>{projNamn}</b>: {heltal(projHus.length)} hus · {heltal(projHus.reduce((s, h) => s + h.lgh, 0))} lgh · {heltal(projHus.reduce((s, h) => s + h.effektiva, 0))} effektiva dörrar
                     {utanSaljare > 0 && <span className="d2dk-projekt__varning"> · {utanSaljare} hus utan säljare</span>}
                   </div>
+                  <button type="button" className={`btn btn--sm ${valjLage ? "btn--brand" : "btn--ghost"} d2dk-valj`}
+                    aria-pressed={valjLage} onClick={() => setValjLage((v) => !v)}>
+                    {valjLage ? "✓ Väljer fastigheter på kartan — klar" : "Välj fastigheter på kartan"}
+                  </button>
+                  {valjLage && <p className="d2dk-hjalp">Klicka på en ring för att lägga till alla hus i den. Hur mycket en ring rymmer beror på zoomnivån: {NIVAER[niva]?.namn.toLowerCase()} just nu. Klick på en ring som redan är med tar bort husen.</p>}
                   <label className="d2dk-projekt__bara">
                     <input type="checkbox" checked={baraProjekt} onChange={(e) => setBaraProjekt(e.target.checked)} /> Visa bara projektets hus
                   </label>

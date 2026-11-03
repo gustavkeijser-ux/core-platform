@@ -1956,3 +1956,18 @@
   .d2dk-bubbla--topp { max-height: none; }
   .d2dk-bubbla--lista { width: 100%; align-self: stretch; }
 }
+/* Välj fastigheter på kartan: klick på en ring lägger till alla hus i den. */
+.d2dk-valj { align-self: flex-start; }
+.d2dk-karta-wrap.is-valj { outline: 3px solid var(--brand); outline-offset: -3px; }
+.d2dk-karta-wrap.is-valj .d2dk-m { cursor: copy; }
+.d2dk-valjbanner {
+  position: absolute; left: var(--sp-3); bottom: var(--sp-3); z-index: 700;
+  display: flex; align-items: center; gap: var(--sp-3); max-width: calc(100% - 24px);
+  background: var(--surface); border: 1px solid var(--brand); border-radius: var(--r-pill);
+  box-shadow: var(--shadow-lg); padding: 6px 6px 6px var(--sp-4); font-size: var(--text-sm); color: var(--ink);
+}
+.d2dk-karta-wrap.is-valj .d2dk-legend { display: none; }
+@media (max-width: 900px) {
+  .d2dk-karta-wrap.is-valj { outline: 0; }
+  .d2dk-valjbanner { bottom: auto; top: calc(60vh - 56px); }
+}
