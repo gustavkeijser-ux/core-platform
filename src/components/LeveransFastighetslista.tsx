@@ -9,8 +9,8 @@ import { getUserName, useTenantUsers } from "@/lib/users";
  * Leveransöversikten → "Alla fastigheter": en rad per fastighet i projektplanen
  * med Koncernmoder, direktägande bolag, ort, fastighet, hushåll, FS/SC-portar,
  * FBL, Kundklar (CE-datum redigerbart, Telias datum under), Telias status,
- * vad som ska levereras, befintlig KO/koax/kabel-TV, LPL, entreprenör
- * (projektledare) och TeliaNow (CS).
+ * vad som ska levereras, befintlig KO/koax/kabel-TV, LPL, projektledare
+ * (entreprenören under) och TeliaNow (CS).
  *
  * Varje rubrik har ett filter som i Excel (bocka i värden, sök, sortera).
  * CE-leveransansvarig (en eller två användare, fälten ce_ansvarig/ce_ansvarig_2)
@@ -205,7 +205,7 @@ const KOLUMNER: Kol[] = [
   { key: "koax", label: "Befintlig koax", sort: (r) => r.bef_koax, varde: (r) => txt(r.bef_koax) },
   { key: "ktv", label: "Befintlig kabel-TV", sort: (r) => r.ktv_avtal, varde: (r) => datum(r.ktv_avtal) ?? "" },
   { key: "lpl", label: "LPL", sort: (r) => r.lpl, varde: (r) => txt(r.lpl) },
-  { key: "entr", label: "Entreprenör (projektledare)", sort: (r) => r.entreprenor, varde: (r) => txt(r.entreprenor) },
+  { key: "pl", label: "Projektledare", sort: (r) => r.projektledare, varde: (r) => txt(r.projektledare) },
   { key: "cs", label: "TeliaNow (CS)", sort: (r) => r.telianow_cs, varde: (r) => txt(r.telianow_cs) },
 ];
 
@@ -892,10 +892,10 @@ export function LeveransFastighetslista({
                       {r.ktv_avtal ? <div>Avtal t.o.m. {datum(r.ktv_avtal)}</div> : tom}
                     </td>
                     <td data-label="LPL">{r.lpl ?? tom}</td>
-                    <td data-label="Entreprenör (projektledare)">
-                      {r.entreprenor || r.projektledare
-                        ? <div>{r.entreprenor ?? "–"}{r.projektledare && <span className="lev-fl__pl"> ({r.projektledare})</span>}</div>
-                        : tom}
+                    <td data-label="Projektledare">
+                      {r.projektledare
+                        ? <div>{r.projektledare}{r.entreprenor && <span className="lev-fl__under">{r.entreprenor}</span>}</div>
+                        : r.entreprenor ? <div>{tom}<span className="lev-fl__under">{r.entreprenor}</span></div> : tom}
                     </td>
                     <td data-label="TeliaNow (CS)" className="lev-fl__cs">{r.telianow_cs ?? tom}</td>
                   </tr>
