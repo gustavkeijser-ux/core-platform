@@ -538,7 +538,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           const groupObjects = group.keys
             .map((k) => objMap.get(k))
             .filter(Boolean) as ObjectDef[];
-          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__", "__d2dfeedback__", "__d2dloner__"].includes(activeKey ?? ""));
+          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__", "__d2dfeedback__", "__d2dloner__", "__d2dkarta__"].includes(activeKey ?? ""));
 
           // Hoppa över om inga objekt i gruppen finns
           if (groupObjects.length === 0) return null;
@@ -572,6 +572,13 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                         onClick={() => selectAndClose("__d2dbuilder__")}
                       >
                         Projekt
+                      </button>
+                      <button
+                        className="sidebar__item sidebar__item--child"
+                        aria-current={activeKey === "__d2dkarta__"}
+                        onClick={() => selectAndClose("__d2dkarta__")}
+                      >
+                        Karta
                       </button>
                       <button
                         className="sidebar__item sidebar__item--child"
