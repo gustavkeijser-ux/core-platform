@@ -15,8 +15,8 @@ import { getUserName, useTenantUsers } from "@/lib/users";
  * Varje rubrik har ett filter som i Excel (bocka i värden, sök, sortera).
  * CE-leveransansvarig (en eller två användare, fälten ce_ansvarig/ce_ansvarig_2)
  * väljs direkt i cellen.
- * Varje rad kan expanderas: kontakter (ägare, förvaltare) och checklista
- * (13 kryssrutor) per fastighet, sparas direkt på leveransen.
+ * Varje rad kan expanderas: checklista och kommentar per fastighet, sparas
+ * direkt på leveransen. Kontakterna ligger på koncernmodern (KoncernmoderKontakter).
  * Data: RPC:n leverans_fastighetslista (samma behörighet, sök och filter som listan).
  */
 
@@ -72,15 +72,6 @@ export async function hamtaFastighetslista(search: string | undefined, filters: 
   if (error) throw new Error("Kunde inte hämta fastigheterna.");
   return (data as unknown as FastighetRad[]) ?? [];
 }
-
-/** Kontaktfälten i den expanderade raden. */
-const KONTAKTER: { key: string; label: string; typ: "text" | "email" | "tel"; grupp: string }[] = [
-  { key: "kontakt_agare_namn", label: "För- och efternamn", typ: "text", grupp: "Ägare / primär kontakt" },
-  { key: "kontakt_agare_epost", label: "E-post", typ: "email", grupp: "Ägare / primär kontakt" },
-  { key: "forvaltare_namn", label: "För- och efternamn", typ: "text", grupp: "Förvaltare" },
-  { key: "forvaltare_epost", label: "E-post", typ: "email", grupp: "Förvaltare" },
-  { key: "forvaltare_telefon", label: "Telefon", typ: "tel", grupp: "Förvaltare" },
-];
 
 /** Alla standardpunkter (varsitt kryssfält chk_* på leveransen). */
 export const CHECKPUNKTER: { key: string; label: string }[] = [
@@ -586,7 +577,7 @@ function Checklista({ r, kanAndra, onSpara, ovan, onKopiera }: {
   );
 }
 
-/** Den expanderade raden: kontakter, checklista och kommentar för fastigheten. */
+/** Den expanderade raden: checklista och kommentar för fastigheten (kontakterna ligger på koncernmodern). */
 function RadDetalj({ r, kanAndra, onSpara, ovan, onKopiera }: {
   r: FastighetRad;
   kanAndra: boolean;
@@ -595,38 +586,9 @@ function RadDetalj({ r, kanAndra, onSpara, ovan, onKopiera }: {
   onKopiera?: (fran: FastighetRad) => void;
 }) {
   const d = r.detalj ?? {};
-  const grupper = [...new Set(KONTAKTER.map((k) => k.grupp))];
   const kommentar = typeof d.checklista_kommentar === "string" ? d.checklista_kommentar : "";
   return (
     <div className="lev-fl-detalj">
-      <section className="lev-fl-detalj__del">
-        <h3 className="lev-fl-detalj__rubrik">Kontakter</h3>
-        {grupper.map((g) => (
-          <fieldset key={g} className="lev-fl-detalj__grupp">
-            <legend>{g}</legend>
-            <div className="lev-fl-detalj__falt">
-              {KONTAKTER.filter((k) => k.grupp === g).map((k) => (
-                <label key={k.key} className="lev-fl-detalj__etikett">
-                  <span>{k.label}</span>
-                  <input
-                    className="input input--sm"
-                    type={k.typ}
-                    defaultValue={typeof d[k.key] === "string" ? (d[k.key] as string) : ""}
-                    key={String(d[k.key] ?? "")}
-                    disabled={!kanAndra}
-                    autoComplete="off"
-                    onBlur={(e) => {
-                      const v = e.currentTarget.value.trim() || null;
-                      if (v !== ((d[k.key] as string | undefined) ?? null)) void onSpara(k.key, v);
-                    }}
-                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                  />
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        ))}
-      </section>
       <Checklista r={r} kanAndra={kanAndra} onSpara={onSpara} ovan={ovan} onKopiera={onKopiera} />
       <section className="lev-fl-detalj__del">
         <h3 className="lev-fl-detalj__rubrik">Kommentar</h3>
@@ -720,7 +682,14 @@ export function LeveransFastighetslista({
   }
 
   function vaxla(id: string) {
+    const oppnas = !oppna.has(id);
     setOppna((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    // Hela panelen ska synas direkt när raden expanderas.
+    if (oppnas) {
+      setTimeout(() => {
+        document.querySelector(`[data-detalj="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }, 60);
+    }
   }
 
   /** Sparar ett fält direkt (visas genast; återställs om sparningen misslyckas). */
@@ -851,7 +820,7 @@ export function LeveransFastighetslista({
                   <tr data-row-id={r.id} className={oppen ? "is-oppen" : undefined}>
                     <td data-label="Checklista" className="lev-fl__expcell">
                       <button type="button" className="lev-fl__exp" aria-expanded={oppen}
-                        aria-label={`${oppen ? "Dölj" : "Visa"} kontakter, checklista och kommentar för ${r.fastighet ?? "fastigheten"}`}
+                        aria-label={`${oppen ? "Dölj" : "Visa"} checklista och kommentar för ${r.fastighet ?? "fastigheten"}`}
                         onClick={() => vaxla(r.id)}>
                         <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" className="lev-fl__pil">
                           <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -931,7 +900,7 @@ export function LeveransFastighetslista({
                     <td data-label="TeliaNow (CS)" className="lev-fl__cs">{r.telianow_cs ?? tom}</td>
                   </tr>
                   {oppen && (
-                    <tr className="lev-fl__detaljrad">
+                    <tr className="lev-fl__detaljrad" data-detalj={r.id}>
                       <td colSpan={KOLUMNER.length}>
                         <div className="lev-fl__detaljhall" style={synBredd ? { width: synBredd } : undefined}>
                           <RadDetalj r={r} kanAndra={kanAndra}
