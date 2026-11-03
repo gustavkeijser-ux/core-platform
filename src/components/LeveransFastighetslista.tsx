@@ -3,6 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { supabase } from "@/integrations/supabase/client";
 import { updateRecord, DataError, type RecordFilter } from "@/lib/data";
 import { loadListState, saveListState } from "@/lib/returnRow";
+import { getUserName, useTenantUsers } from "@/lib/users";
 
 /**
  * Leveransöversikten → "Alla fastigheter": en rad per fastighet i projektplanen
@@ -12,12 +13,24 @@ import { loadListState, saveListState } from "@/lib/returnRow";
  * (projektledare) och TeliaNow (CS).
  *
  * Varje rubrik har ett filter som i Excel (bocka i värden, sök, sortera).
+ * CE-leveransansvarig (en eller två användare, fälten ce_ansvarig/ce_ansvarig_2)
+ * väljs direkt i cellen.
  * Varje rad kan expanderas: kontakter (ägare, förvaltare) och checklista
  * (13 kryssrutor) per fastighet, sparas direkt på leveransen.
  * Data: RPC:n leverans_fastighetslista (samma behörighet, sök och filter som listan).
  */
 
-export type Detalj = Partial<Record<string, string | boolean | null>>;
+export type Detalj = Partial<Record<string, unknown>>;
+
+/** Fastighetens egen checklista (fältet chk_layout). Saknas den gäller standardordningen. */
+export type ChkLayout = {
+  /** Nycklar i visningsordning: standardpunkter (chk_*) och egna punkters id. */
+  ordning?: string[];
+  /** Punkter som bara finns på den här fastigheten. */
+  egna?: { id: string; label: string; klar?: boolean }[];
+  /** Standardpunkter som tagits bort från den här fastigheten. */
+  dolda?: string[];
+};
 
 export type FastighetRad = {
   id: string;
@@ -45,6 +58,8 @@ export type FastighetRad = {
   entreprenor: string | null;
   projektledare: string | null;
   telianow_cs: string | null;
+  /** CE-leveransansvarig: användar-id för ce_ansvarig och ce_ansvarig_2. */
+  ce_ansvariga?: string[];
   /** Kontakter och checklista (fälten kontakt_*, forvaltare_*, chk_*). */
   detalj?: Detalj;
 };
@@ -67,22 +82,59 @@ const KONTAKTER: { key: string; label: string; typ: "text" | "email" | "tel"; gr
   { key: "forvaltare_telefon", label: "Telefon", typ: "tel", grupp: "Förvaltare" },
 ];
 
-/** Checklistan per fastighet, i arbetsordning. */
+/** Alla standardpunkter (varsitt kryssfält chk_* på leveransen). */
 export const CHECKPUNKTER: { key: string; label: string }[] = [
   { key: "chk_uppsagning_bef", label: "Uppsägning befintlig leverantör" },
+  { key: "chk_adresslista", label: "Adresslista" },
+  { key: "chk_bekraftad_projektplan", label: "Bekräftad projektplan" },
+  { key: "chk_torrinstallation", label: "Torrinstallation" },
+  { key: "chk_leveransdatum", label: "Leveransdatum" },
   { key: "chk_avi_1", label: "Avi 1" },
   { key: "chk_avi_2", label: "Avi 2" },
   { key: "chk_avi_3", label: "Avi 3" },
-  { key: "chk_projekthemsida", label: "Projekthemsida" },
-  { key: "chk_adresslista", label: "Adresslista" },
-  { key: "chk_leveransdatum", label: "Leveransdatum" },
-  { key: "chk_torrinstallation", label: "Torrinstallation" },
-  { key: "chk_uppsagningar", label: "Uppsägningar" },
-  { key: "chk_levererad", label: "Levererad" },
-  { key: "chk_bekraftad_projektplan", label: "Bekräftad projektplan" },
   { key: "chk_forvaltningsdokument", label: "Förvaltningsdokument" },
   { key: "chk_bommar", label: "Bommar" },
+  { key: "chk_projekthemsida", label: "Projekthemsida" },
+  { key: "chk_uppsagningar", label: "Uppsägningar" },
+  { key: "chk_levererad", label: "Levererad" },
 ];
+/** Standardordningen innan någon ändrat fastighetens lista (Gustav 3 nov). */
+export const STANDARDORDNING = [
+  "chk_uppsagning_bef", "chk_adresslista", "chk_bekraftad_projektplan", "chk_torrinstallation",
+  "chk_leveransdatum", "chk_avi_1", "chk_avi_2", "chk_avi_3", "chk_forvaltningsdokument", "chk_bommar",
+];
+const STD_ETIKETT = new Map(CHECKPUNKTER.map((c) => [c.key, c.label]));
+
+type Punkt = { key: string; label: string; klar: boolean; egen: boolean };
+
+function layoutFor(r: FastighetRad): ChkLayout | null {
+  const l = r.detalj?.chk_layout;
+  return l && typeof l === "object" && !Array.isArray(l) ? (l as ChkLayout) : null;
+}
+
+/** Fastighetens checklista i visningsordning. */
+function punkter(r: FastighetRad): Punkt[] {
+  const d = r.detalj ?? {};
+  const l = layoutFor(r);
+  const std = (key: string): Punkt => ({ key, label: STD_ETIKETT.get(key) ?? key, klar: d[key] === true, egen: false });
+  if (!l) {
+    // Standardordningen, plus övriga standardpunkter som redan är ibockade (inget tappas).
+    return [...STANDARDORDNING, ...CHECKPUNKTER.map((c) => c.key).filter((k) => !STANDARDORDNING.includes(k) && d[k] === true)]
+      .map(std);
+  }
+  const dolda = new Set(l.dolda ?? []);
+  const egna = new Map((l.egna ?? []).map((e) => [e.id, e]));
+  const ut: Punkt[] = [];
+  const sett = new Set<string>();
+  for (const k of l.ordning ?? []) {
+    if (sett.has(k)) continue;
+    if (STD_ETIKETT.has(k) && !dolda.has(k)) { ut.push(std(k)); sett.add(k); }
+    else if (egna.has(k)) { const e = egna.get(k)!; ut.push({ key: e.id, label: e.label, klar: !!e.klar, egen: true }); sett.add(k); }
+  }
+  for (const k of STANDARDORDNING) if (!sett.has(k) && !dolda.has(k)) { ut.push(std(k)); sett.add(k); }
+  for (const e of l.egna ?? []) if (!sett.has(e.id)) { ut.push({ key: e.id, label: e.label, klar: !!e.klar, egen: true }); sett.add(e.id); }
+  return ut;
+}
 
 const datumFmt = new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "short", year: "numeric" });
 function datum(s?: string | null): string | null {
@@ -95,8 +147,12 @@ function tal(v: unknown): number | null {
   const n = Number(String(v).replace(",", "."));
   return Number.isFinite(n) ? n : null;
 }
+/** Högst två CE-leveransansvariga per fastighet (fälten ce_ansvarig, ce_ansvarig_2). */
+const MAX_ANSVARIGA = 2;
+const ansvarigNamn = (r: FastighetRad) => (r.ce_ansvariga ?? []).map((id) => getUserName(id)).join(", ");
+
 function klara(r: FastighetRad): number {
-  return CHECKPUNKTER.reduce((n, c) => n + (r.detalj?.[c.key] === true ? 1 : 0), 0);
+  return punkter(r).filter((p) => p.klar).length;
 }
 const tom = <span className="lev-fl__tom">–</span>;
 
@@ -113,11 +169,12 @@ type Kol = {
 const txt = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
 
 const KOLUMNER: Kol[] = [
-  { key: "chk", label: "Checklista", sort: (r) => klara(r), varde: (r) => `${klara(r)} av ${CHECKPUNKTER.length}`, num: true },
+  { key: "chk", label: "Checklista", sort: (r) => klara(r), varde: (r) => `${klara(r)} av ${punkter(r).length}`, num: true },
   { key: "kund", label: "Koncernmoder", sort: (r) => r.kund, varde: (r) => txt(r.kund) },
   { key: "bolag", label: "Direktägande bolag", sort: (r) => r.bolag, varde: (r) => txt(r.bolag) },
   { key: "ort", label: "Ort", sort: (r) => r.ort, varde: (r) => txt(r.ort) },
   { key: "fastighet", label: "Fastighet", sort: (r) => r.fastighet, varde: (r) => txt(r.fastighet) },
+  { key: "ce", label: "CE-leveransansvarig", sort: (r) => ansvarigNamn(r), varde: (r) => ansvarigNamn(r) },
   { key: "hushall", label: "Hushåll", sort: (r) => tal(r.hushall), varde: (r) => txt(tal(r.hushall)), num: true },
   { key: "fs", label: "FS-portar", sort: (r) => tal(r.fs_portar), varde: (r) => txt(tal(r.fs_portar)), num: true },
   { key: "sc", label: "SC", sort: (r) => tal(r.sc_portar), varde: (r) => txt(tal(r.sc_portar)), num: true },
@@ -278,15 +335,211 @@ function KolumnMeny({
   );
 }
 
-/** Den expanderade raden: kontakter och checklista för fastigheten. */
+/** Väljare för CE-leveransansvarig (en eller två användare). */
+function AnsvarigMeny({ valda, ankare, onSpara, onStang }: {
+  valda: string[];
+  ankare: HTMLElement;
+  onSpara: (ids: string[]) => void;
+  onStang: () => void;
+}) {
+  const users = useTenantUsers();
+  const ref = useRef<HTMLDivElement>(null);
+  const [val, setVal] = useState<string[]>(valda);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 260 });
+  useLayoutEffect(() => {
+    const r = ankare.getBoundingClientRect();
+    const width = Math.min(260, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(r.left, window.innerWidth - width - 12));
+    const top = r.bottom + 4 + 360 > window.innerHeight ? Math.max(12, r.top - 364) : r.bottom + 4;
+    setPos({ top, left, width });
+  }, [ankare]);
+  useEffect(() => {
+    const klick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node) && !ankare.contains(e.target as Node)) onStang();
+    };
+    const tangent = (e: KeyboardEvent) => { if (e.key === "Escape") onStang(); };
+    document.addEventListener("mousedown", klick);
+    document.addEventListener("keydown", tangent);
+    return () => { document.removeEventListener("mousedown", klick); document.removeEventListener("keydown", tangent); };
+  }, [ankare, onStang]);
+  // Valda som inte finns i listan (t.ex. borttagna användare) visas ändå.
+  const lista = [...users, ...val.filter((id) => !users.some((u) => u.id === id)).map((id) => ({ id, name: getUserName(id) }))];
+  const fullt = val.length >= MAX_ANSVARIGA;
+  return (
+    <div ref={ref} className="lev-fl-meny" role="dialog" aria-label="Välj CE-leveransansvarig"
+      style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: 360 }}>
+      <div className="lev-fl-meny__rubrik">CE-leveransansvarig</div>
+      <div className="lev-fl-meny__lista">
+        {lista.map((u) => {
+          const pa = val.includes(u.id);
+          return (
+            <label key={u.id} className="lev-fl-meny__val">
+              <input type="checkbox" checked={pa} disabled={!pa && fullt}
+                onChange={(e) => setVal((v) => (e.target.checked ? [...v, u.id] : v.filter((x) => x !== u.id)))} />
+              <span>{u.name}</span>
+              {pa && val.length > 1 && <span className="lev-fl-meny__antal">{val.indexOf(u.id) + 1}</span>}
+            </label>
+          );
+        })}
+        {lista.length === 0 && <div className="lev-fl-meny__inga">Hämtar användare…</div>}
+      </div>
+      <div className="lev-fl-meny__tips">Högst {MAX_ANSVARIGA} personer.</div>
+      <div className="lev-fl-meny__fot">
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onStang}>Avbryt</button>
+        <button type="button" className="btn btn--brand btn--sm" onClick={() => { onSpara(val); onStang(); }}>Spara</button>
+      </div>
+    </div>
+  );
+}
+
+/** Checklistan i den expanderade raden: bocka i, ändra ordning, egna punkter. */
+function Checklista({ r, kanAndra, onSpara }: {
+  r: FastighetRad;
+  kanAndra: boolean;
+  onSpara: (falt: string, varde: unknown) => Promise<void>;
+}) {
+  const lista = punkter(r);
+  const n = lista.filter((p) => p.klar).length;
+  const [redigera, setRedigera] = useState(false);
+  const [ny, setNy] = useState("");
+  const [drar, setDrar] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+  const l = layoutFor(r);
+
+  /** Sparar hela listans uppställning (ordning, egna punkter, borttagna standardpunkter). */
+  function sparaLayout(nyLista: Punkt[], dolda: string[], egnaKlar?: Map<string, boolean>) {
+    const egnaFore = new Map((l?.egna ?? []).map((e) => [e.id, e]));
+    const layout: ChkLayout = {
+      ordning: nyLista.map((p) => p.key),
+      egna: nyLista.filter((p) => p.egen).map((p) => ({
+        id: p.key, label: p.label, klar: egnaKlar?.get(p.key) ?? egnaFore.get(p.key)?.klar ?? p.klar,
+      })),
+      dolda,
+    };
+    void onSpara("chk_layout", layout);
+  }
+  const doldaNu = () => {
+    const visas = new Set(lista.map((p) => p.key));
+    return CHECKPUNKTER.map((c) => c.key).filter((k) => !visas.has(k));
+  };
+  function flytta(fran: number, till: number) {
+    if (till < 0 || till >= lista.length || fran === till) return;
+    const nyLista = [...lista];
+    const [p] = nyLista.splice(fran, 1);
+    nyLista.splice(till, 0, p);
+    sparaLayout(nyLista, doldaNu());
+  }
+  function taBort(i: number) {
+    const p = lista[i];
+    const nyLista = lista.filter((_, x) => x !== i);
+    const dolda = p.egen ? doldaNu() : [...doldaNu(), p.key];
+    sparaLayout(nyLista, [...new Set(dolda)]);
+  }
+  function laggTill(label: string) {
+    const t = label.trim();
+    if (!t) return;
+    const id = "egen_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    sparaLayout([...lista, { key: id, label: t, klar: false, egen: true }], doldaNu());
+    setNy("");
+  }
+  function laggTillbaka(key: string) {
+    sparaLayout([...lista, { key, label: STD_ETIKETT.get(key) ?? key, klar: r.detalj?.[key] === true, egen: false }],
+      doldaNu().filter((k) => k !== key));
+  }
+  function vaxla(p: Punkt, klar: boolean) {
+    if (!p.egen) { void onSpara(p.key, klar); return; }
+    sparaLayout(lista, doldaNu(), new Map([[p.key, klar]]));
+  }
+  const saknas = doldaNu();
+
+  return (
+    <section className="lev-fl-detalj__del lev-fl-detalj__del--chk">
+      <div className="lev-fl-detalj__huvud">
+        <h3 className="lev-fl-detalj__rubrik">Checklista</h3>
+        <span className="lev-fl-detalj__antal">{n} av {lista.length}</span>
+        {kanAndra && (
+          <button type="button" className="btn btn--ghost btn--sm lev-fl-detalj__andra" aria-pressed={redigera}
+            onClick={() => setRedigera((x) => !x)}>
+            {redigera ? "Klar" : "Ändra listan"}
+          </button>
+        )}
+      </div>
+      <div className="lev-fl-detalj__stapel" aria-hidden="true">
+        <span style={{ width: `${lista.length ? (n / lista.length) * 100 : 0}%` }} />
+      </div>
+      <ol className={"lev-fl-chk" + (redigera ? " is-redigera" : "")}>
+        {lista.map((p, i) => (
+          <li key={p.key}
+            className={"lev-fl-chk__rad" + (p.klar ? " is-klar" : "") + (drar === i ? " is-drar" : "")
+              + (over === i && drar !== null && drar !== i ? (drar < i ? " is-over-efter" : " is-over-fore") : "")}
+            draggable={redigera}
+            onDragStart={(e) => { setDrar(i); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); }}
+            onDragOver={(e) => { if (drar === null) return; e.preventDefault(); setOver(i); }}
+            onDragLeave={() => setOver((o) => (o === i ? null : o))}
+            onDrop={(e) => { e.preventDefault(); if (drar !== null) flytta(drar, i); setDrar(null); setOver(null); }}
+            onDragEnd={() => { setDrar(null); setOver(null); }}>
+            {redigera && (
+              <span className="lev-fl-chk__handtag" aria-hidden="true" title="Dra för att flytta">
+                <svg width="10" height="14" viewBox="0 0 10 14"><g fill="currentColor">
+                  <circle cx="2.5" cy="2.5" r="1.3" /><circle cx="7.5" cy="2.5" r="1.3" />
+                  <circle cx="2.5" cy="7" r="1.3" /><circle cx="7.5" cy="7" r="1.3" />
+                  <circle cx="2.5" cy="11.5" r="1.3" /><circle cx="7.5" cy="11.5" r="1.3" />
+                </g></svg>
+              </span>
+            )}
+            <label className="lev-fl-chk__val">
+              <input type="checkbox" checked={p.klar} disabled={!kanAndra} onChange={(e) => vaxla(p, e.target.checked)} />
+              <span>{p.label}</span>
+              {p.egen && <span className="lev-fl-chk__egen">Egen</span>}
+            </label>
+            {redigera && (
+              <span className="lev-fl-chk__verktyg">
+                <button type="button" aria-label={`Flytta upp ${p.label}`} disabled={i === 0} onClick={() => flytta(i, i - 1)}>↑</button>
+                <button type="button" aria-label={`Flytta ned ${p.label}`} disabled={i === lista.length - 1} onClick={() => flytta(i, i + 1)}>↓</button>
+                <button type="button" aria-label={`Ta bort ${p.label} från fastighetens lista`} onClick={() => taBort(i)}>×</button>
+              </span>
+            )}
+          </li>
+        ))}
+        {lista.length === 0 && <li className="lev-fl-chk__tom">Inga punkter. Lägg till nedan.</li>}
+      </ol>
+      {redigera && (
+        <div className="lev-fl-chk__ny">
+          <div className="lev-fl-chk__nyrad">
+            <input className="input input--sm" placeholder="Ny punkt för den här fastigheten…" value={ny}
+              onChange={(e) => setNy(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") laggTill(ny); }} />
+            <button type="button" className="btn btn--brand btn--sm" disabled={!ny.trim()} onClick={() => laggTill(ny)}>Lägg till</button>
+          </div>
+          {saknas.length > 0 && (
+            <div className="lev-fl-chk__forslag">
+              <span>Lägg tillbaka:</span>
+              {saknas.map((k) => (
+                <button key={k} type="button" className="chip" onClick={() => laggTillbaka(k)}>+ {STD_ETIKETT.get(k)}</button>
+              ))}
+            </div>
+          )}
+          {l && (
+            <button type="button" className="lev-fl__lank lev-fl-chk__aterstall"
+              onClick={() => { if (confirm("Återställ checklistan till standard? Egna punkter tas bort; ibockade standardpunkter ligger kvar.")) void onSpara("chk_layout", null); }}>
+              Återställ standardlistan
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Den expanderade raden: kontakter, checklista och kommentar för fastigheten. */
 function RadDetalj({ r, kanAndra, onSpara }: {
   r: FastighetRad;
   kanAndra: boolean;
-  onSpara: (falt: string, varde: string | boolean | null) => Promise<void>;
+  onSpara: (falt: string, varde: unknown) => Promise<void>;
 }) {
   const d = r.detalj ?? {};
-  const n = klara(r);
   const grupper = [...new Set(KONTAKTER.map((k) => k.grupp))];
+  const kommentar = typeof d.checklista_kommentar === "string" ? d.checklista_kommentar : "";
   return (
     <div className="lev-fl-detalj">
       <section className="lev-fl-detalj__del">
@@ -317,26 +570,23 @@ function RadDetalj({ r, kanAndra, onSpara }: {
           </fieldset>
         ))}
       </section>
+      <Checklista r={r} kanAndra={kanAndra} onSpara={onSpara} />
       <section className="lev-fl-detalj__del">
-        <div className="lev-fl-detalj__huvud">
-          <h3 className="lev-fl-detalj__rubrik">Checklista</h3>
-          <span className="lev-fl-detalj__antal">{n} av {CHECKPUNKTER.length}</span>
-        </div>
-        <div className="lev-fl-detalj__stapel" aria-hidden="true">
-          <span style={{ width: `${(n / CHECKPUNKTER.length) * 100}%` }} />
-        </div>
-        <div className="lev-fl-detalj__checkar">
-          {CHECKPUNKTER.map((c) => {
-            const pa = d[c.key] === true;
-            return (
-              <label key={c.key} className={"lev-fl-check" + (pa ? " is-klar" : "")}>
-                <input type="checkbox" checked={pa} disabled={!kanAndra}
-                  onChange={(e) => void onSpara(c.key, e.target.checked)} />
-                <span>{c.label}</span>
-              </label>
-            );
-          })}
-        </div>
+        <h3 className="lev-fl-detalj__rubrik">Kommentar</h3>
+        <textarea
+          className="input lev-fl-detalj__kommentar"
+          placeholder="Skriv en kommentar om fastigheten…"
+          defaultValue={kommentar}
+          key={kommentar}
+          disabled={!kanAndra}
+          rows={8}
+          aria-label={`Kommentar för ${r.fastighet ?? "fastigheten"}`}
+          onBlur={(e) => {
+            const v = e.currentTarget.value.trim() ? e.currentTarget.value : null;
+            if (v !== (kommentar || null)) void onSpara("checklista_kommentar", v);
+          }}
+        />
+        <span className="lev-fl-detalj__tips">Sparas när du lämnar fältet.</span>
       </section>
     </div>
   );
@@ -358,6 +608,9 @@ export function LeveransFastighetslista({
   const [sparar, setSparar] = useState<string | null>(null);
   const [oppna, setOppna] = useState<Set<string>>(new Set());
   const [meny, setMeny] = useState<{ kol: string; ankare: HTMLElement } | null>(null);
+  const [ansvMeny, setAnsvMeny] = useState<{ id: string; ankare: HTMLElement } | null>(null);
+  // Laddar användarna (namnen i kolumnen CE-leveransansvarig) och ritar om när de finns.
+  const users = useTenantUsers();
 
   useEffect(() => { saveListState(FILTER_NYCKEL, { filter, sort }); }, [filter, sort]);
 
@@ -383,13 +636,13 @@ export function LeveransFastighetslista({
 
   const filtrerade = useMemo(() => rader.filter((r) => passar(r)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rader, filter]);
+    [rader, filter, users]);
 
   const sorterade = useMemo(() => {
     if (!sort) return filtrerade;
     const kol = KOLUMNER.find((k) => k.key === sort.key);
     return kol ? [...filtrerade].sort(jamforSort(kol, sort.dir)) : filtrerade;
-  }, [filtrerade, sort]);
+  }, [filtrerade, sort, users]);
 
   const summa = useMemo(() => {
     let hushall = 0, fs = 0, sc = 0;
@@ -412,7 +665,7 @@ export function LeveransFastighetslista({
   }
 
   /** Sparar ett fält direkt (visas genast; återställs om sparningen misslyckas). */
-  async function spara(r: FastighetRad, falt: string, varde: string | boolean | null, lokalt: Partial<FastighetRad>, fore: Partial<FastighetRad>) {
+  async function spara(r: FastighetRad, falt: string, varde: unknown, lokalt: Partial<FastighetRad>, fore: Partial<FastighetRad>) {
     setSparar(r.id + falt);
     onRadAndrad(r.id, lokalt);
     try {
@@ -425,7 +678,24 @@ export function LeveransFastighetslista({
     }
   }
 
+  async function sparaAnsvariga(r: FastighetRad, ids: string[]) {
+    const nya = ids.slice(0, MAX_ANSVARIGA);
+    const fore = r.ce_ansvariga ?? [];
+    if (nya.join() === fore.join()) return;
+    setSparar(r.id + "ce_ansvarig");
+    onRadAndrad(r.id, { ce_ansvariga: nya });
+    try {
+      await updateRecord(r.id, { ce_ansvarig: nya[0] ?? null, ce_ansvarig_2: nya[1] ?? null });
+    } catch (e) {
+      onRadAndrad(r.id, { ce_ansvariga: fore });
+      alert(e instanceof DataError ? e.message : "Kunde inte spara CE-leveransansvarig.");
+    } finally {
+      setSparar(null);
+    }
+  }
+
   const tf = new Intl.NumberFormat("sv-SE");
+  const ansvRad = ansvMeny ? rader.find((x) => x.id === ansvMeny.id) : undefined;
   const menyKol = meny ? KOLUMNER.find((k) => k.key === meny.kol) : undefined;
   const filterVisning = (v: string[]) => {
     const t = v.map((x) => x || TOMT);
@@ -495,18 +765,19 @@ export function LeveransFastighetslista({
             {sorterade.map((r) => {
               const oppen = oppna.has(r.id);
               const n = klara(r);
+              const tot = punkter(r).length;
               return (
                 <Fragment key={r.id}>
                   <tr data-row-id={r.id} className={oppen ? "is-oppen" : undefined}>
                     <td data-label="Checklista" className="lev-fl__expcell">
                       <button type="button" className="lev-fl__exp" aria-expanded={oppen}
-                        aria-label={`${oppen ? "Dölj" : "Visa"} kontakter och checklista för ${r.fastighet ?? "fastigheten"}`}
+                        aria-label={`${oppen ? "Dölj" : "Visa"} kontakter, checklista och kommentar för ${r.fastighet ?? "fastigheten"}`}
                         onClick={() => vaxla(r.id)}>
                         <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" className="lev-fl__pil">
                           <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <span className={"lev-fl__prog" + (n === CHECKPUNKTER.length ? " is-klar" : n === 0 ? " is-noll" : "")}>
-                          {n}/{CHECKPUNKTER.length}
+                        <span className={"lev-fl__prog" + (tot > 0 && n === tot ? " is-klar" : n === 0 ? " is-noll" : "")}>
+                          {n}/{tot}
                         </span>
                       </button>
                     </td>
@@ -519,6 +790,21 @@ export function LeveransFastighetslista({
                       <button type="button" className="lev-fl__lank" onClick={() => onOpen(r.id)}>{r.fastighet ?? "Utan beteckning"}</button>
                       {r.adress && <span className="lev-fl__under">{r.adress}</span>}
                     </div></td>
+                    <td data-label="CE-leveransansvarig" className="lev-fl__ce">
+                      {kanAndra ? (
+                        <button type="button"
+                          className={"lev-fl__ceknapp" + ((r.ce_ansvariga ?? []).length ? "" : " is-tom")}
+                          aria-haspopup="dialog" aria-expanded={ansvMeny?.id === r.id}
+                          disabled={sparar === r.id + "ce_ansvarig"}
+                          aria-label={`Välj CE-leveransansvarig för ${r.fastighet ?? "fastigheten"}`}
+                          onClick={(e) => setAnsvMeny(ansvMeny?.id === r.id ? null : { id: r.id, ankare: e.currentTarget })}>
+                          {(r.ce_ansvariga ?? []).length ? ansvarigNamn(r) : "Välj"}
+                          <svg width="10" height="10" viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      ) : (ansvarigNamn(r) || tom)}
+                    </td>
                     <td data-label="Hushåll" className="lev-fl__num">{tal(r.hushall) ?? tom}</td>
                     <td data-label="FS-portar" className="lev-fl__num">{tal(r.fs_portar) ?? tom}</td>
                     <td data-label="SC" className="lev-fl__num">{tal(r.sc_portar) ?? tom}</td>
@@ -585,6 +871,16 @@ export function LeveransFastighetslista({
           </tbody>
         </table>
       </div>
+
+      {ansvMeny && ansvRad && (
+        <AnsvarigMeny
+          key={ansvRad.id}
+          valda={ansvRad.ce_ansvariga ?? []}
+          ankare={ansvMeny.ankare}
+          onSpara={(ids) => void sparaAnsvariga(ansvRad, ids)}
+          onStang={() => setAnsvMeny(null)}
+        />
+      )}
 
       {meny && menyKol && (
         <KolumnMeny
