@@ -22,6 +22,7 @@ import { RecordDrawer } from "@/components/RecordDrawer";
 import { D2DSellerApp } from "@/components/D2DSellerApp";
 import { D2DProjectBuilder } from "@/components/D2DProjectBuilder";
 import { D2DUtfallPage } from "@/components/D2DUtfallPage";
+import { D2DKarta } from "@/components/D2DKarta";
 import { D2DAvtalPage } from "@/components/D2DAvtalPage";
 import { D2DFeedbackGranskning, d2dFeedbackAntalVantar, d2dFeedbackArGranskare } from "@/components/D2DFeedback";
 import { D2DLonerPage, d2dLonBehorig } from "@/components/D2DLon";
@@ -46,6 +47,7 @@ type View =
   | { kind: "d2d" }
   | { kind: "d2dbuilder" }
   | { kind: "d2dutfall" }
+  | { kind: "d2dkarta" }
   | { kind: "d2davtal" }
   | { kind: "d2dfeedback" }
   | { kind: "d2dloner" }
@@ -73,6 +75,7 @@ function viewFromSegs(segs: string[]): View {
     case "d2d": return { kind: "d2d" };
     case "d2dbuilder": return { kind: "d2dbuilder" };
     case "d2dutfall": return { kind: "d2dutfall" };
+    case "d2dkarta": return { kind: "d2dkarta" };
     case "d2davtal": return { kind: "d2davtal" };
     case "d2dfeedback": return { kind: "d2dfeedback" };
     case "d2dloner": return { kind: "d2dloner" };
@@ -322,6 +325,7 @@ export default function App() {
     : view?.kind === "tasks" ? "Dina uppgifter i alla moduler"
     : view?.kind === "d2dbuilder" ? "Projekt, adresser och tilldelning"
     : view?.kind === "d2dutfall" ? "Utfall, merförsäljning och bindningstider"
+    : view?.kind === "d2dkarta" ? "Hela beståndet: utfall och dörrkvalitet per hus"
     : view?.kind === "d2davtal" ? "Avtal signerade med Scrive i D2D-vyn"
     : view?.kind === "d2dfeedback" ? "Feedback från säljarna i D2D-sälj — granskas innan den skickas vidare"
     : view?.kind === "d2dloner" ? "Kommande bonusar enligt lönemodellen — pinnar per säljare och månad"
@@ -347,7 +351,7 @@ export default function App() {
     : view?.kind === "dashboard" ? "Översikt"
     : view?.kind === "tasks" ? "Mina uppgifter"
     : view?.kind === "settings" ? (view.tab === "import" ? "Import" : view.tab === "m365" ? "Microsoft 365" : view.tab === "priser" ? "Door2Door" : "Inställningar")
-    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" || view?.kind === "d2dfeedback" || view?.kind === "d2dloner" ? "Door2Door"
+    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2dkarta" || view?.kind === "d2davtal" || view?.kind === "d2dfeedback" || view?.kind === "d2dloner" ? "Door2Door"
     : view?.kind === "nummerbyten" ? (objectDefFor("nummerbyte")?.labelPlural ?? "Annat")
     : view?.kind === "vtbestallningar" ? "Door2Door"
     : view?.kind === "cases" || view?.kind === "case" || view?.kind === "newcase" ? "Ärenden"
@@ -402,6 +406,7 @@ export default function App() {
           : view?.kind === "tasks" ? "__tasks__"
           : view?.kind === "d2dbuilder" ? "__d2dbuilder__"
           : view?.kind === "d2dutfall" ? "__d2dutfall__"
+          : view?.kind === "d2dkarta" ? "__d2dkarta__"
           : view?.kind === "d2davtal" ? "__d2davtal__"
           : view?.kind === "d2dfeedback" ? "__d2dfeedback__"
           : view?.kind === "d2dloner" ? "__d2dloner__"
@@ -425,6 +430,7 @@ export default function App() {
             : key === "__d2d__" ? { kind: "d2d" }
             : key === "__d2dbuilder__" ? { kind: "d2dbuilder" }
             : key === "__d2dutfall__" ? { kind: "d2dutfall" }
+            : key === "__d2dkarta__" ? { kind: "d2dkarta" }
             : key === "__d2davtal__" ? { kind: "d2davtal" }
             : key === "__d2dfeedback__" ? { kind: "d2dfeedback" }
             : key === "__d2dloner__" ? { kind: "d2dloner" }
@@ -463,6 +469,7 @@ export default function App() {
                 : view?.kind === "tasks" ? "Mina uppgifter"
                 : view?.kind === "d2dbuilder" ? "D2D – Projekt"
                 : view?.kind === "d2dutfall" ? "D2D – Utfall"
+                : view?.kind === "d2dkarta" ? "D2D – Karta"
                 : view?.kind === "d2davtal" ? "D2D – Avtal"
                 : view?.kind === "d2dfeedback" ? "Säljarfeedback"
                 : view?.kind === "d2dloner" ? "Löner"
@@ -505,6 +512,7 @@ export default function App() {
 
         {view?.kind === "d2dbuilder" && <D2DProjectBuilder objectDefFor={objectDefFor} onOpenRecord={openRecord} />}
         {view?.kind === "d2dutfall" && <D2DUtfallPage onOpenRecord={openRecord} />}
+        {view?.kind === "d2dkarta" && <D2DKarta isAdmin={isAdmin} onOpenRecord={openRecord} />}
         {view?.kind === "d2davtal" && <D2DAvtalPage onOpenRecord={openRecord} lagFields={objectDefFor("d2d_lagenhet")?.fields ?? []} />}
         {view?.kind === "d2dfeedback" && (d2dGranskare
           ? <D2DFeedbackGranskning onAntalAndrat={() => d2dFeedbackAntalVantar().then(setD2dFeedbackVantar)} />
