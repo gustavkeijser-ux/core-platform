@@ -25,11 +25,13 @@ import "@/styles/d2d.css";
    inte väljas förrän de finns i projektplanen. Säljare tilldelas direkt i
    husets kort: en säljare sparas direkt (100 %), flera säljare öppnar en
    popup där adresserna fördelas. Med ett valt projekt ligger projektets
-   översikt (nyckeltal och säljstatus) ovanför kartan och fastighetslistan med
-   säljstatus per fastighet i den breddade panelen till höger.
+   översikt (nyckeltal och säljstatus) som en bubbla överst på kartan och
+   fastighetslistan med säljstatus per fastighet som en bubbla vid kartans
+   högra kant. Båda är lager ovanpå kartan (kartan behåller sin storlek) och
+   går att fälla ihop.
    ============================================================================= */
 
-const VERSION = "Karta 1.3 · 2026-11-03";
+const VERSION = "Karta 1.4 · 2026-11-03";
 
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
@@ -321,6 +323,8 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   // Platser där projektvyn (ProjectDetail) ritar översikten och fastighetslistan.
   const [toppPlats, setToppPlats] = useState<HTMLDivElement | null>(null);
   const [listPlats, setListPlats] = useState<HTMLDivElement | null>(null);
+  const [visaOversikt, setVisaOversikt] = useState(true);
+  const [visaLista, setVisaLista] = useState(true);
 
   const mapEl = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletAny>(null);
@@ -568,11 +572,25 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
 
   return (
     <div className="d2dk-sida">
-    {projektId && <div ref={setToppPlats} className="d2dk-topp" />}
     <div className={`d2dk${projektId ? " d2dk--projekt" : ""}`}>
       <div className="d2dk-karta-wrap">
         <div ref={mapEl} className="d2dk-karta" />
-        <div className="d2dk-niva">{NIVAER[niva]?.namn} · zoom {zoom}</div>
+        {!projektId && <div className="d2dk-niva">{NIVAER[niva]?.namn} · zoom {zoom}</div>}
+        {projektId && (
+          // Lager ovanpå kartan. Själva lagret släpper igenom klick till kartan, bara bubblorna tar emot dem.
+          <div className="d2dk-lager">
+            <div className={`d2dk-bubbla d2dk-bubbla--topp${visaOversikt ? "" : " is-hopfalld"}`}>
+              <button type="button" className="d2dk-bubbla__vaxla" onClick={() => setVisaOversikt((v) => !v)}
+                aria-expanded={visaOversikt}>{visaOversikt ? "Dölj översikt" : "Visa översikt"}</button>
+              <div ref={setToppPlats} className="d2dk-topp" hidden={!visaOversikt} />
+            </div>
+            <div className={`d2dk-bubbla d2dk-bubbla--lista${visaLista ? "" : " is-hopfalld"}`}>
+              <button type="button" className="d2dk-bubbla__vaxla" onClick={() => setVisaLista((v) => !v)}
+                aria-expanded={visaLista}>{visaLista ? "Dölj fastigheter ›" : "‹ Fastigheter"}</button>
+              <div ref={setListPlats} className="d2dk-fastlista" hidden={!visaLista} />
+            </div>
+          </div>
+        )}
         <div className="d2dk-legend">
           {lage === "utfall"
             ? KAT.map((k) => <span key={k.k}><i className={`d2dk-dot d2dk-${k.k}`} />{k.namn}</span>)
@@ -612,13 +630,12 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
                   <label className="d2dk-projekt__bara">
                     <input type="checkbox" checked={baraProjekt} onChange={(e) => setBaraProjekt(e.target.checked)} /> Visa bara projektets hus
                   </label>
-                  <p className="d2dk-hjalp">Klicka på ett hus och välj Lägg till, eller lägg till ett helt område med + i listan nedan. Tilldela säljare i husets kort eller i listan.</p>
+                  <p className="d2dk-hjalp">Klicka på ett hus och välj Lägg till, eller lägg till ett helt område med + i listan nedan. Tilldela säljare i husets kort eller i fastighetslistan på kartan.</p>
                 </>
               )}
               {arbetar && <div className="d2dk-arbetar">{arbetar}</div>}
               {projFel && <div className="d2d-error">{projFel}</div>}
             </section>
-            {projektId && <div ref={setListPlats} className="d2dk-fastlista" />}
 
             <div className="d2dk-lage" role="tablist">
               <button role="tab" aria-selected={lage === "kvalitet"} className={lage === "kvalitet" ? "on" : ""} onClick={() => setLage("kvalitet")}>Dörrkvalitet</button>
