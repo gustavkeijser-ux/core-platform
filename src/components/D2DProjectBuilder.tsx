@@ -1586,6 +1586,55 @@ function AddFastighetPicker({ projektId, turordningStart, onAdded }: {
 }
 
 // =============================================================================
+// Leveranser ↔ projekt. Delas av leveranslistan i projektet och Door to door → Karta.
+// =============================================================================
+
+/** Leverans-id → projektets d2d_fastighet-id. */
+export async function d2dProjektLeveranser(projektId: string): Promise<Map<string, string>> {
+  const { data: fastRels } = await supabase.from("relationships").select("from_record_id")
+    .eq("rel_type", "d2d_fast_projekt").eq("to_record_id", projektId);
+  const fastIds = ((fastRels ?? []) as Array<{ from_record_id: string }>).map((r) => r.from_record_id);
+  if (fastIds.length === 0) return new Map();
+  const { data: levRels } = await supabase.from("relationships").select("from_record_id,to_record_id")
+    .eq("rel_type", "d2d_fast_delivery").in("from_record_id", fastIds);
+  return new Map(((levRels ?? []) as Array<{ from_record_id: string; to_record_id: string }>)
+    .map((r) => [r.to_record_id, r.from_record_id]));
+}
+
+/**
+ * Lägger leveranser i ett projekt som D2D-fastigheter. Fastighetsposter som
+ * tidigare plockats ur ett projekt återanvänds, så lägenheter och tilldelning
+ * följer med om man ångrar sig. Geokodar till sist.
+ */
+export async function d2dLaggTillLeveranser(
+  projektId: string, levIds: string[], turordningStart: number, framsteg?: (text: string) => void,
+): Promise<void> {
+  if (levIds.length === 0) return;
+  const { data: gamla } = await supabase.from("relationships").select("from_record_id,to_record_id")
+    .eq("rel_type", "d2d_fast_delivery").in("to_record_id", levIds);
+  const kand = ((gamla ?? []) as Array<{ from_record_id: string; to_record_id: string }>);
+  const { data: iProjekt } = kand.length
+    ? await supabase.from("relationships").select("from_record_id")
+      .eq("rel_type", "d2d_fast_projekt").in("from_record_id", kand.map((k) => k.from_record_id))
+    : { data: [] };
+  const upptagna = new Set(((iProjekt ?? []) as Array<{ from_record_id: string }>).map((x) => x.from_record_id));
+  const ledig = new Map<string, string>();
+  for (const k of kand) if (!upptagna.has(k.from_record_id) && !ledig.has(k.to_record_id)) ledig.set(k.to_record_id, k.from_record_id);
+
+  let tur = turordningStart;
+  for (let i = 0; i < levIds.length; i++) {
+    framsteg?.(`Lägger till ${i + 1} av ${levIds.length}…`);
+    const fastId = ledig.get(levIds[i]);
+    if (fastId) {
+      await addRelation(fastId, "d2d_fast_projekt", projektId);
+      await d2dHamtaTeliaLagenheter(fastId).catch(() => null);
+    } else await d2dSkapaFastighetFranLeverans(levIds[i], projektId, tur++);
+  }
+  framsteg?.("Geokodar…");
+  await d2dGeokodaNu().catch(() => null);
+}
+
+// =============================================================================
 // Projektdetalj
 // =============================================================================
 
@@ -1595,8 +1644,14 @@ const PROJEKT_KOLUMNER = [
   "befintlig_fiberleverantor", "avtalstid_ko", "kanalpaket_projektplan", "migrering", "projektplan_status", "kundklar",
 ];
 
-function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
+/**
+ * Ett projekt: fastigheter, tilldelning, godkännande. `inbaddad` = visas under
+ * kartan på Door to door → Karta; då väljs fastigheterna på kartan i stället för
+ * i leveranslistan, och kartsektionen och tillbakaknappen döljs.
+ */
+export function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord, inbaddad = false, reloadKey = 0, onAndrat }: {
   projektId: string; onBack: () => void; deliveryDef?: ObjectDef; onOpenRecord?: (id: string) => void;
+  inbaddad?: boolean; reloadKey?: number; onAndrat?: () => void;
 }) {
   const [project, setProject] = useState<RecordRow | null>(null);
   const [fastigheter, setFastigheter] = useState<FastRow[]>([]);
@@ -1631,13 +1686,7 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
 
       if (fastIds.length === 0) { setFastigheter([]); setLevTillFast(new Map()); return; }
 
-      const { data: levRels } = await supabase
-        .from("relationships")
-        .select("from_record_id,to_record_id")
-        .eq("rel_type", "d2d_fast_delivery")
-        .in("from_record_id", fastIds);
-      setLevTillFast(new Map(((levRels ?? []) as Array<{ from_record_id: string; to_record_id: string }>)
-        .map((r) => [r.to_record_id, r.from_record_id])));
+      setLevTillFast(await d2dProjektLeveranser(projektId));
 
       const { data: fastData } = await supabase
         .from("records")
@@ -1670,12 +1719,13 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
     }
   }, [projektId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, reloadKey]);
 
   async function removeFastighet(id: string) {
     if (!confirm("Ta bort fastigheten ur projektet? Lägenheter/adresser tas inte bort.")) return;
     await removeRelation(id, "d2d_fast_projekt", projektId).catch(() => {});
-    load();
+    await load();
+    onAndrat?.();
   }
 
   /** Bocka i/ur leveranser i projektet. */
@@ -1685,36 +1735,14 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
       const nya = rader.filter((r) => !levTillFast.has(r.id));
       if (nya.length === 0) return;
       try {
-        // Fastighetsposter som tidigare plockats ur ett projekt återanvänds,
-        // så lägenheter och tilldelning följer med om man ångrar sig.
-        const { data: gamla } = await supabase.from("relationships").select("from_record_id,to_record_id")
-          .eq("rel_type", "d2d_fast_delivery").in("to_record_id", nya.map((r) => r.id));
-        const kand = ((gamla ?? []) as Array<{ from_record_id: string; to_record_id: string }>);
-        const { data: iProjekt } = kand.length
-          ? await supabase.from("relationships").select("from_record_id")
-            .eq("rel_type", "d2d_fast_projekt").in("from_record_id", kand.map((k) => k.from_record_id))
-          : { data: [] };
-        const upptagna = new Set(((iProjekt ?? []) as Array<{ from_record_id: string }>).map((x) => x.from_record_id));
-        const ledig = new Map<string, string>();
-        for (const k of kand) if (!upptagna.has(k.from_record_id) && !ledig.has(k.to_record_id)) ledig.set(k.to_record_id, k.from_record_id);
-
-        let tur = fastigheter.length + 1;
-        for (let i = 0; i < nya.length; i++) {
-          setValArbetar(`Lägger till ${i + 1} av ${nya.length}…`);
-          const fastId = ledig.get(nya[i].id);
-          if (fastId) {
-            await addRelation(fastId, "d2d_fast_projekt", projektId);
-            await d2dHamtaTeliaLagenheter(fastId).catch(() => null);
-          } else await d2dSkapaFastighetFranLeverans(nya[i].id, projektId, tur++);
-        }
-        setValArbetar("Geokodar…");
-        await d2dGeokodaNu().catch(() => null);
+        await d2dLaggTillLeveranser(projektId, nya.map((r) => r.id), fastigheter.length + 1, setValArbetar);
       } catch (e) {
         setValFel(e instanceof DataError ? e.message : "Kunde inte lägga till alla fastigheter.");
       } finally {
         setValArbetar(null);
         await load();
         setKartaKey((k) => k + 1);
+        onAndrat?.();
       }
     } else {
       const bort = rader.map((r) => levTillFast.get(r.id)).filter((x): x is string => !!x);
@@ -1732,6 +1760,7 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
         setValArbetar(null);
         await load();
         setKartaKey((k) => k + 1);
+        onAndrat?.();
       }
     }
   }
@@ -1808,10 +1837,16 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
       </TopbarActions>
 
       <div className="d2dpb-crumb">
-        <button type="button" className="btn btn--ghost btn--sm" onClick={onBack}>← Alla projekt</button>
+        {!inbaddad && <button type="button" className="btn btn--ghost btn--sm" onClick={onBack}>← Alla projekt</button>}
         <h2 className="d2dpb-crumb__title">{project.title ?? "Projekt"}</h2>
         <StatusPill status={project.status} def={projDef(project.status)} />
         {!!data.description && <span className="d2dpb-crumb__meta">{String(data.description)}</span>}
+        {!inbaddad && (
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => navigate(["d2dkarta"], { projekt: projektId })}
+            title="Välj fastigheter på kartan med dörrkvalitet och utfall">
+            Planera på kartan
+          </button>
+        )}
       </div>
       {deleteErr && <div className="card d2dpb-note d2dpb-note--fel">{deleteErr}</div>}
       {approveMsg && <div className="card d2dpb-note d2dpb-note--ok">✓ {approveMsg}</div>}
@@ -1839,7 +1874,7 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
           )}
         </div>
         {fastigheter.length === 0 ? (
-          <p className="d2dpb-sek__tom">Inga fastigheter i projektet ännu. Välj dem i leveranslistan nedan eller importera en adresslista.</p>
+          <p className="d2dpb-sek__tom">Inga fastigheter i projektet ännu. {inbaddad ? "Välj dem på kartan ovan" : "Välj dem i leveranslistan nedan"} eller importera en adresslista.</p>
         ) : (
           <div className="d2dpb-tabell" style={{ "--d2dpb-antal": plan?.statusar.length ?? 0 } as React.CSSProperties}>
             <div className="d2dpb-rad__main d2dpb-tabell__head" aria-hidden="true">
@@ -1865,16 +1900,16 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
             ))}
           </div>
         )}
-        {!deliveryDef && (
+        {(!deliveryDef || inbaddad) && (
           <AddFastighetPicker
             projektId={projektId}
             turordningStart={fastigheter.length + 1}
-            onAdded={load}
+            onAdded={() => { load(); onAndrat?.(); }}
           />
         )}
       </section>
 
-      {deliveryDef && (
+      {deliveryDef && !inbaddad && (
         <section className="card d2dpb-sek d2dpb-leveranser">
           <div className="d2dpb-sek__head"><h2>Lägg till fastigheter från leveranslistan</h2></div>
           <p className="d2dpb-sek__hjalp">
@@ -1900,7 +1935,7 @@ function ProjectDetail({ projektId, onBack, deliveryDef, onOpenRecord }: {
         />
       </section>
 
-      <KartaSection projektId={projektId} totalFastigheter={fastigheter.length} reloadKey={kartaKey} />
+      {!inbaddad && <KartaSection projektId={projektId} totalFastigheter={fastigheter.length} reloadKey={kartaKey} />}
     </div>
   );
 }
@@ -2214,10 +2249,10 @@ export function D2DProjectBuilder({ objectDefFor, onOpenRecord }: {
     <div className="page d2dpb">
       {view.kind !== "project" && (
         <div className="tab-bar d2dpb-tabs" role="tablist">
-          {([["list", "Projekt"], ["karta", "Leveranskarta"], ["godkanna", "Att godkänna"]] as const).map(([k, label]) => (
+          {([["list", "Projekt"], ["karta", "Karta"], ["godkanna", "Att godkänna"]] as const).map(([k, label]) => (
             <button key={k} role="tab" aria-selected={view.kind === k}
               className={`tab-bar__tab${view.kind === k ? " tab-bar__tab--active" : ""}`}
-              onClick={() => setView({ kind: k } as typeof view)}>
+              onClick={() => k === "karta" ? navigate(["d2dkarta"]) : setView({ kind: k } as typeof view)}>
               {label}
               {k === "godkanna" && !!antalGodk && <span className="tab-bar__count">{antalGodk}</span>}
             </button>
