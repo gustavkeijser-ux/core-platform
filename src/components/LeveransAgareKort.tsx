@@ -125,7 +125,7 @@ function initialer(namn: string) {
   return namn.split(/[\s/|,]+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
 }
 
-function Roll({ roll, varden }: { roll: string; varden: string[] }) {
+export function Roll({ roll, varden }: { roll: string; varden: string[] }) {
   const tom = varden.length === 0;
   return (
     <div className="lev-kort__person">
@@ -142,7 +142,7 @@ function Roll({ roll, varden }: { roll: string; varden: string[] }) {
   );
 }
 
-function Siffra({ etikett, varde }: { etikett: string; varde: number | null | undefined }) {
+export function Siffra({ etikett, varde }: { etikett: string; varde: number | null | undefined }) {
   const har = varde !== null && varde !== undefined && varde !== 0;
   return (
     <div className="lev-kort__siffra">
