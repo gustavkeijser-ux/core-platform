@@ -769,7 +769,7 @@ function ExcelImportPanel({
 //   en adress som bockas i hos en säljare försvinner från de andras listor.
 // =============================================================================
 
-type Assignment = { user_id: string; procent: number; antal?: number };
+export type Assignment = { user_id: string; procent: number; antal?: number };
 
 type LagRad = { id: string; label: string; status: string | null; owner: string | null };
 
@@ -793,14 +793,16 @@ function jamforLag(a: LagRad, b: LagRad) {
   return a.label.localeCompare(b.label, "sv", { numeric: true });
 }
 
-function AssignmentEditor({
-  fastighetId, sellers, initial, manuell, onSaved, rubrik,
+/** Tilldela säljare på en fastighet. Används i projektets fastighetslista och i
+ *  popupen på Door to door → Karta (då med `forvalda` = säljarna man valt där). */
+export function AssignmentEditor({
+  fastighetId, sellers, initial, manuell, onSaved, rubrik, forvalda,
 }: {
   fastighetId: string; sellers: SellerOption[]; initial: Assignment[]; rubrik?: React.ReactNode;
-  manuell: Record<string, string> | null; onSaved: () => void;
+  manuell: Record<string, string> | null; onSaved: () => void; forvalda?: string[];
 }) {
   const [valda, setValda] = useState<string[]>(() =>
-    initial.map((a) => a.user_id).filter((id) => sellers.some((s) => s.id === id)));
+    (forvalda ?? initial.map((a) => a.user_id)).filter((id) => sellers.some((s) => s.id === id)));
   const [lagenheter, setLagenheter] = useState<LagRad[] | null>(null);
   const [karta, setKarta] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
