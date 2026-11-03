@@ -1893,3 +1893,30 @@
 }
 .d2dk-dialog .d2dpb-assign__sellers { flex-wrap: wrap; }
 .d2dk-dialog .d2dpb-assign__add { max-width: 100%; min-width: 0; }
+
+/* Karta med valt projekt: översikten ovanför kartan, bredare panel med fastighetslistan. */
+.d2dk-topp { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.d2dk-topp:empty { display: none; }
+.d2dk-topp .d2dpb-crumb { margin: 0; }
+.d2dk-topp .d2dpb-sek { margin: 0; }
+.d2dk.d2dk--projekt { grid-template-columns: minmax(0, 1fr) minmax(520px, 46%); }
+.d2dk-fastlista:empty { display: none; }
+.d2dk-fastlista .d2dpb-sek { margin: 0; padding: 0; overflow: hidden; }
+.d2dk-fastlista .d2dpb-sek__head { padding: var(--sp-3) var(--sp-4); }
+.d2dk-fastlista .d2dpb-picker { padding: var(--sp-3) var(--sp-4); }
+/* Panelen är smal: raderna staplas som på mobil, säljstatus som stapel + förklaring. */
+.d2dk-fastlista .d2dpb-tabell__head { display: none; }
+.d2dk-fastlista .d2dpb-rad__main { grid-template-columns: 52px minmax(0, 1fr) auto; row-gap: 8px; padding: 10px var(--sp-4); }
+.d2dk-fastlista .d2dpb-rad__main .d2dpb-lage { grid-column: 3; grid-row: 1; }
+.d2dk-fastlista .d2dpb-rad__narmast { display: none; }
+.d2dk-fastlista .d2dpb-rad__stapel, .d2dk-fastlista .d2dpb-rad__knappar { grid-column: 1 / -1; }
+.d2dk-fastlista .d2dpb-rad__knappar { justify-content: flex-start; flex-wrap: wrap; }
+.d2dk-fastlista .d2dpb-rad__antal, .d2dk-fastlista .d2dpb-tabell__status { display: none; }
+.d2dk-fastlista .d2dpb-rad__mobil-legend { display: block; padding: 0 var(--sp-4) 10px; }
+.d2dk-fastlista .d2dpb-rad > .d2dpb-addr, .d2dk-fastlista .d2dpb-rad > .d2dpb-assign, .d2dk-fastlista .d2dpb-rad > .d2dpb-info { padding: var(--sp-3) var(--sp-4); }
+.d2dpb-rad__fokus { border: 0; background: none; padding: 0; font: inherit; text-align: left; cursor: pointer; min-width: 0; color: inherit; }
+.d2dpb-rad__fokus strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d2dpb-rad__fokus:hover strong { color: var(--brand-ink); text-decoration: underline; }
+@media (max-width: 900px) {
+  .d2dk.d2dk--projekt { grid-template-columns: 1fr; }
+}
