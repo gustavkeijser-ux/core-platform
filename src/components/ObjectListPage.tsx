@@ -13,6 +13,7 @@ import { RecordDrawer } from "./RecordDrawer";
 import { KanbanBoard } from "./KanbanBoard";
 import { LeveransKort } from "./LeveransKort";
 import { LeveransAgareKort, hamtaAgareOversikt, agareFilter, gruppNyckel, type AgareGrupp } from "./LeveransAgareKort";
+import { LeveransFastighetslista, hamtaFastighetslista, type FastighetRad } from "./LeveransFastighetslista";
 import { ColumnConfigPanel } from "./ColumnConfigPanel";
 import { FilterBar } from "./FilterBar";
 import { ColumnFilter, kolumnVal } from "./ColumnFilter";
@@ -64,6 +65,8 @@ type SavedListState = {
   /** Valt korts namn och Leveransöversikt-post (för rubriken och "Öppna"). */
   agareNamn?: string;
   agarePost?: string | null;
+  /** Leveransöversikten: kort per koncernmoder eller tabell med alla fastigheter. */
+  levVy?: "koncern" | "fastigheter";
 };
 
 const PAGE_SIZE = 25;
@@ -180,7 +183,11 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
   const [agareNamn, setAgareNamn] = useState<string>(saved.agareNamn ?? "");
   const [agarePost, setAgarePost] = useState<string | null>(saved.agarePost ?? null);
   const [grupper, setGrupper] = useState<AgareGrupp[]>([]);
-  const visarAgare = mode === "kort" && !agare;
+  // Leveransöversikten: "Koncernmoder" (korten) eller "Alla fastigheter" (tabell).
+  const [levVy, setLevVy] = useState<"koncern" | "fastigheter">(saved.levVy ?? "koncern");
+  const [fastRader, setFastRader] = useState<FastighetRad[]>([]);
+  const visarFastigheter = mode === "kort" && levVy === "fastigheter";
+  const visarAgare = mode === "kort" && !agare && !visarFastigheter;
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(saved.page ?? 0);
   const [search, setSearch] = useState(saved.search ?? "");
@@ -350,6 +357,14 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
     setLoading(true);
     setError(null);
     try {
+      if (visarFastigheter) {
+        const f: RecordFilter[] = [...allFilters];
+        if (status) f.push({ field: "__status", op: "eq", value: status });
+        const rader = await hamtaFastighetslista(search || undefined, f);
+        setFastRader(rader);
+        setTotal(rader.length);
+        return;
+      }
       if (mode === "kort" && !agare) {
         const f: RecordFilter[] = [...allFilters];
         if (status) f.push({ field: "__status", op: "eq", value: status });
@@ -371,7 +386,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
       setItems(res.items);
       setTotal(res.total);
     } catch (e) {
-      setError(e instanceof DataError || (e instanceof Error && visarAgare) ? (e as Error).message : "Kunde inte hämta listan.");
+      setError(e instanceof DataError || (e instanceof Error && (visarAgare || visarFastigheter)) ? (e as Error).message : "Kunde inte hämta listan.");
     } finally {
       setLoading(false);
     }
@@ -384,15 +399,15 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
 
   // Spara läget varje gång det ändras.
   useEffect(() => {
-    saveListState<SavedListState>(stateKey, { mode, page, search, status, filters, sort, activeViewId, agare, agareNamn, agarePost });
-  }, [stateKey, mode, page, search, status, filters, sort, activeViewId, agare, agareNamn, agarePost]);
+    saveListState<SavedListState>(stateKey, { mode, page, search, status, filters, sort, activeViewId, agare, agareNamn, agarePost, levVy });
+  }, [stateKey, mode, page, search, status, filters, sort, activeViewId, agare, agareNamn, agarePost, levVy]);
 
   // Första renderingen återställer ett sparat läge — då ska sidnumret
   // INTE nollställas av filter/sök-effekterna nedan.
   const firstRun = useRef(true);
   useEffect(() => { const t = setTimeout(() => { firstRun.current = false; }, 0); return () => clearTimeout(t); }, []);
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [objectDef.key, page, status, mode, reloadKey, agare]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [objectDef.key, page, status, mode, reloadKey, agare, levVy]);
   useEffect(() => { if (firstRun.current) return; setPage(0); load(); /* eslint-disable-next-line */ }, [JSON.stringify(filters)]);
   useEffect(() => { if (firstRun.current) return; load(); /* eslint-disable-next-line */ }, [sort?.field, sort?.dir]);
   useEffect(() => {
@@ -545,6 +560,12 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
               <span className="live-dot__pip" />
               Live
             </span>
+          )}
+          {harKort && (
+            <div className="view-toggle" role="group" aria-label="Visa leveransöversikten som">
+              <button className="view-toggle__btn" aria-current={levVy === "koncern"} onClick={() => setLevVy("koncern")}>Koncernmoder</button>
+              <button className="view-toggle__btn" aria-current={levVy === "fastigheter"} onClick={() => setLevVy("fastigheter")}>Alla fastigheter</button>
+            </div>
           )}
           {hasStatuses && !picker && !harKort && (
             <div className="view-toggle">
@@ -889,7 +910,22 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
               />
       )}
 
-      {!error && mode === "kort" && agare && (
+      {!error && visarFastigheter && (
+        loading && fastRader.length === 0
+          ? <div className="card"><SkeletonRows /></div>
+          : fastRader.length === 0
+            ? <div className="card"><EmptyState kind={filtered ? "filtered" : undefined} title={filtered ? "Inga träffar" : `Inga ${plural} än`}
+                text={filtered ? "Inget matchar sökningen eller filtren. Rensa dem för att se alla." : "Projektplanen är tom."} /></div>
+            : <LeveransFastighetslista
+                rader={fastRader}
+                loading={loading}
+                onOpen={openRow}
+                kanAndra={objectDef.can.update}
+                onKundklarSparad={(id, v) => setFastRader((rs) => rs.map((r) => (r.id === id ? { ...r, kundklar_ce: v } : r)))}
+              />
+      )}
+
+      {!error && mode === "kort" && agare && !visarFastigheter && (
         <div className="lev-agare-rubrik">
           <button className="btn btn--ghost btn--sm" onClick={() => { setPage(0); setAgare(""); }}>← Alla fastighetsägare</button>
           <h2 className="lev-agare-rubrik__titel">{agareNamn || "Leveranser"}</h2>
@@ -902,7 +938,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
         </div>
       )}
 
-      {!error && mode === "kort" && agare && (
+      {!error && mode === "kort" && agare && !visarFastigheter && (
         loading && items.length === 0
           ? <div className="card"><SkeletonRows /></div>
           : items.length === 0
@@ -918,7 +954,7 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
               />
       )}
 
-      {(mode === "list" || (mode === "kort" && !!agare)) && !error && total > 0 && (
+      {(mode === "list" || (mode === "kort" && !!agare && !visarFastigheter)) && !error && total > 0 && (
         <Pager page={page} pageSize={PAGE_SIZE} total={total} unit={plural} onPage={setPage} />
       )}
 
