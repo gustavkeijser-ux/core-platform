@@ -1917,6 +1917,8 @@
 .d2dk-bubbla--lista.is-hopfalld { flex: 0 0 auto; width: auto; overflow: visible; }
 /* Översikten kompakt: rubrik, nyckeltal och säljstatus på liten yta. */
 .d2dk-topp { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+/* Hopfälld bubbla: innehållet döljs (display: flex ovan skulle annars vinna över hidden). */
+.d2dk-topp[hidden], .d2dk-fastlista[hidden] { display: none; }
 .d2dk-topp .d2dpb-crumb { margin: 0; padding-right: 120px; }
 .d2dk-topp .d2dpb-crumb__title { font-size: var(--text-lg); }
 .d2dk-topp .d2dpb-tiles { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: var(--sp-2); margin: 0; }
