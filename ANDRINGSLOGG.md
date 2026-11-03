@@ -31,8 +31,7 @@ Områden: Master, Leverans, Ärenden, Säljprocess, D2D.
 
 ## 2026-11-03
 
-- [D2D] Kirunagatan 98 lgh 1701 såld av kundtjänst: [D2D] Kirunagatan 98 lgh 1701 (Vällingby) rättad: såld 2026-11-03 av enbart kundtjänst, inte delad med eller tilldelad någon dörrsäljare (kundtjänst-markeringen borttagen, säljdatum flyttat från 27 okt). DB: 20261103_1200_d2d_kirunagatan_kundtjanst. Publicerad av gustav@connectestate.se (uppgift 20261103-1200-kirunagatan-kundtjanst).
-- [D2D] Kirunagatan 98 lgh 1701 såld av kundtjänst: [D2D] Kirunagatan 98 lgh 1701 (Vällingby) rättad: såld 2026-11-03 av enbart kundtjänst, inte delad med eller tilldelad någon dörrsäljare (kundtjänst-markeringen borttagen, säljdatum flyttat från 27 okt). DB: 20261103_1200_d2d_kirunagatan_kundtjanst. Publicerad av gustav@connectestate.se (uppgift 20261103-1200-kirunagatan-kundtjanst).
+- [D2D] Utfall-rapporten tog för lång tid (statement timeout i månadsrapporten): Månadsrapporten gav "canceling statement due to statement timeout" (Gustav 2 nov) när den hämtar två månader parallellt. Orsak: `d2d_utfall_rapport` slog upp VT-beställningen med `vb.id::text = data->>'vt_bestallning_id'`, vilket inte kan använda primärnyckelindexet — alla ~49 000 poster lästes en gång per rad (280 rader × 32 ms ≈ 9 s, totalt 10 s per anrop). Nu jämförs som uuid (ogiltig text ger ingen träff) och uppslaget blir ett indexslag: 1,5 s per månad i testgrenen, VT-kolumnen oförändrad (69 rader med VT-status i oktober). Funktionen ändras på plats, ingen kodändring. Prova: Utfall → Excel-rapport → oktober 2026 → Hämta månadsrapport (och den vanliga Hämta Excel). DB: `d2d_utfall_rapport` — `supabase/migrations/20261102_1420_d2d_utfall_rapport_vt_index.sql`, körd i testgrenen. Publicerad av gustav@connectestate.se (uppgift 20261102-1420-utfall-rapport-timeout).
 
 ## 2026-11-02
 
