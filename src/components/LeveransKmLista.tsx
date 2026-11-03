@@ -12,7 +12,7 @@ import {
 /**
  * Leveransöversikten → Koncernmoder: en rad per koncernmoder (Kund) med en
  * summering av fastigheterna i projektplanen — antal, hushåll, portar, snittsteg,
- * Telia LPL, CE-leveransansvarig, entreprenör, avisering (Avi 1 ska alltid gå ut
+ * Telia LPL, CE-leveransansvarig, projektledare, avisering (Avi 1 ska alltid gå ut
  * först, sedan 2 och 3), kundklar och checklista. Klick öppnar koncernmoderns
  * fastigheter i samma tabell som "Alla fastigheter".
  * Filter per rubrik som i Excel. Data: grupperna från leverans_agare_oversikt
@@ -33,7 +33,8 @@ export type KmRad = {
   steg: number | "vilande" | null;
   lpl: string[];
   ce: string[];
-  entr: string[];
+  /** Projektledare enligt projektplanen (kolumnen efter Entreprenör). */
+  pl: string[];
   avi: Avi;
   kkMin: string | null;
   kkMax: string | null;
@@ -78,7 +79,7 @@ const KOLUMNER: Kol<KmRad>[] = [
   { key: "steg", label: "Status", sort: (r) => (r.steg === null ? null : r.steg === "vilande" ? -1 : r.steg), varde: (r) => stegText(r.steg) },
   { key: "lpl", label: "Telia LPL", sort: (r) => r.lpl.join(", "), varde: (r) => r.lpl.join(", ") },
   { key: "ce", label: "CE-leveransansvarig", sort: (r) => r.ce.map(getUserName).join(", "), varde: (r) => r.ce.map(getUserName).join(", ") },
-  { key: "entr", label: "Entreprenör", sort: (r) => r.entr.join(", "), varde: (r) => r.entr.join(", ") },
+  { key: "pl", label: "Projektledare", sort: (r) => r.pl.join(", "), varde: (r) => r.pl.join(", ") },
   { key: "avi", label: "Avisering", sort: (r) => { const v = aviVarst(r.avi); return v.ordning === 9 ? null : v.ordning * 10000 - (r.avi.a1 + r.avi.a2 + r.avi.a3); }, varde: (r) => aviVarst(r.avi).text },
   { key: "kk", label: "Kundklar", sort: (r) => r.kkMin, varde: (r) => (r.kkMin ? (r.kkMin === r.kkMax ? datum(r.kkMin) : `${datum(r.kkMin)} – ${datum(r.kkMax)}`) : "") },
   { key: "chk", label: "Checklista", sort: (r) => (r.chkTot ? r.chkKlar / r.chkTot : null), varde: (r) => (r.chkTot ? `${Math.round((r.chkKlar / r.chkTot) * 100)} %` : ""), num: true },
@@ -143,7 +144,7 @@ export function LeveransKmLista({ objectDef, grupper, rader, loading, onOpen, on
         steg: n ? summa / n : vil ? "vilande" : null,
         lpl: unika(fr.map((r) => r.lpl)),
         ce: [...new Set(fr.flatMap((r) => r.ce_ansvariga ?? []))],
-        entr: unika(fr.map((r) => r.entreprenor)),
+        pl: unika(fr.map((r) => r.projektledare)),
         avi,
         kkMin: kk[0] ?? null,
         kkMax: kk[kk.length - 1] ?? null,
@@ -289,7 +290,7 @@ export function LeveransKmLista({ objectDef, grupper, rader, loading, onOpen, on
               <div className="lev-agare__roller lev-km-kort__roller">
                 <Roll roll="Telia LPL" varden={r.lpl} />
                 <Roll roll="CE-leveransansvarig" varden={r.ce.map(getUserName)} />
-                <Roll roll="Entreprenör" varden={r.entr} />
+                <Roll roll="Projektledare" varden={r.pl} />
               </div>
 
               <div className="lev-km-kort__kk">
