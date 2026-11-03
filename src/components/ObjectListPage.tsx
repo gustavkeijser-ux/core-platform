@@ -921,7 +921,9 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
                 loading={loading}
                 onOpen={openRow}
                 kanAndra={objectDef.can.update}
-                onKundklarSparad={(id, v) => setFastRader((rs) => rs.map((r) => (r.id === id ? { ...r, kundklar_ce: v } : r)))}
+                onRadAndrad={(id, andring) => setFastRader((rs) => rs.map((r) => (r.id === id
+                  ? { ...r, ...andring, detalj: andring.detalj ? { ...(r.detalj ?? {}), ...andring.detalj } : r.detalj }
+                  : r)))}
               />
       )}
 
