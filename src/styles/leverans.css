@@ -189,3 +189,85 @@
   color: color-mix(in srgb, var(--lev-ram) 65%, var(--ink));
   background: color-mix(in srgb, var(--lev-ram) 14%, transparent);
 }
+
+/* ── Leveransöversikten → Alla fastigheter (LeveransFastighetslista.tsx) ── */
+
+.lev-fl { padding: 0; overflow: hidden; transition: opacity var(--dur) var(--ease); }
+.lev-fl.is-loading { opacity: .55; }
+
+.lev-fl__summa {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--divider);
+  font-size: var(--text-sm); color: var(--ink-muted);
+}
+.lev-fl__summa b { color: var(--ink); font-weight: 700; }
+
+.lev-fl__scroll { overflow: auto; max-height: calc(100vh - 260px); min-height: 240px; }
+
+.lev-fl__tabell { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.lev-fl__tabell th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface-sunk);
+  border-bottom: 1px solid var(--divider);
+  padding: 0; text-align: left; white-space: nowrap;
+}
+.lev-fl__th {
+  display: block; width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ink-ghost); text-align: inherit;
+}
+.lev-fl__th:hover { color: var(--ink-soft); }
+.lev-fl__tabell th[aria-sort] .lev-fl__th { color: var(--brand-ink); }
+.lev-fl__tabell td {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--divider-soft);
+  color: var(--ink-muted); vertical-align: top;
+}
+.lev-fl__tabell tbody tr:hover td { background: var(--overlay-hover); }
+.lev-fl__num { text-align: right; font-variant-numeric: tabular-nums; }
+.lev-fl__datum, .lev-fl__cs { white-space: nowrap; }
+.lev-fl__kund { color: var(--ink); font-weight: 600; min-width: 160px; }
+.lev-fl__okopplad { color: var(--ink-faint); font-weight: 500; font-style: italic; }
+.lev-fl__fastighet { min-width: 170px; }
+.lev-fl__lank {
+  border: 0; padding: 0; background: none; cursor: pointer;
+  font: inherit; font-weight: 600; color: var(--brand-ink); text-align: left;
+}
+.lev-fl__lank:hover { text-decoration: underline; }
+.lev-fl__lank:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--r-xs, 4px); }
+.lev-fl__under { display: block; margin-top: 2px; font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
+.lev-fl__avvik { color: var(--warn-ink); }
+.lev-fl__pl { color: var(--ink-faint); }
+.lev-fl__status {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  background: var(--neutral-soft); color: var(--ink-soft);
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.lev-fl__kundklar { min-width: 140px; }
+.lev-fl__datuminput { width: 140px; }
+.lev-fl__tom { color: var(--ink-ghost); }
+
+/* Mobil: varje fastighet som ett kort med etikett: värde. */
+@media (max-width: 720px) {
+  .lev-fl__scroll { max-height: none; overflow: visible; }
+  .lev-fl__tabell thead { display: none; }
+  .lev-fl__tabell, .lev-fl__tabell tbody, .lev-fl__tabell tr, .lev-fl__tabell td { display: block; width: 100%; }
+  .lev-fl__tabell tr { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--divider); }
+  .lev-fl__tabell tbody tr:hover td { background: transparent; }
+  .lev-fl__tabell td {
+    display: grid; grid-template-columns: 42% 1fr; gap: var(--sp-2);
+    padding: 3px 0; border: 0; text-align: left; min-width: 0;
+  }
+  .lev-fl__tabell td::before {
+    content: attr(data-label);
+    font-size: 11px; font-weight: 600; color: var(--ink-faint);
+  }
+  .lev-fl__tabell td > * { min-width: 0; }
+  .lev-fl__under { white-space: normal; }
+  .lev-fl__kund { font-size: var(--text-sm); }
+  .lev-fl__datuminput { width: 100%; }
+  .lev-fl__status { justify-self: start; }
+}
