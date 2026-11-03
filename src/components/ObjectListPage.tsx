@@ -13,6 +13,7 @@ import { RecordDrawer } from "./RecordDrawer";
 import { KanbanBoard } from "./KanbanBoard";
 import { hamtaAgareOversikt, agareFilter, gruppNyckel, INGEN_AGARE, type AgareGrupp } from "./LeveransAgareKort";
 import { LeveransKmLista } from "./LeveransKmLista";
+import { KoncernmoderKontakter } from "./LeveransKmKontakter";
 import { LeveransFastighetslista, hamtaFastighetslista, type FastighetRad } from "./LeveransFastighetslista";
 import { ColumnConfigPanel } from "./ColumnConfigPanel";
 import { FilterBar } from "./FilterBar";
@@ -933,6 +934,18 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
               Öppna leveransöversikt
             </button>
           )}
+
+      {/* Kontakterna ligger på koncernmodern (inte per fastighet). */}
+      {!error && visarKmTabell && agare !== INGEN_AGARE && !agare.startsWith("post:") && (
+        <KoncernmoderKontakter
+          key={agare}
+          kundId={agare}
+          kundNamn={agareNamn}
+          postId={agarePost}
+          kanAndra={objectDef.can.update}
+          onPostSkapad={(id) => setAgarePost(id)}
+        />
+      )}
         </div>
       )}
 
