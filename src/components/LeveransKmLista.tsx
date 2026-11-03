@@ -248,6 +248,11 @@ export function LeveransKmLista({ objectDef, grupper, rader, loading, onOpen, on
               <div className="lev-km-kort__namn">
                 <h3 className={r.g.kund ? "lev-kort__titel" : "lev-kort__titel lev-kort__tom"}>{r.namn}</h3>
                 {avtalsparter.length > 0 && <p className="lev-kort__agare" title={avtalsparter.join(", ")}>Avtalsparter: {avtalsparter.join(", ")}</p>}
+                {(() => {
+                  const p = r.g.post ?? {};
+                  const del = [p.agare_namn && `Ägare: ${p.agare_namn}`, p.forvaltare_namn && `Förvaltare: ${p.forvaltare_namn}`].filter(Boolean) as string[];
+                  return del.length ? <p className="lev-kort__agare lev-km-kort__kontakt" title={del.join(" · ")}>{del.join(" · ")}</p> : null;
+                })()}
                 <div className="lev-km-kort__etiketter">
                   {steg !== null && (
                     <span className="lev-agare__steg" title="Genomsnittligt steg för fastigheterna (avslutade = 9, vilande räknas inte)">
