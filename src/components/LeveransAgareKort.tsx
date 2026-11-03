@@ -76,13 +76,13 @@ export function agareFilter(nyckel: string): RecordFilter {
 }
 
 /** Stegnumret i statusens etikett ("2. Beställt uppstartsmöte" → 2). */
-function stegFor(label?: string | null): number | null {
+export function stegFor(label?: string | null): number | null {
   const m = label?.match(/^\s*(\d+)\./);
   return m ? Number(m[1]) : null;
 }
 
-const VILANDE = 8;
-const KLAR = 9; // 9 och 99 räknas som helt klart
+export const VILANDE = 8;
+export const KLAR = 9; // 9 och 99 räknas som helt klart
 
 /**
  * Hur långt kortet har kommit: genomsnittligt steg över fastigheterna, viktat
@@ -102,10 +102,10 @@ function kortSteg(g: AgareGrupp, label: (key: string | null) => string | undefin
   return vilande > 0 ? "vilande" : null;
 }
 
-const snittFmt = new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 1 });
+export const snittFmt = new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 1 });
 
 /** Röd (steg 0) → orange → gul → grön (steg 9/99). */
-function stegFarg(steg: number | "vilande"): string {
+export function stegFarg(steg: number | "vilande"): string {
   if (steg === "vilande") return "var(--ink-ghost)";
   if (steg >= KLAR) return "var(--ok, #2E9E5B)";
   const hue = Math.round((Math.max(0, steg) / KLAR) * 125);
