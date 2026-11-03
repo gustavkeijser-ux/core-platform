@@ -432,10 +432,13 @@ function AnsvarigMeny({ valda, ankare, onSpara, onStang }: {
 }
 
 /** Checklistan i den expanderade raden: bocka i, ändra ordning, egna punkter. */
-function Checklista({ r, kanAndra, onSpara }: {
+function Checklista({ r, kanAndra, onSpara, ovan, onKopiera }: {
   r: FastighetRad;
   kanAndra: boolean;
   onSpara: (falt: string, varde: unknown) => Promise<void>;
+  /** Fastigheten raden ovanför i listan (som den är sorterad och filtrerad). */
+  ovan?: FastighetRad;
+  onKopiera?: (fran: FastighetRad) => void;
 }) {
   const lista = punkter(r);
   const n = lista.filter((p) => p.klar).length;
@@ -496,6 +499,19 @@ function Checklista({ r, kanAndra, onSpara }: {
       <div className="lev-fl-detalj__huvud">
         <h3 className="lev-fl-detalj__rubrik">Checklista</h3>
         <span className="lev-fl-detalj__antal">{n} av {lista.length}</span>
+        {kanAndra && ovan && onKopiera && (
+          <button type="button" className="btn btn--ghost btn--sm lev-fl-detalj__kopiera"
+            title={`Kopiera checklistan från ${ovan.fastighet ?? "fastigheten ovan"}${ovan.ort ? ", " + ovan.ort : ""}`}
+            onClick={() => {
+              const namn = ovan.fastighet ?? "fastigheten ovan";
+              if (confirm(`Kopiera checklistan från ${namn}?\n\nPunkternas ordning, egna punkter och vilka som är ibockade ersätts med ${namn}s. Kommentar och kontakter rörs inte.`)) onKopiera(ovan);
+            }}>
+            <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><g fill="none" stroke="currentColor" strokeWidth="1.6">
+              <rect x="5" y="5" width="8.5" height="8.5" rx="1.5" /><path d="M10.5 5V3.5A1.5 1.5 0 0 0 9 2H3.5A1.5 1.5 0 0 0 2 3.5V9a1.5 1.5 0 0 0 1.5 1.5H5" />
+            </g></svg>
+            Kopiera från ovan
+          </button>
+        )}
         {kanAndra && (
           <button type="button" className="btn btn--ghost btn--sm lev-fl-detalj__andra" aria-pressed={redigera}
             onClick={() => setRedigera((x) => !x)}>
@@ -571,10 +587,12 @@ function Checklista({ r, kanAndra, onSpara }: {
 }
 
 /** Den expanderade raden: kontakter, checklista och kommentar för fastigheten. */
-function RadDetalj({ r, kanAndra, onSpara }: {
+function RadDetalj({ r, kanAndra, onSpara, ovan, onKopiera }: {
   r: FastighetRad;
   kanAndra: boolean;
   onSpara: (falt: string, varde: unknown) => Promise<void>;
+  ovan?: FastighetRad;
+  onKopiera?: (fran: FastighetRad) => void;
 }) {
   const d = r.detalj ?? {};
   const grupper = [...new Set(KONTAKTER.map((k) => k.grupp))];
@@ -609,7 +627,7 @@ function RadDetalj({ r, kanAndra, onSpara }: {
           </fieldset>
         ))}
       </section>
-      <Checklista r={r} kanAndra={kanAndra} onSpara={onSpara} />
+      <Checklista r={r} kanAndra={kanAndra} onSpara={onSpara} ovan={ovan} onKopiera={onKopiera} />
       <section className="lev-fl-detalj__del">
         <h3 className="lev-fl-detalj__rubrik">Kommentar</h3>
         <textarea
@@ -719,6 +737,27 @@ export function LeveransFastighetslista({
     }
   }
 
+  /** Kopierar checklistan (ordning, egna punkter, ibockade) från en annan fastighet. */
+  async function kopieraChecklista(r: FastighetRad, fran: FastighetRad) {
+    const k = fran.detalj ?? {};
+    const patch: Record<string, unknown> = {};
+    for (const c of CHECKPUNKTER) patch[c.key] = k[c.key] === true ? true : null;
+    const l = layoutFor(fran);
+    patch.chk_layout = l ? JSON.parse(JSON.stringify(l)) : null;
+    const fore: Record<string, unknown> = {};
+    for (const key of Object.keys(patch)) fore[key] = r.detalj?.[key] ?? null;
+    setSparar(r.id + "chk_kopiera");
+    onRadAndrad(r.id, { detalj: patch });
+    try {
+      await updateRecord(r.id, patch);
+    } catch (e) {
+      onRadAndrad(r.id, { detalj: fore });
+      alert(e instanceof DataError ? e.message : "Kunde inte kopiera checklistan.");
+    } finally {
+      setSparar(null);
+    }
+  }
+
   async function sparaAnsvariga(r: FastighetRad, ids: string[]) {
     const nya = ids.slice(0, MAX_ANSVARIGA);
     const fore = r.ce_ansvariga ?? [];
@@ -803,7 +842,7 @@ export function LeveransFastighetslista({
             </tr>
           </thead>
           <tbody>
-            {sorterade.map((r) => {
+            {sorterade.map((r, radIndex) => {
               const oppen = oppna.has(r.id);
               const n = klara(r);
               const tot = punkter(r).length;
@@ -896,6 +935,8 @@ export function LeveransFastighetslista({
                       <td colSpan={KOLUMNER.length}>
                         <div className="lev-fl__detaljhall" style={synBredd ? { width: synBredd } : undefined}>
                           <RadDetalj r={r} kanAndra={kanAndra}
+                            ovan={radIndex > 0 ? sorterade[radIndex - 1] : undefined}
+                            onKopiera={(fran) => void kopieraChecklista(r, fran)}
                             onSpara={(falt, varde) => spara(r, falt, varde,
                               { detalj: { [falt]: varde } }, { detalj: { [falt]: r.detalj?.[falt] ?? null } })} />
                         </div>
