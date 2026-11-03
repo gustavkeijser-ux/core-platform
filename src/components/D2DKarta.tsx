@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { lasXlsx, bladnamn, tillObjekt } from "@/lib/xlsx";
+import { useRoute, navigate } from "@/lib/route";
+import { createRecord, removeRelation, DataError } from "@/lib/data";
+import { ProjectDetail, d2dProjektLeveranser, d2dLaggTillLeveranser } from "./D2DProjectBuilder";
 import "@/styles/d2d.css";
 
 /* =============================================================================
@@ -14,9 +17,15 @@ import "@/styles/d2d.css";
    världskoordinater (inte skärmens pixlar), så klustren ändras bara när man
    byter nivå — aldrig av att man drar i kartan. Siffran i en markör är alltid
    lägenheter (eller effektiva dörrar), aldrig antal hus.
+
+   Kartan är också planeringsverktyget: välj eller skapa ett projekt överst,
+   lägg till hus (ett i taget eller ett helt område) och tilldela säljare i
+   projektet som visas under kartan (samma vy som Door to door → Projekt).
+   Husen läggs till via leveransen, så hus som bara finns i Masterlistan kan
+   inte väljas förrän de finns i projektplanen.
    ============================================================================= */
 
-const VERSION = "Karta 1.0 · 2026-11-03";
+const VERSION = "Karta 1.1 · 2026-11-03";
 
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
@@ -236,14 +245,15 @@ function tartaSvg(u: Utfall, d: number): string {
   return ut;
 }
 
-function markorHtml(a: Agg, lage: Lage, maxLgh: number): { html: string; d: number } {
+function markorHtml(a: Agg, lage: Lage, maxLgh: number, iProjekt = 0): { html: string; d: number } {
   const d = Math.round(24 + 30 * Math.sqrt(Math.min(a.lgh, maxLgh) / Math.max(maxLgh, 1)));
   const siffra = lage === "utfall" ? a.lgh : a.effektiva;
   const txt = siffra >= 10000 ? `${Math.round(siffra / 1000)}k` : siffra >= 1000 ? `${(siffra / 1000).toFixed(1).replace(".", ",")}k` : String(siffra);
   const inner = lage === "utfall"
     ? `<svg width="${d}" height="${d}" viewBox="0 0 ${d} ${d}" aria-hidden="true">${tartaSvg(a.utfall, d)}</svg>`
     : `<span class="d2dk-q ${kvalitetSteg(a.saljbara ? a.effektiva / a.saljbara : 0)}"></span>`;
-  return { d, html: `<div class="d2dk-m" style="width:${d}px;height:${d}px">${inner}<b>${txt}</b></div>` };
+  const proj = iProjekt ? ` d2dk-m--proj" data-proj="${iProjekt === a.hus.length ? "alla" : "vissa"}` : "";
+  return { d, html: `<div class="d2dk-m${proj}" style="width:${d}px;height:${d}px">${inner}<b>${txt}</b></div>` };
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +298,18 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const [visaKvalitet, setVisaKvalitet] = useState(false);
   const [klar, setKlar] = useState(false);
 
+  // Projektet ligger i URL:en (#/d2dkarta?projekt=<id>) så en omladdning stannar kvar.
+  const route = useRoute();
+  const projektId = route.query.get("projekt");
+  const setProjekt = (id: string | null) => navigate(["d2dkarta"], { projekt: id }, true);
+  const [projektLista, setProjektLista] = useState<Array<{ id: string; title: string | null; status: string | null; updatedAt: string }>>([]);
+  const [levTillFast, setLevTillFast] = useState<Map<string, string>>(new Map());
+  const [projKey, setProjKey] = useState(0);
+  const [arbetar, setArbetar] = useState<string | null>(null);
+  const [projFel, setProjFel] = useState<string | null>(null);
+  const [nyttNamn, setNyttNamn] = useState<string | null>(null);
+  const [baraProjekt, setBaraProjekt] = useState(false);
+
   const mapEl = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletAny>(null);
   const lagerRef = useRef<LeafletAny>(null);
@@ -302,6 +324,65 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   }
   useEffect(() => { ladda(); }, []);
 
+  async function laddaProjektLista() {
+    const { data: d } = await supabase.rpc("d2d_planering_status", { p_projekt: null });
+    const lista = ((d as { projekt?: Array<{ id: string; title: string | null; status: string | null; updatedAt: string }> } | null)?.projekt ?? [])
+      .slice().sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+    setProjektLista(lista);
+  }
+  useEffect(() => { laddaProjektLista().catch(() => {}); }, []);
+
+  async function laddaProjektHus() {
+    setLevTillFast(projektId ? await d2dProjektLeveranser(projektId).catch(() => new Map()) : new Map());
+  }
+  useEffect(() => { setProjFel(null); setBaraProjekt(false); laddaProjektHus(); }, [projektId]);
+
+  const iProjekt = (h: KartHus) => !!h.levId && levTillFast.has(h.levId);
+
+  async function laggTill(hus: KartHus[]) {
+    if (!projektId) return;
+    const levIds = [...new Set(hus.filter((h) => h.levId && !levTillFast.has(h.levId)).map((h) => h.levId!))];
+    if (levIds.length === 0) return;
+    setProjFel(null);
+    try {
+      await d2dLaggTillLeveranser(projektId, levIds, levTillFast.size + 1, setArbetar);
+    } catch (e) {
+      setProjFel(e instanceof DataError ? e.message : "Kunde inte lägga till alla hus.");
+    } finally {
+      setArbetar(null);
+      await laddaProjektHus();
+      setProjKey((k) => k + 1);
+    }
+  }
+
+  async function taBort(h: KartHus) {
+    const fastId = h.levId ? levTillFast.get(h.levId) : undefined;
+    if (!projektId || !fastId) return;
+    if (!confirm(`Ta bort ${h.beteckning ?? "huset"} ur projektet? Lägenheter och tilldelning ligger kvar om du lägger tillbaka det.`)) return;
+    setProjFel(null);
+    try {
+      await removeRelation(fastId, "d2d_fast_projekt", projektId);
+    } catch (e) {
+      setProjFel(e instanceof DataError ? e.message : "Kunde inte ta bort huset.");
+    }
+    await laddaProjektHus();
+    setProjKey((k) => k + 1);
+  }
+
+  async function skapaProjekt() {
+    const namn = (nyttNamn ?? "").trim();
+    if (!namn) return;
+    setProjFel(null);
+    try {
+      const row = await createRecord("d2d_projekt", { name: namn }, "planering");
+      setNyttNamn(null);
+      await laddaProjektLista();
+      setProjekt(row.id);
+    } catch (e) {
+      setProjFel(e instanceof DataError ? e.message : "Kunde inte skapa projektet.");
+    }
+  }
+
   const idag = data?.idag ?? new Date().toISOString().slice(0, 10);
 
   const filtrerade = useMemo(() => {
@@ -312,9 +393,10 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
       if (losningar.size && !losningar.has(h.losning ?? "okand")) return false;
       if (inst !== "alla" && instKlass(h, idag) !== inst) return false;
       if (minFaktor && h.faktor < minFaktor) return false;
+      if (baraProjekt && !iProjekt(h)) return false;
       return true;
     });
-  }, [data, sok, losningar, inst, minFaktor, idag]);
+  }, [data, sok, losningar, inst, minFaktor, idag, baraProjekt, levTillFast]);
 
   // Aggregaten räknas en gång per nivå och filter, inte vid varje kartrörelse.
   const perNiva = useMemo(() => NIVAER.map((n) => aggregera(filtrerade, n)), [filtrerade]);
@@ -366,7 +448,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     const maxLgh = Math.max(1, ...aggs.map((a) => a.lgh));
     const lager = L.layerGroup();
     for (const a of aggs) {
-      const { html, d } = markorHtml(a, lage, maxLgh);
+      const { html, d } = markorHtml(a, lage, maxLgh, a.hus.filter(iProjekt).length);
       const m = L.marker([a.lat, a.lon], {
         icon: L.divIcon({ html, className: "d2dk-ikon", iconSize: [d, d], iconAnchor: [d / 2, d / 2] }),
         title: a.hus.length > 1 ? `${a.namn}: ${a.hus.length} hus, ${a.lgh} lgh` : `${a.namn} (${a.lgh} lgh)`,
@@ -381,7 +463,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     }
     lager.addTo(map);
     lagerRef.current = lager;
-  }, [perNiva, niva, lage, klar]);
+  }, [perNiva, niva, lage, klar, levTillFast]);
 
   // Bästa gångavståndsområdena i vyn (klusternivån, celler på ca 1 km).
   const basta = useMemo(() => {
@@ -409,6 +491,8 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   }, [data]);
 
   const valtHus = valt ? data?.fastigheter.find((h) => h.id === valt) ?? null : null;
+  const projHus = useMemo(() => (data?.fastigheter ?? []).filter(iProjekt), [data, levTillFast]);
+  const projNamn = projektLista.find((p) => p.id === projektId)?.title ?? "Projekt";
   useEffect(() => { if (valt) kortRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [valt]);
 
   async function importera(fil: File | null) {
@@ -436,6 +520,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const vaxla = (k: string) => setLosningar((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
   return (
+    <div className="d2dk-sida">
     <div className="d2dk">
       <div className="d2dk-karta-wrap">
         <div ref={mapEl} className="d2dk-karta" />
@@ -453,6 +538,38 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
 
         {data && (
           <>
+            <section className="d2dk-projekt">
+              <div className="d2dk-projekt__rad">
+                <select className="input" value={projektId ?? ""} onChange={(e) => setProjekt(e.target.value || null)} aria-label="Projekt">
+                  <option value="">Inget projekt — bara titta</option>
+                  {projektLista.filter((p) => p.status !== "avslutat" || p.id === projektId).map((p) => (
+                    <option key={p.id} value={p.id}>{p.title ?? "Namnlöst projekt"}</option>
+                  ))}
+                </select>
+                <button className="btn btn--ghost btn--sm" onClick={() => setNyttNamn(nyttNamn === null ? "" : null)}>+ Nytt projekt</button>
+              </div>
+              {nyttNamn !== null && (
+                <div className="d2dk-projekt__rad">
+                  <input className="input" autoFocus placeholder="Projektets namn, t.ex. Blitz Örebro v. 47" value={nyttNamn}
+                    onChange={(e) => setNyttNamn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") skapaProjekt(); }} />
+                  <button className="btn btn--brand btn--sm" onClick={skapaProjekt} disabled={!nyttNamn.trim()}>Skapa</button>
+                </div>
+              )}
+              {projektId && (
+                <>
+                  <div className="d2dk-projekt__sum">
+                    <b>{projNamn}</b>: {heltal(projHus.length)} hus · {heltal(projHus.reduce((s, h) => s + h.lgh, 0))} lgh · {heltal(projHus.reduce((s, h) => s + h.effektiva, 0))} effektiva dörrar
+                  </div>
+                  <label className="d2dk-projekt__bara">
+                    <input type="checkbox" checked={baraProjekt} onChange={(e) => setBaraProjekt(e.target.checked)} /> Visa bara projektets hus
+                  </label>
+                  <p className="d2dk-hjalp">Klicka på ett hus och välj Lägg till, eller lägg till ett helt område med + i listan nedan. Tilldela säljare under kartan.</p>
+                </>
+              )}
+              {arbetar && <div className="d2dk-arbetar">{arbetar}</div>}
+              {projFel && <div className="d2d-error">{projFel}</div>}
+            </section>
+
             <div className="d2dk-lage" role="tablist">
               <button role="tab" aria-selected={lage === "kvalitet"} className={lage === "kvalitet" ? "on" : ""} onClick={() => setLage("kvalitet")}>Dörrkvalitet</button>
               <button role="tab" aria-selected={lage === "utfall"} className={lage === "utfall" ? "on" : ""} onClick={() => setLage("utfall")}>Utfall</button>
@@ -492,6 +609,8 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
 
             <div ref={kortRef} />
             {valtHus && <Fastighetskort h={valtHus} idag={idag} onStang={() => setValt(null)} onOpenRecord={onOpenRecord}
+              projekt={projektId ? { namn: projNamn, iProjekt: iProjekt(valtHus), arbetar: !!arbetar,
+                onLaggTill: () => laggTill([valtHus]), onTaBort: () => taBort(valtHus) } : null}
               onVisa={() => valtHus.lat != null && mapRef.current?.setView([valtHus.lat, valtHus.lon], 16)} />}
 
             <section className="d2dk-sek">
@@ -499,18 +618,29 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
               <p className="d2dk-hjalp">Hus inom ett par kilometer från varandra, rangordnade efter effektiva dörrar.</p>
               {basta.length === 0 && <div className="d2dk-tom">Inga hus i vyn med nuvarande filter.</div>}
               <ol className="d2dk-lista">
-                {basta.map((a) => (
-                  <li key={a.id}>
-                    <button onClick={() => {
+                {basta.map((a) => {
+                  const nya = a.hus.filter((h) => h.levId && !iProjekt(h));
+                  const iProj = a.hus.filter(iProjekt).length;
+                  return (
+                  <li key={a.id} className={iProj ? "i-projekt" : ""}>
+                    <button className="d2dk-lista__val" onClick={() => {
                       if (a.hus.length === 1) { setValt(a.hus[0].id); mapRef.current?.setView([a.lat, a.lon], 16); }
                       else mapRef.current?.fitBounds([[a.syd, a.vast], [a.nord, a.ost]], { padding: [40, 40], maxZoom: 16 });
                     }}>
                       <span className="d2dk-lista__namn">{a.namn || "Okänd ort"}</span>
-                      <span className="d2dk-lista__sub">{a.hus.length} hus · {heltal(a.lgh)} lgh · snitt {fak(a.saljbara ? a.effektiva / a.saljbara : 0)}</span>
+                      <span className="d2dk-lista__sub">{a.hus.length} hus · {heltal(a.lgh)} lgh · snitt {fak(a.saljbara ? a.effektiva / a.saljbara : 0)}{iProj ? ` · ${iProj} i projektet` : ""}</span>
                       <b>{heltal(a.effektiva)}</b>
                     </button>
+                    {projektId && (
+                      <button className="d2dk-plus" disabled={!!arbetar || nya.length === 0} onClick={() => laggTill(nya)}
+                        title={nya.length ? `Lägg till ${nya.length} hus i ${projNamn}` : "Alla hus med leverans är redan i projektet"}
+                        aria-label={nya.length ? `Lägg till ${nya.length} hus i projektet` : "Redan i projektet"}>
+                        {nya.length ? `+${nya.length}` : "✓"}
+                      </button>
+                    )}
                   </li>
-                ))}
+                  );
+                })}
               </ol>
             </section>
 
@@ -549,11 +679,21 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
         )}
       </aside>
     </div>
+    {projektId && (
+      <div className="d2dk-projektdetalj">
+        <ProjectDetail projektId={projektId} inbaddad reloadKey={projKey} onAndrat={laddaProjektHus} onOpenRecord={onOpenRecord}
+          onBack={() => { setProjekt(null); laddaProjektLista().catch(() => {}); }} />
+      </div>
+    )}
+    </div>
   );
 }
 
-function Fastighetskort({ h, idag, onStang, onVisa, onOpenRecord }: {
+type KortProjekt = { namn: string; iProjekt: boolean; arbetar: boolean; onLaggTill: () => void; onTaBort: () => void };
+
+function Fastighetskort({ h, idag, onStang, onVisa, onOpenRecord, projekt }: {
   h: KartHus; idag: string; onStang: () => void; onVisa: () => void; onOpenRecord?: (id: string) => void;
+  projekt?: KortProjekt | null;
 }) {
   const tot = KAT.reduce((s, k) => s + h.utfall[k.k], 0);
   return (
@@ -601,6 +741,11 @@ function Fastighetskort({ h, idag, onStang, onVisa, onOpenRecord }: {
       )}
 
       <div className="d2dk-kort__knappar">
+        {projekt && (h.levId
+          ? (projekt.iProjekt
+            ? <button className="btn btn--ghost btn--sm" onClick={projekt.onTaBort} disabled={projekt.arbetar}>Ta bort ur {projekt.namn}</button>
+            : <button className="btn btn--brand btn--sm" onClick={projekt.onLaggTill} disabled={projekt.arbetar}>Lägg till i {projekt.namn}</button>)
+          : <span className="d2dk-hjalp">Finns bara i Masterlistan — kan läggas till när huset finns i projektplanen.</span>)}
         <button className="btn btn--ghost btn--sm" onClick={onVisa}>Visa på kartan</button>
         {h.levId && onOpenRecord && <button className="btn btn--ghost btn--sm" onClick={() => onOpenRecord(h.levId!)}>Öppna leveransen</button>}
       </div>
