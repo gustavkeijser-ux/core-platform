@@ -203,7 +203,8 @@
 }
 .lev-fl__summa b { color: var(--ink); font-weight: 700; }
 
-.lev-fl__scroll { overflow: auto; max-height: calc(100vh - 260px); min-height: 240px; }
+/* Ingen egen höjd: tabellen (och en expanderad rad) växer med sidan, bara sidledes rullning här. */
+.lev-fl__scroll { overflow-x: auto; overflow-y: hidden; }
 
 .lev-fl__tabell { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
 .lev-fl__tabell th {
@@ -436,8 +437,8 @@
 .lev-fl__ingen td { padding: var(--sp-6) var(--sp-4); text-align: center; color: var(--ink-faint); }
 
 .lev-fl-detalj {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--sp-4);
-  align-items: start; max-width: 1500px;
+  display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--sp-4);
+  align-items: stretch; max-width: 1400px;
 }
 .lev-fl-detalj__del {
   display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0;
@@ -463,10 +464,12 @@
 .lev-fl-detalj__stapel { height: 6px; border-radius: 999px; background: var(--neutral-soft); overflow: hidden; }
 .lev-fl-detalj__stapel span { display: block; height: 100%; background: var(--hue-green); border-radius: inherit; transition: width var(--dur) var(--ease); }
 /* Checklistan: en punkt per rad, kan ordnas om i redigeringsläget */
-.lev-fl-chk { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+/* Två spalter (uppifrån och ned) så att hela listan syns utan rullning. */
+.lev-fl-chk { list-style: none; margin: 0; padding: 0; columns: 2 220px; column-gap: 6px; }
+.lev-fl-chk > li { break-inside: avoid; margin-bottom: 4px; }
 .lev-fl-chk__rad {
   display: flex; align-items: center; gap: var(--sp-2); min-width: 0;
-  padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 4px 8px; min-height: 32px; border: 1px solid var(--border); border-radius: var(--r-sm);
   background: var(--surface); transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .lev-fl-chk__rad:hover { border-color: var(--border-strong); }
@@ -499,13 +502,24 @@
 .lev-fl-chk__forslag { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-faint); }
 .lev-fl-chk__aterstall { align-self: flex-start; font-size: 12px; font-weight: 500; }
 
-@media (max-width: 1200px) {
-  .lev-fl-detalj { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .lev-fl-detalj__del--chk { grid-row: span 2; }
-}
-@media (max-width: 1000px) {
+@media (max-width: 900px) {
   .lev-fl-detalj { grid-template-columns: minmax(0, 1fr); }
-  .lev-fl-detalj__del--chk { grid-row: auto; }
+}
+.lev-fl-detalj__kommentar { flex: 1 1 auto; }
+
+/* Koncernmoderns kontakter (LeveransKmKontakter.tsx) */
+.lev-kmk { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); margin-bottom: var(--sp-3); }
+.lev-kmk__huvud { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2) var(--sp-3); }
+.lev-kmk__grupper { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3) var(--sp-5); transition: opacity var(--dur) var(--ease); }
+.lev-kmk__grupper.is-loading { opacity: .5; }
+.lev-kmk__falt { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2) var(--sp-3); }
+.lev-kmk__fel { margin: 0; font-size: 12px; color: var(--danger-ink); }
+.lev-km-kort__kontakt { color: var(--ink-soft); }
+@media (max-width: 1000px) {
+  .lev-kmk__grupper { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .lev-kmk__falt { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Mobil: varje fastighet som ett kort med etikett: värde. */
