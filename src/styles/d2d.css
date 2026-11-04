@@ -1771,7 +1771,7 @@
 .d2dk-m svg { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), var(--shadow-sm); }
 .d2dk-m .d2dk-q { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), var(--shadow-sm); }
 .d2dk-m b {
-  position: relative; font-size: 11px; font-weight: 700; line-height: 1; padding: 2px 4px;
+  position: relative; font-size: 11px; font-weight: 700; line-height: 1; padding: 2px 4px; white-space: nowrap;
   border-radius: var(--r-pill); background: var(--surface); color: var(--ink);
 }
 .d2dk-m:hover svg, .d2dk-m:hover .d2dk-q { box-shadow: 0 0 0 3px var(--brand), var(--shadow-md); }
@@ -1971,3 +1971,10 @@
   .d2dk-karta-wrap.is-valj { outline: 0; }
   .d2dk-valjbanner { bottom: auto; top: calc(60vh - 56px); }
 }
+/* Karta, läget Penetration: ljusare = låg penetration, mörkare = hög; grått = saknas i filen. */
+.d2dk .p0 { background: color-mix(in srgb, var(--hue-blue) 18%, var(--surface)); }
+.d2dk .p1 { background: color-mix(in srgb, var(--hue-blue) 38%, var(--surface)); }
+.d2dk .p2 { background: color-mix(in srgb, var(--hue-blue) 58%, var(--surface)); }
+.d2dk .p3 { background: color-mix(in srgb, var(--hue-blue) 80%, var(--surface)); }
+.d2dk .p4 { background: color-mix(in srgb, var(--hue-blue) 85%, var(--ink)); }
+.d2dk .pn { background: var(--surface-sunk); border: 1px dashed var(--border-strong); }
