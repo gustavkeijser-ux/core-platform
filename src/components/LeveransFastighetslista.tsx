@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { updateRecord, DataError, type RecordFilter } from "@/lib/data";
 import { loadListState, saveListState } from "@/lib/returnRow";
 import { getUserName, useTenantUsers } from "@/lib/users";
+import { LeveransAvisering } from "./LeveransAvisering";
 
 /**
  * Leveransöversikten → "Alla fastigheter": en rad per fastighet i projektplanen
@@ -43,6 +44,8 @@ export type FastighetRad = {
   fastighet: string | null;
   adress: string | null;
   hushall: number | string | null;
+  /** Antal lokaler (projektplanen). */
+  lokaler?: number | string | null;
   fs_portar: number | string | null;
   sc_portar: number | string | null;
   fbl: string | null;
@@ -743,6 +746,7 @@ export function LeveransFastighetslista({
     }
   }
 
+  const [avisera, setAvisera] = useState(false);
   const tf = new Intl.NumberFormat("sv-SE");
   const ansvRad = ansvMeny ? rader.find((x) => x.id === ansvMeny.id) : undefined;
   const menyKol = meny ? KOLUMNER.find((k) => k.key === meny.kol) : undefined;
@@ -761,7 +765,19 @@ export function LeveransFastighetslista({
         <span><b>{tf.format(summa.hushall)}</b> hushåll</span>
         <span><b>{tf.format(summa.fs)}</b> FS-portar</span>
         <span><b>{tf.format(summa.sc)}</b> SC-portar</span>
+        <button type="button" className="btn btn--brand btn--sm lev-fl__avisera" onClick={() => setAvisera(true)} disabled={!filtrerade.length}>
+          Avisera
+        </button>
       </div>
+      {avisera && (
+        <LeveransAvisering
+          rader={sorterade}
+          forvaljAlla={filterNyckel !== FILTER_NYCKEL}
+          kanAndra={kanAndra}
+          onStang={() => setAvisera(false)}
+          onRadAndrad={onRadAndrad}
+        />
+      )}
 
       {/* Mobil: rubrikerna syns inte, så filtren nås härifrån. */}
       <div className="lev-fl__mobilfilter" aria-label="Filtrera kolumner">
