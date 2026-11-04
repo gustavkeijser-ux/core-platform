@@ -32,10 +32,10 @@ import "@/styles/d2d.css";
 
    "Välj fastigheter på kartan": i väljläget lägger ett klick på en ring till
    alla hus i ringen i projektet direkt. Vad en ring rymmer beror på zoomnivån
-   (område, delområde, kluster eller ett enskilt hus).
+   (stad, delområde, kluster eller ett enskilt hus).
    ============================================================================= */
 
-const VERSION = "Karta 1.5 · 2026-11-03";
+const VERSION = "Karta 1.6 · 2026-11-04";
 
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
@@ -163,13 +163,15 @@ async function lasMasterlista(fil: File) {
 }
 
 // ---------------------------------------------------------------------------
-// Aggregering i fyra nivåer. Rutnätet räknas i världspixlar vid en fast
-// referenszoom per nivå, så samma hus hamnar alltid i samma cell.
+// Aggregering i fyra nivåer. Utzoomat blir det en ring per stad (postort, annars
+// kommun). Närmare räknas rutnätet i världspixlar vid en fast referenszoom per
+// nivå, så samma hus hamnar alltid i samma cell.
 // ---------------------------------------------------------------------------
 
-type Niva = { namn: string; fran: number; till: number; cell: number; ref: number };
+/** cell > 0 = rutnät i pixlar, cell = 0 = varje hus för sig, stad = en ring per stad. */
+type Niva = { namn: string; fran: number; till: number; cell: number; ref: number; stad?: boolean };
 const NIVAER: Niva[] = [
-  { namn: "Områden", fran: 0, till: 8, cell: 170, ref: 5 },
+  { namn: "Städer", fran: 0, till: 8, cell: 0, ref: 5, stad: true },
   { namn: "Delområden", fran: 9, till: 11, cell: 120, ref: 9 },
   { namn: "Kluster", fran: 12, till: 14, cell: 88, ref: 12 },
   { namn: "Fastigheter", fran: 15, till: 22, cell: 0, ref: 15 },
@@ -189,12 +191,20 @@ function varldsPx(lat: number, lon: number, z: number) {
   return { x: ((lon + 180) / 360) * s, y: (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * s };
 }
 
+/** Stadens namn i läsbar form ("KRISTIANSTAD" → "Kristianstad", "Halmstads kommun" → "Halmstads kommun"). */
+function stadNamn(s: string): string {
+  const t = s.trim();
+  return t === t.toUpperCase() ? t.toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()) : t;
+}
+const stadNyckel = (h: KartHus) => (h.ort || h.kommun || "").trim().toLowerCase().replace(/\s+kommun$/, "");
+
 function aggregera(hus: KartHus[], niva: Niva): Agg[] {
   const celler = new Map<string, KartHus[]>();
   for (const h of hus) {
     if (h.lat == null || h.lon == null) continue;
     let key = h.id;
-    if (niva.cell > 0) {
+    if (niva.stad) key = `stad:${stadNyckel(h) || h.id}`;
+    else if (niva.cell > 0) {
       const p = varldsPx(h.lat, h.lon, niva.ref);
       key = `${Math.floor(p.x / niva.cell)}:${Math.floor(p.y / niva.cell)}`;
     }
@@ -213,7 +223,7 @@ function aggregera(hus: KartHus[], niva: Niva): Agg[] {
       lat += h.lat! * w; lon += h.lon! * w; vikt += w;
       for (const k of KAT) u[k.k] += h.utfall[k.k];
       syd = Math.min(syd, h.lat!); nord = Math.max(nord, h.lat!); vast = Math.min(vast, h.lon!); ost = Math.max(ost, h.lon!);
-      const o = h.ort || h.kommun || "";
+      const o = stadNamn(h.ort || h.kommun || "");
       orter.set(o, (orter.get(o) ?? 0) + h.lgh);
     }
     const tyngst = [...orter.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
@@ -255,15 +265,15 @@ function tartaSvg(u: Utfall, d: number): string {
   return ut;
 }
 
-function markorHtml(a: Agg, lage: Lage, maxLgh: number, iProjekt = 0): { html: string; d: number } {
-  const d = Math.round(24 + 30 * Math.sqrt(Math.min(a.lgh, maxLgh) / Math.max(maxLgh, 1)));
+function markorHtml(a: Agg, lage: Lage, maxLgh: number, iProjekt = 0, skala = 1): { html: string; d: number } {
+  const d = Math.round((24 + 30 * Math.sqrt(Math.min(a.lgh, maxLgh) / Math.max(maxLgh, 1))) * skala);
   const siffra = lage === "utfall" ? a.lgh : a.effektiva;
   const txt = siffra >= 10000 ? `${Math.round(siffra / 1000)}k` : siffra >= 1000 ? `${(siffra / 1000).toFixed(1).replace(".", ",")}k` : String(siffra);
   const inner = lage === "utfall"
     ? `<svg width="${d}" height="${d}" viewBox="0 0 ${d} ${d}" aria-hidden="true">${tartaSvg(a.utfall, d)}</svg>`
     : `<span class="d2dk-q ${kvalitetSteg(a.saljbara ? a.effektiva / a.saljbara : 0)}"></span>`;
   const proj = iProjekt ? ` d2dk-m--proj" data-proj="${iProjekt === a.hus.length ? "alla" : "vissa"}` : "";
-  return { d, html: `<div class="d2dk-m${proj}" style="width:${d}px;height:${d}px">${inner}<b>${txt}</b></div>` };
+  return { d, html: `<div class="d2dk-m${proj}" style="width:${d}px;height:${d}px">${inner}${d >= 22 ? `<b>${txt}</b>` : ""}</div>` };
 }
 
 // ---------------------------------------------------------------------------
@@ -470,6 +480,8 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   // Aggregaten räknas en gång per nivå och filter, inte vid varje kartrörelse.
   const perNiva = useMemo(() => NIVAER.map((n) => aggregera(filtrerade, n)), [filtrerade]);
   const niva = Math.max(0, nivaFor(zoom));
+  // Stadsnivån: ringarna krymper när man zoomar ut, så att närliggande städer går att skilja åt.
+  const skala = NIVAER[niva]?.stad ? Math.min(1, Math.max(0.6, 0.6 + (zoom - 5) * 0.14)) : 1;
 
   // Kartan
   useEffect(() => {
@@ -517,13 +529,15 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     const maxLgh = Math.max(1, ...aggs.map((a) => a.lgh));
     const lager = L.layerGroup();
     for (const a of aggs) {
-      const { html, d } = markorHtml(a, lage, maxLgh, a.hus.filter(iProjekt).length);
+      const { html, d } = markorHtml(a, lage, maxLgh, a.hus.filter(iProjekt).length, skala);
       const m = L.marker([a.lat, a.lon], {
         icon: L.divIcon({ html, className: "d2dk-ikon", iconSize: [d, d], iconAnchor: [d / 2, d / 2] }),
         title: valjLage && projektId
           ? (a.hus.some((h) => h.levId && !iProjekt(h)) ? `Lägg till ${a.hus.filter((h) => h.levId && !iProjekt(h)).length} hus (${a.namn})` : `${a.namn}: redan i projektet`)
           : a.hus.length > 1 ? `${a.namn}: ${a.hus.length} hus, ${a.lgh} lgh` : `${a.namn} (${a.lgh} lgh)`,
         keyboard: true,
+        // Små städer ovanpå stora, så att de går att klicka på även där ringarna ligger tätt.
+        zIndexOffset: -Math.round(a.lgh),
       });
       m.on("click", () => {
         // Väljläget: hela ringen läggs till i projektet direkt (eller tas bort om allt redan är med).
@@ -545,7 +559,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     }
     lager.addTo(map);
     lagerRef.current = lager;
-  }, [perNiva, niva, lage, klar, levTillFast, valjLage, arbetar, projektId]);
+  }, [perNiva, niva, lage, klar, levTillFast, valjLage, arbetar, projektId, skala]);
 
   // Bästa gångavståndsområdena i vyn (klusternivån, celler på ca 1 km).
   const basta = useMemo(() => {
