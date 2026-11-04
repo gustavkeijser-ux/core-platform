@@ -33,9 +33,13 @@ import "@/styles/d2d.css";
    "Välj fastigheter på kartan": i väljläget lägger ett klick på en ring till
    alla hus i ringen i projektet direkt. Vad en ring rymmer beror på zoomnivån
    (stad, delområde, kluster eller ett enskilt hus).
+
+   Läget Penetration visar Telias penetration (filen "ConnectEstate penetration",
+   importeras under Inställningar → Import) per hus och HC-viktat per ring, för
+   valt mått: BB Telia, BB totalt, IPTV Telia eller IPTV totalt.
    ============================================================================= */
 
-const VERSION = "Karta 1.6 · 2026-11-04";
+const VERSION = "Karta 1.7 · 2026-11-04";
 
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
@@ -76,7 +80,25 @@ export type KartHus = {
   kundklar: string | null; avtalSlut: string | null; projektstatus: string | null;
   dorrar: number; utfall: Utfall; vandor: number; senast: string | null; uppskattad: boolean;
   saljbara: number; faktor: number; delar: Del[]; effektiva: number;
+  /** Telias penetration (procent) från leveransen, null = inte med i senaste filen. */
+  pen: Pen | null;
 };
+type Pen = { hc: number | null; bbTelia: number | null; bbTot: number | null; tvTelia: number | null; tvTot: number | null; datum: string | null };
+type PenMatt = "bbTelia" | "bbTot" | "tvTelia" | "tvTot";
+const PEN_MATT: Record<PenMatt, string> = { bbTelia: "BB Telia", bbTot: "BB totalt", tvTelia: "IPTV Telia", tvTot: "IPTV totalt" };
+
+/** HC-viktad penetration för en grupp hus (hus utan hushållstal väger 1). */
+function penFor(hus: KartHus[], matt: PenMatt): { varde: number | null; hc: number; hus: number } {
+  let sum = 0, vikt = 0, hc = 0, n = 0;
+  for (const h of hus) {
+    const v = h.pen?.[matt];
+    if (v == null) continue;
+    const w = Math.max(Number(h.pen?.hc) || 0, 1);
+    sum += Number(v) * w; vikt += w; hc += Number(h.pen?.hc) || 0; n++;
+  }
+  return { varde: vikt ? sum / vikt : null, hc, hus: n };
+}
+const pctKort = (v: number | null) => (v == null ? "–" : `${Math.round(v)} %`);
 type KartData = { idag: string; underlag: { rader: number; kalla: string | null; uppdaterad: string | null }; fastigheter: KartHus[] };
 type Losning = "last_fiber" | "oppet_fiber" | "koax" | "ingen";
 
@@ -237,7 +259,13 @@ function aggregera(hus: KartHus[], niva: Niva): Agg[] {
 // Markörer
 // ---------------------------------------------------------------------------
 
-type Lage = "utfall" | "kvalitet";
+type Lage = "utfall" | "kvalitet" | "penetration";
+
+/** Penetration (procent) → färgsteg (klass i d2d.css); pn = saknas. */
+function penSteg(v: number | null): string {
+  if (v == null) return "pn";
+  return v >= 80 ? "p4" : v >= 60 ? "p3" : v >= 40 ? "p2" : v >= 20 ? "p1" : "p0";
+}
 
 /** Snittfaktor → färgsteg (klass i d2d.css). */
 function kvalitetSteg(f: number): string {
@@ -265,12 +293,15 @@ function tartaSvg(u: Utfall, d: number): string {
   return ut;
 }
 
-function markorHtml(a: Agg, lage: Lage, maxLgh: number, iProjekt = 0, skala = 1): { html: string; d: number } {
+function markorHtml(a: Agg, lage: Lage, maxLgh: number, iProjekt = 0, skala = 1, matt: PenMatt = "bbTelia"): { html: string; d: number } {
   const d = Math.round((24 + 30 * Math.sqrt(Math.min(a.lgh, maxLgh) / Math.max(maxLgh, 1))) * skala);
   const siffra = lage === "utfall" ? a.lgh : a.effektiva;
-  const txt = siffra >= 10000 ? `${Math.round(siffra / 1000)}k` : siffra >= 1000 ? `${(siffra / 1000).toFixed(1).replace(".", ",")}k` : String(siffra);
+  const pen = lage === "penetration" ? penFor(a.hus, matt).varde : null;
+  const txt = lage === "penetration" ? (pen == null ? "–" : `${Math.round(pen)}%`)
+    : siffra >= 10000 ? `${Math.round(siffra / 1000)}k` : siffra >= 1000 ? `${(siffra / 1000).toFixed(1).replace(".", ",")}k` : String(siffra);
   const inner = lage === "utfall"
     ? `<svg width="${d}" height="${d}" viewBox="0 0 ${d} ${d}" aria-hidden="true">${tartaSvg(a.utfall, d)}</svg>`
+    : lage === "penetration" ? `<span class="d2dk-q ${penSteg(pen)}"></span>`
     : `<span class="d2dk-q ${kvalitetSteg(a.saljbara ? a.effektiva / a.saljbara : 0)}"></span>`;
   const proj = iProjekt ? ` d2dk-m--proj" data-proj="${iProjekt === a.hus.length ? "alla" : "vissa"}` : "";
   return { d, html: `<div class="d2dk-m${proj}" style="width:${d}px;height:${d}px">${inner}${d >= 22 ? `<b>${txt}</b>` : ""}</div>` };
@@ -310,6 +341,8 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const [losningar, setLosningar] = useState<Set<string>>(new Set());
   const [inst, setInst] = useState<InstFilter>("alla");
   const [minFaktor, setMinFaktor] = useState(0);
+  const [penMatt, setPenMatt] = useState<PenMatt>("bbTelia");
+  const [maxPen, setMaxPen] = useState(0);
   const [valt, setValt] = useState<string | null>(null);
   const [zoom, setZoom] = useState(5);
   const [vy, setVy] = useState<{ s: number; n: number; v: number; o: number } | null>(null);
@@ -472,10 +505,12 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
       if (losningar.size && !losningar.has(h.losning ?? "okand")) return false;
       if (inst !== "alla" && instKlass(h, idag) !== inst) return false;
       if (minFaktor && h.faktor < minFaktor) return false;
+      // Penetration högst X %: hus utan penetration är inte med.
+      if (lage === "penetration" && maxPen && !(h.pen?.[penMatt] != null && Number(h.pen[penMatt]) <= maxPen)) return false;
       if (baraProjekt && !iProjekt(h)) return false;
       return true;
     });
-  }, [data, sok, losningar, inst, minFaktor, idag, baraProjekt, levTillFast]);
+  }, [data, sok, losningar, inst, minFaktor, idag, baraProjekt, levTillFast, lage, penMatt, maxPen]);
 
   // Aggregaten räknas en gång per nivå och filter, inte vid varje kartrörelse.
   const perNiva = useMemo(() => NIVAER.map((n) => aggregera(filtrerade, n)), [filtrerade]);
@@ -529,7 +564,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     const maxLgh = Math.max(1, ...aggs.map((a) => a.lgh));
     const lager = L.layerGroup();
     for (const a of aggs) {
-      const { html, d } = markorHtml(a, lage, maxLgh, a.hus.filter(iProjekt).length, skala);
+      const { html, d } = markorHtml(a, lage, maxLgh, a.hus.filter(iProjekt).length, skala, penMatt);
       const m = L.marker([a.lat, a.lon], {
         icon: L.divIcon({ html, className: "d2dk-ikon", iconSize: [d, d], iconAnchor: [d / 2, d / 2] }),
         title: valjLage && projektId
@@ -559,7 +594,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     }
     lager.addTo(map);
     lagerRef.current = lager;
-  }, [perNiva, niva, lage, klar, levTillFast, valjLage, arbetar, projektId, skala]);
+  }, [perNiva, niva, lage, klar, levTillFast, valjLage, arbetar, projektId, skala, penMatt]);
 
   // Bästa gångavståndsområdena i vyn (klusternivån, celler på ca 1 km).
   const basta = useMemo(() => {
@@ -572,8 +607,8 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
 
   const iVy = useMemo(() => {
     const l = filtrerade.filter((h) => h.lat != null && (!vy || (h.lat! >= vy.s && h.lat! <= vy.n && h.lon! >= vy.v && h.lon! <= vy.o)));
-    return { hus: l.length, lgh: l.reduce((s, h) => s + h.lgh, 0), eff: l.reduce((s, h) => s + h.effektiva, 0), slj: l.reduce((s, h) => s + h.saljbara, 0) };
-  }, [filtrerade, vy]);
+    return { hus: l.length, lgh: l.reduce((s, h) => s + h.lgh, 0), eff: l.reduce((s, h) => s + h.effektiva, 0), slj: l.reduce((s, h) => s + h.saljbara, 0), pen: penFor(l, penMatt).varde };
+  }, [filtrerade, vy, penMatt]);
 
   const kvalitet = useMemo(() => {
     const f = data?.fastigheter ?? [];
@@ -587,6 +622,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   }, [data]);
 
   const valtHus = valt ? data?.fastigheter.find((h) => h.id === valt) ?? null : null;
+  const penDatum = useMemo(() => (data?.fastigheter ?? []).reduce<string | null>((m, h) => (h.pen?.datum && (!m || h.pen.datum > m) ? h.pen.datum : m), null), [data]);
   const projHus = useMemo(() => (data?.fastigheter ?? []).filter(iProjekt), [data, levTillFast]);
   const projNamn = projektLista.find((p) => p.id === projektId)?.title ?? "Projekt";
   /** Klick på en fastighet i listan: visa huset på kartan och öppna kortet. */
@@ -654,6 +690,8 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
         <div className="d2dk-legend">
           {lage === "utfall"
             ? KAT.map((k) => <span key={k.k}><i className={`d2dk-dot d2dk-${k.k}`} />{k.namn}</span>)
+            : lage === "penetration"
+            ? (<>{PEN_MATT[penMatt]}: <span><i className="d2dk-dot p0" />under 20 %</span><span><i className="d2dk-dot p2" />40–60 %</span><span><i className="d2dk-dot p4" />80 %+</span><span><i className="d2dk-dot pn" />saknas</span></>)
             : (<><span><i className="d2dk-dot q1" />under ×0,6</span><span><i className="d2dk-dot q3" />×0,9–1,2</span><span><i className="d2dk-dot q5" />över ×1,6</span></>)}
         </div>
       </div>
@@ -705,17 +743,28 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
             <div className="d2dk-lage" role="tablist">
               <button role="tab" aria-selected={lage === "kvalitet"} className={lage === "kvalitet" ? "on" : ""} onClick={() => setLage("kvalitet")}>Dörrkvalitet</button>
               <button role="tab" aria-selected={lage === "utfall"} className={lage === "utfall" ? "on" : ""} onClick={() => setLage("utfall")}>Utfall</button>
+              <button role="tab" aria-selected={lage === "penetration"} className={lage === "penetration" ? "on" : ""} onClick={() => setLage("penetration")}>Penetration</button>
             </div>
             <p className="d2dk-hjalp">
               {lage === "kvalitet"
                 ? "Siffran är effektiva dörrar: säljbara dörrar × kvalitetsfaktor. Färgen är snittfaktorn."
-                : "Siffran är lägenheter. Tårtan visar utfallet vid dörrarna."}
+                : lage === "utfall" ? "Siffran är lägenheter. Tårtan visar utfallet vid dörrarna."
+                : `Siffran och färgen är Telias penetration (${PEN_MATT[penMatt]}), viktad på hushåll (HC). Grå = huset finns inte i penetrationsfilen${penDatum ? ` (mätt ${dag(penDatum)})` : ""}.`}
             </p>
+            {lage === "penetration" && (
+              <div className="d2dk-chips" role="radiogroup" aria-label="Penetrationsmått">
+                {(Object.keys(PEN_MATT) as PenMatt[]).map((k) => (
+                  <button key={k} role="radio" aria-checked={penMatt === k} className={`d2dk-chip${penMatt === k ? " on" : ""}`} onClick={() => setPenMatt(k)}>{PEN_MATT[k]}</button>
+                ))}
+              </div>
+            )}
 
             <div className="d2dk-tiles">
               <div><b>{heltal(iVy.hus)}</b><span>hus i vyn</span></div>
               <div><b>{heltal(iVy.lgh)}</b><span>lägenheter</span></div>
-              <div><b>{heltal(iVy.eff)}</b><span>effektiva dörrar</span></div>
+              {lage === "penetration"
+                ? <div><b>{pctKort(iVy.pen)}</b><span>{PEN_MATT[penMatt]} i vyn</span></div>
+                : <div><b>{heltal(iVy.eff)}</b><span>effektiva dörrar</span></div>}
             </div>
 
             <div className="d2dk-filter">
@@ -731,11 +780,19 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
                     {(Object.keys(INST) as InstFilter[]).map((k) => <option key={k} value={k}>{INST[k]}</option>)}
                   </select>
                 </label>
-                <label>Faktor minst
-                  <select className="input" value={minFaktor} onChange={(e) => setMinFaktor(Number(e.target.value))}>
-                    <option value={0}>Alla</option><option value={0.9}>×0,9</option><option value={1.2}>×1,2</option><option value={1.6}>×1,6</option>
-                  </select>
-                </label>
+                {lage === "penetration" ? (
+                  <label>{PEN_MATT[penMatt]} högst
+                    <select className="input" value={maxPen} onChange={(e) => setMaxPen(Number(e.target.value))}>
+                      <option value={0}>Alla</option><option value={20}>20 %</option><option value={40}>40 %</option><option value={60}>60 %</option>
+                    </select>
+                  </label>
+                ) : (
+                  <label>Faktor minst
+                    <select className="input" value={minFaktor} onChange={(e) => setMinFaktor(Number(e.target.value))}>
+                      <option value={0}>Alla</option><option value={0.9}>×0,9</option><option value={1.2}>×1,2</option><option value={1.6}>×1,6</option>
+                    </select>
+                  </label>
+                )}
               </div>
             </div>
 
@@ -924,6 +981,9 @@ function Fastighetskort({ h, idag, onStang, onVisa, onOpenRecord, projekt, tilld
         <dt>Gamla avtalet upphör</dt><dd>{dag(h.avtalSlut)}</dd>
         <dt>Bearbetning</dt><dd>{h.vandor ? `${h.vandor} vändor, senast ${dag(h.senast)}${h.uppskattad ? " (uppskattat)" : ""}` : "Aldrig knackat"}</dd>
         <dt>Projektplan</dt><dd>{h.projektstatus ?? "–"}{h.kalla === "masterlista" ? " · bara i Masterlistan" : ""}</dd>
+        <dt>Penetration</dt><dd>{h.pen
+          ? <>{(Object.keys(PEN_MATT) as PenMatt[]).map((k) => `${PEN_MATT[k]} ${pctKort(h.pen![k])}`).join(" · ")}{h.pen.hc != null ? ` · ${h.pen.hc} HC` : ""}{h.pen.datum ? ` (${dag(h.pen.datum)})` : ""}</>
+          : "Finns inte i penetrationsfilen"}</dd>
       </dl>
 
       {tot > 0 && h.dorrar > 0 && (
