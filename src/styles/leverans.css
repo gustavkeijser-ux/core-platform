@@ -561,3 +561,131 @@
   .lev-fl__datuminput { width: 100%; }
   .lev-fl__status { justify-self: start; }
 }
+
+/* --- Avisera (LeveransAvisering) ------------------------------------------- */
+.lev-fl__summa .lev-fl__avisera { margin-left: auto; }
+.lev-avi {
+  position: fixed; inset: 0; z-index: 70;
+  background: var(--scrim);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-4);
+}
+.lev-avi__ruta {
+  width: min(860px, 100%); max-height: calc(100vh - 2 * var(--sp-4));
+  display: flex; flex-direction: column;
+  background: var(--surface); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+}
+.lev-avi__ruta.is-bred { width: min(1240px, 100%); }
+.lev-avi__huvud {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--divider);
+}
+.lev-avi__huvud h2 { margin: 0; font-size: var(--text-lg); }
+.lev-avi__steg { display: flex; gap: var(--sp-3); list-style: none; margin: var(--sp-1) 0 0; padding: 0; font-size: var(--text-xs); color: var(--ink-faint); }
+.lev-avi__steg .is-aktiv { color: var(--brand-ink); font-weight: 700; }
+.lev-avi__steg .is-klar { color: var(--ink-muted); }
+.lev-avi__kropp { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4) var(--sp-5); overflow-y: auto; min-height: 0; flex: 1; }
+.lev-avi__rubrik { margin: 0 0 var(--sp-2); font-size: var(--text-sm); font-weight: 700; color: var(--ink); }
+.lev-avi__rubrik span { font-weight: 400; color: var(--ink-faint); margin-left: var(--sp-2); }
+.lev-avi__typer { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.lev-avi__typ {
+  display: flex; gap: var(--sp-2); align-items: flex-start;
+  padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border-input); border-radius: var(--r-sm, 8px);
+  cursor: pointer; font-size: var(--text-sm);
+}
+.lev-avi__typ.is-vald { border-color: var(--brand); background: var(--brand-tint); }
+.lev-avi__typ input { margin-top: 3px; }
+.lev-avi__typ span { display: flex; flex-direction: column; gap: 2px; }
+.lev-avi__typ small { color: var(--ink-muted); font-size: var(--text-xs); }
+.lev-avi__falt { display: flex; flex-direction: column; min-height: 0; }
+.lev-avi__listhuvud { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); }
+.lev-avi__listhuvud .lev-avi__rubrik { margin: 0; flex: 1 1 200px; }
+.lev-avi__listhuvud input { flex: 1 1 220px; max-width: 320px; }
+.lev-avi__knappar { display: flex; gap: var(--sp-1); }
+.lev-avi__lista {
+  list-style: none; margin: 0; padding: 0;
+  border: 1px solid var(--border); border-radius: var(--r-sm, 8px);
+  max-height: 42vh; overflow-y: auto;
+}
+.lev-avi__lista li + li { border-top: 1px solid var(--divider-soft); }
+.lev-avi__lista label {
+  display: grid; grid-template-columns: auto minmax(0, 2fr) minmax(0, 1.3fr) auto;
+  align-items: center; gap: var(--sp-3); padding: 6px var(--sp-3); cursor: pointer; font-size: var(--text-sm);
+}
+.lev-avi__lista label.is-vald { background: var(--brand-tint); }
+.lev-avi__fast { display: flex; flex-direction: column; min-width: 0; }
+.lev-avi__fast small, .lev-avi__agare { color: var(--ink-muted); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lev-avi__mer { padding: var(--sp-2) var(--sp-3); font-size: var(--text-xs); color: var(--ink-faint); }
+.lev-avi__fot {
+  display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--sp-2);
+  padding-top: var(--sp-3); border-top: 1px solid var(--divider);
+  position: sticky; bottom: calc(-1 * var(--sp-4)); background: var(--surface); padding-bottom: var(--sp-1);
+}
+.lev-avi__fot > :first-child { margin-right: auto; font-size: var(--text-sm); color: var(--ink-muted); }
+.lev-avi__bocka { display: flex; align-items: center; gap: var(--sp-2); }
+.lev-avi__fel { margin: 0; color: var(--danger-ink); background: var(--danger-soft); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm, 8px); font-size: var(--text-sm); }
+.lev-avi__varning { margin: 0; color: var(--warn-ink); background: var(--warn-soft); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm, 8px); font-size: var(--text-sm); }
+.lev-avi__tips { margin: 0; font-size: var(--text-xs); color: var(--ink-faint); }
+
+.lev-avi__forhand { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.lev-avi__grupper { display: flex; flex-direction: column; gap: var(--sp-2); position: sticky; top: 0; max-height: 70vh; overflow-y: auto; }
+.lev-avi__grupp {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-sm, 8px);
+  background: var(--surface); cursor: pointer; font: inherit; font-size: var(--text-sm); color: var(--ink);
+}
+.lev-avi__grupp.is-aktiv { border-color: var(--brand); background: var(--brand-tint); }
+.lev-avi__grupp small { color: var(--ink-muted); font-size: var(--text-xs); }
+.lev-avi__grupp em { font-style: normal; font-size: 11px; color: var(--warn-ink); }
+.lev-avi__editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.lev-avi__textfalt { display: flex; flex-direction: column; gap: var(--sp-2); }
+.lev-avi__textfalt textarea { resize: vertical; font: inherit; }
+.lev-avi__edhuvud { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); min-height: 30px; }
+.lev-avi__edhuvud select { max-width: 60%; }
+.lev-avi__avsnitt { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lev-avi__avsnitt input { font-weight: 700; }
+.lev-avi__fakta { display: flex; flex-direction: column; gap: 4px; }
+.lev-avi__fakta > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 4px; }
+.lev-avi__etikett { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); }
+.lev-avi__flaggor { font-size: var(--text-xs); color: var(--warn-ink); background: var(--warn-soft); border-radius: var(--r-sm, 8px); padding: var(--sp-2) var(--sp-3); }
+.lev-avi__flaggor ul { margin: 4px 0 0; padding-left: 1.1em; }
+.lev-avi__visning { display: flex; flex-direction: column; gap: var(--sp-2); position: sticky; top: 0; }
+.lev-avi__papper { aspect-ratio: 210 / 297; border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); background: var(--surface); }
+.lev-avi__papper.is-a6 { aspect-ratio: 148 / 105; }
+.lev-avi__papper svg { display: block; width: 100%; height: 100%; }
+.lev-avi__klart p { margin: 0; }
+
+@media (max-width: 1000px) {
+  .lev-avi__forhand { grid-template-columns: minmax(0, 1fr); }
+  .lev-avi__grupper { position: static; max-height: 220px; }
+}
+@media (max-width: 720px) {
+  .lev-avi { padding: 0; align-items: stretch; }
+  .lev-avi__ruta, .lev-avi__ruta.is-bred { width: 100%; max-height: 100vh; border-radius: 0; }
+  .lev-avi__huvud, .lev-avi__kropp { padding-left: var(--sp-4); padding-right: var(--sp-4); }
+  .lev-avi__typer { grid-template-columns: minmax(0, 1fr); }
+  .lev-avi__lista label { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .lev-avi__agare { display: none; }
+  .lev-avi__lista { max-height: none; }
+  .lev-avi__editor { grid-template-columns: minmax(0, 1fr); }
+  .lev-avi__visning { position: static; order: -1; }
+  .lev-avi__fot { position: static; }
+  .lev-avi__fot > :first-child { flex-basis: 100%; }
+}
+
+/* Aviseringsprofil på koncernmodern */
+.lev-kmp { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-5); }
+.lev-kmp__logo {
+  width: 150px; height: 52px; display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--border-strong); border-radius: var(--r-sm, 8px); background: var(--surface-sunk);
+  font-size: var(--text-xs); color: var(--ink-faint); overflow: hidden; text-align: center; padding: 4px;
+}
+.lev-kmp__logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.lev-kmp__del { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); }
+.lev-kmp__del input[type="color"] { width: 36px; height: 30px; padding: 2px; border: 1px solid var(--border-input); border-radius: var(--r-xs); background: var(--surface); }
+.lev-kmp__del .input { width: 110px; }
+.lev-kmp__slug .input { width: 160px; }
+.lev-kmp__fil { position: relative; overflow: hidden; }
+.lev-kmp__fil input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
