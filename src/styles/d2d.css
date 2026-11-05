@@ -1723,3 +1723,42 @@
   .d2dpb-delning__verktyg { flex-wrap: wrap; }
   .d2dpb-delning__verktyg .input { flex: 1 1 100%; }
 }
+
+/* Orderbekräftelse via Scrive (D2DOrderbekraftelse, Door to door → Avtal) */
+.d2dob-cell { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
+.d2dob-cell .formfield__error { flex-basis: 100%; }
+.d2dob-bakgrund {
+  position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-4); background: var(--scrim);
+}
+.d2dob {
+  width: 100%; max-width: 560px; max-height: calc(100dvh - 2 * var(--sp-4)); display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg, var(--r-md)); box-shadow: var(--shadow-modal);
+  cursor: default; text-align: left;
+}
+.d2dob__huvud { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+.d2dob__huvud h2 { margin: 0; font-size: var(--text-lg, 18px); }
+.d2dob__kropp { flex: 1; overflow-y: auto; padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+.d2dob__kund { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); color: var(--ink-muted); }
+.d2dob__kund b { font-size: var(--text-md, 15px); color: var(--ink); }
+.d2dob__saknas { color: var(--danger-ink); font-style: normal; font-weight: 600; }
+.d2dob__tabell { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.d2dob__tabell th { text-align: left; font-weight: 600; color: var(--ink-faint); font-size: var(--text-xs, 12px); padding: 0 0 var(--sp-1); border-bottom: 1px solid var(--border); }
+.d2dob__tabell td { padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); }
+.d2dob__tabell th:not(:first-child), .d2dob__tabell td:not(:first-child) { text-align: right; padding-left: var(--sp-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.d2dob__tabell td:last-child { color: var(--ink-muted); }
+.d2dob__summa td { font-weight: 700; color: var(--ink); }
+.d2dob__engang td { color: var(--ink-muted); }
+.d2dob__villkor { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); margin: 0; }
+.d2dob__villkor div { padding: var(--sp-2) var(--sp-3); background: var(--canvas); border-radius: var(--r-sm); }
+.d2dob__villkor dt { font-size: var(--text-xs, 12px); color: var(--ink-faint); }
+.d2dob__villkor dd { margin: 0; font-weight: 600; }
+.d2dob__fot { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border); }
+@media (max-width: 600px) {
+  .d2dob-bakgrund { padding: 0; align-items: stretch; }
+  .d2dob { max-width: none; max-height: none; border-radius: 0; border: 0; }
+  .d2dob__huvud { padding-top: calc(var(--sp-3) + env(safe-area-inset-top, 0)); }
+  .d2dob__fot { padding-bottom: calc(var(--sp-3) + env(safe-area-inset-bottom, 0)); }
+  .d2dob__fot .btn { flex: 1; justify-content: center; }
+  .d2dob__villkor { grid-template-columns: 1fr 1fr; }
+}
