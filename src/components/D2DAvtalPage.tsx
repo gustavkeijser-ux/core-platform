@@ -5,6 +5,7 @@ import { beraknaAvtal, loadPrislista, onPrislista, type Prislista } from "@/lib/
 import { prisKategorier } from "./D2DAvtal";
 import { FilterPills, SkeletonRows } from "./PageChrome";
 import { ScriveOkopplade } from "./D2DScriveImport";
+import { OrderCell, useOrderbekraftelser } from "./D2DOrderbekraftelse";
 import "@/styles/d2d.css";
 
 /* =============================================================================
@@ -14,6 +15,9 @@ import "@/styles/d2d.css";
      • Totalt — sålda och signerade Scrive-avtal tillsammans: antal och
        summor per månad, totalt och per säljare.
    Period och projekt gäller för alla flikar.
+
+   Administratörer kan skicka orderbekräftelse via Scrive på sålda och
+   signerade avtal (kolumnen Orderbekräftelse, D2DOrderbekraftelse).
 
    Säljarvyn (D2D-sälj → Avtal) använder samma sida med `saljarvy`: bara
    säljarens egna avtal (databasen filtrerar), utan säljarkolumn och utan
@@ -67,6 +71,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [], saljarvy = false }:
   const [projekt, setProjekt] = useState("");
   const [fritext, setFritext] = useState("");
   const [pdfFel, setPdfFel] = useState<string | null>(null);
+  const order = useOrderbekraftelser(!saljarvy);
 
   const ladda = useCallback(async () => {
     setFel(null);
@@ -248,7 +253,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [], saljarvy = false }:
             <div className="rtable-scroll">
               <table className="rtable utf__tabell">
                 <thead>
-                  <tr><th>Kund</th><th>Adress</th><th>Tjänster</th><th>Per månad</th>{!saljarvy && <th>Säljare</th>}<th>Status</th><th /></tr>
+                  <tr><th>Kund</th><th>Adress</th><th>Tjänster</th><th>Per månad</th>{!saljarvy && <th>Säljare</th>}<th>Status</th>{!saljarvy && <th>Orderbekräftelse</th>}<th /></tr>
                 </thead>
                 <tbody>
                   {avtalLista.map((a) => (
@@ -268,6 +273,13 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [], saljarvy = false }:
                         {a.leverans === "skickat" && a.status === "vantar" && <small className="utf__sub"> skickat till kunden</small>}
                         {a.leverans === "manuell" && <small className="utf__sub"> gjort i Scrive</small>}
                       </td>
+                      {!saljarvy && (
+                        <td data-label="Orderbekräftelse">
+                          {a.status === "signerat"
+                            ? <OrderCell lagenhetId={a.lagenhetId} avtalId={a.id} order={order.map.get(a.lagenhetId)} onAndrad={() => { void order.ladda(); }} />
+                            : "–"}
+                        </td>
+                      )}
                       <td data-label="">
                         {a.harPdf && (
                           <button type="button" className="btn btn--ghost btn--sm"
@@ -300,7 +312,7 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [], saljarvy = false }:
             <div className="rtable-scroll">
               <table className="rtable utf__tabell">
                 <thead>
-                  <tr><th>Kund</th><th>Adress</th><th>Tjänster</th><th>Per månad</th>{!saljarvy && <th>Säljare</th>}</tr>
+                  <tr><th>Kund</th><th>Adress</th><th>Tjänster</th><th>Per månad</th>{!saljarvy && <th>Säljare</th>}{!saljarvy && <th>Orderbekräftelse</th>}</tr>
                 </thead>
                 <tbody>
                   {saldUrval.map((s) => (
@@ -315,6 +327,13 @@ export function D2DAvtalPage({ onOpenRecord, lagFields = [], saljarvy = false }:
                       <td data-label="Tjänster"><span>{s.tjanster.join(", ") || "Ingen tjänst ifylld"}</span></td>
                       <td data-label="Per månad" className="utf__num">{s.tjanster.length ? kr(s.manadSumma) : "–"}</td>
                       {!saljarvy && <td data-label="Säljare">{s.saljare ?? "–"}</td>}
+                      {!saljarvy && (
+                        <td data-label="Orderbekräftelse">
+                          {s.tjanster.length
+                            ? <OrderCell lagenhetId={s.id} order={order.map.get(s.id)} onAndrad={() => { void order.ladda(); }} />
+                            : "–"}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
