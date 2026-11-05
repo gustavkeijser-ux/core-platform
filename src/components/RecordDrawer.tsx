@@ -16,6 +16,8 @@ import { DealFollowUp } from "./DealFollowUp";
 import { FmoTab } from "./FmoTab";
 import { TeliaLagenheterTab } from "./TeliaLagenheterTab";
 import { PenetrationTab } from "./PenetrationTab";
+import { KontaktytorTab } from "./KontaktytorTab";
+import { KONTAKTYTOR_TYPER } from "@/lib/kontaktytor";
 import { LagenhetForm } from "./D2DSellerApp";
 import { KoncernmoderKort } from "./KoncernmoderKort";
 
@@ -148,6 +150,14 @@ const D2D_EXTRA_TABS: Record<string, TabDef> = {
 /** Bygg flikar dynamiskt: basflikar + eventuella D2D-flikar beroende på inkommande relationer */
 function buildTabs(objectDef: ObjectDef): TabDef[] {
   const tabs = [...BASE_TABS];
+
+  // Kontaktytor: kundens kontakter ärvs till affär, leverans och alla processer
+  // (ersätter den vanliga relationsfliken Kontaktpersoner).
+  if (KONTAKTYTOR_TYPER.has(objectDef.key)) {
+    const idx = tabs.findIndex((t) => t.key === "kontaktpersoner");
+    if (idx >= 0) tabs.splice(idx, 1);
+    tabs.splice(1, 0, { key: "kontaktytor", label: "Kontaktytor", objectType: "contact" });
+  }
 
   // Lyft affär hör bara till affärskortet — egen flik, ingen relationstyp.
   if (objectDef.key === "deal") {
@@ -726,6 +736,11 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
       );
     }
 
+    // Kontaktytor (ärvda från kundens bolag)
+    if (activeTab === "kontaktytor" && record) {
+      return <KontaktytorTab recordId={record.id} onOpen={onNavigate} />;
+    }
+
     // Relationsflikar
     const tabDef = tabs.find((t) => t.key === activeTab);
     if (tabDef?.objectType && record) {
@@ -794,7 +809,7 @@ export function RecordDrawer({ objectDef: objectDefProp, record: recordProp, rec
     return null;
   }
 
-  const tabCount = (t: TabDef) => t.objectType ? related.filter((r) => r.record.objectType === t.objectType).length : null;
+  const tabCount = (t: TabDef) => t.objectType && t.key !== "kontaktytor" ? related.filter((r) => r.record.objectType === t.objectType).length : null;
   const statusDef = resolvedDef.statuses.find((x) => x.key === (record?.status ?? null));
   const updated = record ? new Date(record.updated_at).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" }) : "";
 
