@@ -15,6 +15,7 @@ import { hamtaAgareOversikt, agareFilter, gruppNyckel, INGEN_AGARE, type AgareGr
 import { LeveransKmLista } from "./LeveransKmLista";
 import { KoncernmoderKontakter } from "./LeveransKmKontakter";
 import { LeveransFastighetslista, hamtaFastighetslista, type FastighetRad } from "./LeveransFastighetslista";
+import { LeveransKundklarKnappar } from "./LeveransKundklar";
 import { ColumnConfigPanel } from "./ColumnConfigPanel";
 import { FilterBar } from "./FilterBar";
 import { ColumnFilter, kolumnVal } from "./ColumnFilter";
@@ -590,7 +591,12 @@ export function ObjectListPage({ objectDef, onOpenRecord, onMetadataChanged, rel
               Kolumner
             </button>
           )}
-          {total > 0 && (
+          {/* Leveransöversikten: egen export/import (koncernmoder, bolag, fastighet, kundklar). */}
+          {visarAgare && objectDef.key === "delivery" && (
+            <LeveransKundklarKnappar rader={fastRader} alla={fastRader} kanAndra={objectDef.can.update}
+              onRadAndrad={(id, andring) => setFastRader((rs) => rs.map((r) => (r.id === id ? { ...r, ...andring } : r)))} />
+          )}
+          {total > 0 && !(objectDef.key === "delivery" && mode === "kort") && (
             <button
               className="btn btn--ghost btn--sm"
               disabled={exporting !== null}

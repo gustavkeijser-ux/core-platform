@@ -5,6 +5,7 @@ import { updateRecord, DataError, type RecordFilter } from "@/lib/data";
 import { loadListState, saveListState } from "@/lib/returnRow";
 import { getUserName, useTenantUsers } from "@/lib/users";
 import { LeveransAvisering } from "./LeveransAvisering";
+import { LeveransKundklarKnappar } from "./LeveransKundklar";
 
 /**
  * Leveransöversikten → "Alla fastigheter": en rad per fastighet i projektplanen
@@ -765,9 +766,12 @@ export function LeveransFastighetslista({
         <span><b>{tf.format(summa.hushall)}</b> hushåll</span>
         <span><b>{tf.format(summa.fs)}</b> FS-portar</span>
         <span><b>{tf.format(summa.sc)}</b> SC-portar</span>
-        <button type="button" className="btn btn--brand btn--sm lev-fl__avisera" onClick={() => setAvisera(true)} disabled={!filtrerade.length}>
+        <span className="lev-fl__knappar">
+          <LeveransKundklarKnappar rader={sorterade} alla={rader} kanAndra={kanAndra} onRadAndrad={onRadAndrad} />
+        <button type="button" className="btn btn--brand btn--sm" onClick={() => setAvisera(true)} disabled={!filtrerade.length}>
           Avisera
         </button>
+        </span>
       </div>
       {avisera && (
         <LeveransAvisering
