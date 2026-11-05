@@ -41,6 +41,19 @@ export async function scrive(path: string, form?: Record<string, string>): Promi
   return res;
 }
 
+/** Nytt dokument från en egen PDF (multipart, fältet "file"). */
+export async function scriveNyttFranPdf(pdf: Uint8Array, filnamn: string): Promise<any> {
+  const fd = new FormData();
+  fd.append("file", new Blob([pdf as Uint8Array<ArrayBuffer>], { type: "application/pdf" }), filnamn);
+  fd.append("saved", "true");
+  const res = await fetch(API + "/documents/new", { method: "POST", headers: { Authorization: authHeader() }, body: fd });
+  const text = await res.text();
+  let j: any = null;
+  try { j = JSON.parse(text); } catch { /* */ }
+  if (!res.ok) throw new ScriveError(res.status, `Scrive ${res.status}: ${j?.error_message ?? j?.error_type ?? text.slice(0, 300)}`);
+  return j;
+}
+
 export async function scriveJson<T = any>(path: string, form?: Record<string, string>): Promise<T> {
   const res = await scrive(path, form);
   const text = await res.text();
@@ -105,4 +118,33 @@ export async function syncAvtal(db: SupabaseClient, avtalId: string): Promise<Re
   }
   await db.from("d2d_avtal").update(patch).eq("id", avtalId);
   return { ...a, ...patch };
+}
+
+// ── Orderbekräftelser (d2d_orderbekraftelse) ────────────────────────────
+
+const ORDER_FROM_SCRIVE: Record<string, string> = {
+  preparation: "skapas", pending: "vantar", closed: "skickad",
+  rejected: "avbrutet", canceled: "avbrutet", timedout: "avbrutet", document_error: "fel",
+};
+
+/** Hämtar orderbekräftelsens läge från Scrive. När avsändaren signerat skickar
+ *  Scrive den till kunden; då sparas den slutliga PDF:en. */
+export async function syncOrder(db: SupabaseClient, orderId: string): Promise<Record<string, unknown>> {
+  const { data: o } = await db.from("d2d_orderbekraftelse").select("*").eq("id", orderId).maybeSingle();
+  if (!o) throw new Error("Orderbekräftelsen finns inte");
+  if (!o.scrive_document_id) return o;
+  const doc = await scriveJson(`/documents/${encodeURIComponent(o.scrive_document_id)}/get`);
+  const status = ORDER_FROM_SCRIVE[String(doc.status)] ?? o.status;
+  const patch: Record<string, unknown> = { status, uppdaterad: new Date().toISOString() };
+  if (status === "skickad" && o.status !== "skickad") {
+    const res = await scrive(`/documents/${encodeURIComponent(o.scrive_document_id)}/files/main/orderbekraftelse.pdf`);
+    if (res.ok) {
+      const path = `${o.tenant_id}/${o.lagenhet_id}/order-${o.scrive_document_id}.pdf`;
+      const { error } = await db.storage.from("d2d-avtal").upload(path, new Uint8Array(await res.arrayBuffer()), { contentType: "application/pdf", upsert: true });
+      if (!error) patch.pdf_path = path;
+    }
+    patch.skickad = (doc.parties ?? []).map((p: any) => p.sign_time).filter(Boolean).sort().pop() ?? new Date().toISOString();
+  }
+  await db.from("d2d_orderbekraftelse").update(patch).eq("id", orderId);
+  return { ...o, ...patch };
 }
