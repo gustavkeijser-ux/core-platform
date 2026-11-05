@@ -98,9 +98,9 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
   };
 
   return (
-    <div className="page d2dk">
-      <div className="d2dk__info card">
-        <svg className="d2dk__las" viewBox="0 0 16 16" width="16" height="16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5">
+    <div className="page d2dkl">
+      <div className="d2dkl__info card">
+        <svg className="d2dkl__las" viewBox="0 0 16 16" width="16" height="16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5">
           <rect x="3" y="7" width="10" height="7" rx="1.5" /><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
         </svg>
         <p>
@@ -109,12 +109,12 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
         </p>
       </div>
 
-      <div className="utf__filter d2dk__filter">
-        <input className="input input--sm d2dk__sok" type="search" autoComplete="off" spellCheck={false}
+      <div className="utf__filter d2dkl__filter">
+        <input className="input input--sm d2dkl__sok" type="search" autoComplete="off" spellCheck={false}
           placeholder="Sök namn, telefon, e-post, adress…" aria-label="Sök i kontaktlistan"
           value={sok} onChange={(e) => setSok(e.target.value)} />
-        <span className="d2dk__antal">{rader ? `${totalt.toLocaleString("sv-SE")} kontakter` : ""}</span>
-        <div className="d2dk__knappar">
+        <span className="d2dkl__antal">{rader ? `${totalt.toLocaleString("sv-SE")} kontakter` : ""}</span>
+        <div className="d2dkl__knappar">
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setVisaLogg((v) => !v)} aria-expanded={visaLogg}>
             {visaLogg ? "Dölj logg" : "Visa logg"}
           </button>
@@ -125,12 +125,12 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
       </div>
 
       {exportFraga && (
-        <div className="card d2dk__export" role="alertdialog" aria-label="Bekräfta export">
+        <div className="card d2dkl__export" role="alertdialog" aria-label="Bekräfta export">
           <p>
             Du exporterar <b>{totalt.toLocaleString("sv-SE")}</b> kontakter{aktivtSok ? <> (sökning ”{aktivtSok}”)</> : null} till
             en CSV-fil. Exporten loggas med ditt namn. Spara filen säkert och radera den när den inte behövs.
           </p>
-          <div className="d2dk__knappar">
+          <div className="d2dkl__knappar">
             <button type="button" className="btn btn--ghost btn--sm" onClick={() => setExportFraga(false)} disabled={exporterar}>Avbryt</button>
             <button type="button" className="btn btn--sm" onClick={() => void exportera()} disabled={exporterar}>
               {exporterar ? "Exporterar…" : "Ladda ner CSV"}
@@ -142,13 +142,13 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
       {fel && <div className="formfield__error">{fel}</div>}
 
       {visaLogg && (
-        <section className="card utf__sek d2dk__logg">
+        <section className="card utf__sek d2dkl__logg">
           <div className="utf__sekhuvud"><h2>Logg</h2><small className="utf__sub">senaste 100 händelserna</small></div>
           {!logg ? <SkeletonRows rows={3} /> : logg.length === 0 ? <p className="formfield__help">Inget loggat ännu.</p> : (
-            <ul className="d2dk__logglista">
+            <ul className="d2dkl__logglista">
               {logg.map((l, i) => (
                 <li key={i}>
-                  <span className="d2dk__loggtid">{tidpunkt(l.tid)}</span>
+                  <span className="d2dkl__loggtid">{tidpunkt(l.tid)}</span>
                   <span><b>{l.vem ?? "Okänd"}</b> {l.handling === "export" ? "exporterade" : "visade"} {l.antal ?? 0} kontakter
                     {l.sok && <> · sökning ”{l.sok}”</>}</span>
                 </li>
@@ -166,7 +166,7 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
             <p className="formfield__help">{aktivtSok ? "Inga kontakter matchar sökningen." : "Inga kontaktuppgifter har kommit in ännu."}</p>
           ) : (
             <div className="rtable-scroll">
-              <table className="rtable d2dk__tabell">
+              <table className="rtable d2dkl__tabell">
                 <thead>
                   <tr><th>Namn</th><th>Telefon</th><th>E-post</th><th>Adress</th><th>Status</th><th>Inkom</th></tr>
                 </thead>
@@ -177,7 +177,7 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
                       <td data-label="Telefon">
                         {k.telefon ? <a href={telLank(k.telefon)} onClick={(e) => e.stopPropagation()}>{k.telefon}</a> : "–"}
                       </td>
-                      <td data-label="E-post" className="d2dk__epost">
+                      <td data-label="E-post" className="d2dkl__epost">
                         {k.epost ? <a href={`mailto:${k.epost}`} onClick={(e) => e.stopPropagation()}>{k.epost}</a> : "–"}
                       </td>
                       <td data-label="Adress">
@@ -187,7 +187,7 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
                       <td data-label="Status">
                         <span>{statusText(k.status)}{k.saljare && <small className="utf__sub"> {k.saljare}</small>}</span>
                       </td>
-                      <td data-label="Inkom" className="d2dk__datum">{datum(k.inkom)}</td>
+                      <td data-label="Inkom" className="d2dkl__datum">{datum(k.inkom)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -195,7 +195,7 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
             </div>
           )}
           {rader.length < totalt && (
-            <button type="button" className="btn btn--ghost d2dk__fler" disabled={laddar} onClick={() => void hamta(rader.length)}>
+            <button type="button" className="btn btn--ghost d2dkl__fler" disabled={laddar} onClick={() => void hamta(rader.length)}>
               {laddar ? "Hämtar…" : `Visa fler (${(totalt - rader.length).toLocaleString("sv-SE")} kvar)`}
             </button>
           )}
