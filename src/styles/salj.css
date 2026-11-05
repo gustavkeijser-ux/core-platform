@@ -87,3 +87,48 @@
   .salj-kv { grid-template-columns: 1fr; gap: 2px 0; }
   .salj-kv dt { margin-top: 8px; }
 }
+
+/* ── Kontaktytor (flik på kund, affär, leverans och processer) ─────────── */
+.kyt { display: flex; flex-direction: column; gap: var(--sp-4); }
+.kyt__arv { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); }
+.kyt__arv-etikett { color: var(--ink-faint); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-label); font-weight: 700; }
+.kyt__bolag { border: 0; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.kyt__bolag:hover { background: var(--brand-tint); color: var(--brand-ink); }
+.kyt__bolag-typ { font-weight: 500; opacity: .75; }
+.kyt__rubrik { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--ink); }
+.kyt__tackning { border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-4); background: var(--surface); display: flex; flex-direction: column; gap: var(--sp-3); }
+.kyt__ytor { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px var(--sp-4); }
+.kyt__ytor li { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: var(--r-sm); background: var(--surface-alt); font-size: var(--text-sm); min-width: 0; }
+.kyt__yta-namn { color: var(--ink-faint); font-size: var(--text-xs); font-weight: 600; }
+.kyt__yta-vem { color: var(--ink); overflow-wrap: anywhere; }
+.kyt__yta--saknas { background: var(--warn-soft) !important; }
+.kyt__yta--saknas .kyt__yta-vem { color: var(--warn-ink); font-weight: 600; }
+.kyt__lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.kyt__kontakt { border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-3) var(--sp-4); background: var(--surface); display: flex; flex-direction: column; gap: 6px; }
+.kyt__kontakt-topp { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-3); }
+.kyt__kontakt-namn { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; min-width: 0; }
+.kyt__kontakt-namn .salj-lank { font-size: var(--text-base); }
+.kyt__titel { color: var(--ink-muted); font-size: var(--text-sm); }
+.kyt__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.kyt__chip button { background: none; border: 0; padding: 0 0 0 2px; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; }
+.kyt__fritext { background: var(--surface); color: var(--ink-soft); border: 1px dashed var(--border-strong); }
+.kyt__uppg { display: flex; flex-wrap: wrap; gap: 4px var(--sp-4); font-size: var(--text-sm); }
+.kyt__uppg a { color: var(--brand); text-decoration: none; overflow-wrap: anywhere; }
+.kyt__uppg a:hover { text-decoration: underline; }
+.kyt__notering { font-size: var(--text-xs); color: var(--ink-muted); white-space: pre-line; }
+.kyt__hor { font-size: var(--text-xs); color: var(--ink-faint); }
+.kyt__form { border: 1px solid var(--brand-soft); border-radius: var(--r-lg); padding: var(--sp-4); background: var(--surface); display: flex; flex-direction: column; gap: var(--sp-3); }
+.kyt__form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-3); }
+.kyt__form .formfield { margin: 0; }
+.kyt__valj { margin-top: 6px; max-width: 320px; }
+.kyt__fritext-rad { display: flex; gap: var(--sp-2); margin-top: 6px; max-width: 420px; }
+.kyt__fritext-rad .input { flex: 1; min-width: 0; }
+.kyt__hjalp { display: block; font-size: var(--text-xs); color: var(--ink-faint); margin-top: 4px; }
+.kyt__bolagval { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); }
+.kyt__bolagval label { display: flex; align-items: center; gap: 8px; }
+.kyt__bolagval input { accent-color: var(--brand); width: 16px; height: 16px; }
+.kyt__form-knappar { display: flex; justify-content: flex-end; gap: var(--sp-2); }
+@media (max-width: 640px) {
+  .kyt__ytor { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .kyt__valj, .kyt__fritext-rad { max-width: none; }
+}
