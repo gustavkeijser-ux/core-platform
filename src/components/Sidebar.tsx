@@ -34,6 +34,8 @@ type Props = {
   d2dFeedback?: { vantar: number };
   /** Door to door → Löner visas bara för dem med lönebehörighet (Lukas, Jonas, Gustav). */
   d2dLoner?: boolean;
+  /** Door to door → Kontaktlista visas bara för dem i d2d_kontakt_behorighet. */
+  d2dKontakter?: boolean;
   /** Antal öppna nummerbyten/porteringar — siffra vid Door to door → Nummerbyten. */
   nummerbytenOppna?: number;
   /** Antal öppna VT-beställningar — siffra vid Door to door → VT-beställningar. */
@@ -370,7 +372,7 @@ function VyValjare({ vyer, vald, onValj }: { vyer: Arbetsvy[]; vald: Arbetsvy | 
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, nummerbytenOppna, vtOppna, arbetsvyer, arbetsvy, onValjArbetsvy }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, d2dKontakter, nummerbytenOppna, vtOppna, arbetsvyer, arbetsvy, onValjArbetsvy }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -538,7 +540,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           const groupObjects = group.keys
             .map((k) => objMap.get(k))
             .filter(Boolean) as ObjectDef[];
-          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__", "__d2dfeedback__", "__d2dloner__"].includes(activeKey ?? ""));
+          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__", "__d2dfeedback__", "__d2dloner__", "__d2dkontakter__"].includes(activeKey ?? ""));
 
           // Hoppa över om inga objekt i gruppen finns
           if (groupObjects.length === 0) return null;
@@ -599,6 +601,16 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                           onClick={() => selectAndClose("__d2dloner__")}
                         >
                           Löner
+                        </button>
+                      )}
+                      {/* Kontaktlista — kunder som lämnat telefon/e-post (bara behöriga) */}
+                      {d2dKontakter && (
+                        <button
+                          className="sidebar__item sidebar__item--child"
+                          aria-current={activeKey === "__d2dkontakter__"}
+                          onClick={() => selectAndClose("__d2dkontakter__")}
+                        >
+                          Kontaktlista
                         </button>
                       )}
                       <button
