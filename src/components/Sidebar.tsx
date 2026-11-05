@@ -111,7 +111,7 @@ const MENU_GROUPS: MenuGroup[] = [
         <path d="M6.5 14V10h3v4" />
       </svg>
     ),
-    keys: ["__d2dutfall__", "__d2davtal__", "d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte", "vt_bestallning"],
+    keys: ["__d2dutfall__", "__d2davtal__", "__d2dkontakter__", "d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte", "vt_bestallning"],
   },
 ];
 
@@ -540,7 +540,7 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
           const groupObjects = group.keys
             .map((k) => objMap.get(k))
             .filter(Boolean) as ObjectDef[];
-          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__", "__d2dfeedback__", "__d2dloner__", "__d2dkontakter__"].includes(activeKey ?? ""));
+          const hasActive = group.keys.includes(activeKey ?? "") || (group.id === "d2d" && ["__d2dbuilder__", "__d2d__", "__d2dfeedback__", "__d2dloner__"].includes(activeKey ?? ""));
 
           // Hoppa över om inga objekt i gruppen finns
           if (groupObjects.length === 0) return null;
