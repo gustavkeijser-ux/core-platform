@@ -26,6 +26,7 @@ import { D2DKarta } from "@/components/D2DKarta";
 import { D2DAvtalPage } from "@/components/D2DAvtalPage";
 import { D2DFeedbackGranskning, d2dFeedbackAntalVantar, d2dFeedbackArGranskare } from "@/components/D2DFeedback";
 import { D2DLonerPage, d2dLonBehorig } from "@/components/D2DLon";
+import { D2DKontaktlistaPage, d2dKontaktBehorig } from "@/components/D2DKontaktlista";
 import { MyTasksPage } from "@/components/MyTasksPage";
 import { NummerbytenPage } from "@/components/NummerbytenPage";
 import { VtBestallningarPage } from "@/components/D2DVtBestallningar";
@@ -51,6 +52,7 @@ type View =
   | { kind: "d2davtal" }
   | { kind: "d2dfeedback" }
   | { kind: "d2dloner" }
+  | { kind: "d2dkontakter" }
   | { kind: "nummerbyten" }
   | { kind: "vtbestallningar" }
   | { kind: "cases"; filter: CaseFilter }
@@ -79,6 +81,7 @@ function viewFromSegs(segs: string[]): View {
     case "d2davtal": return { kind: "d2davtal" };
     case "d2dfeedback": return { kind: "d2dfeedback" };
     case "d2dloner": return { kind: "d2dloner" };
+    case "d2dkontakter": return { kind: "d2dkontakter" };
     case "nummerbyten": return { kind: "nummerbyten" };
     case "vtbestallningar": return { kind: "vtbestallningar" };
     case "arenden": return { kind: "cases", filter: (CASE_FILTERS.includes(segs[1] as CaseFilter) ? segs[1] : "open") as CaseFilter };
@@ -136,6 +139,8 @@ export default function App() {
   const [newFeedback, setNewFeedback] = useState(0);
   const [d2dGranskare, setD2dGranskare] = useState(false);
   const [d2dLoner, setD2dLoner] = useState(false);
+  // Kontaktlista (Door to door → Kontaktlista): bara de i d2d_kontakt_behorighet.
+  const [d2dKontakter, setD2dKontakter] = useState(false);
   const [d2dFeedbackVantar, setD2dFeedbackVantar] = useState(0);
   // Öppna nummerbyten/porteringar — siffra vid menyvalet Nummerbyten (uppdateras varje minut).
   const [nummerbytenOppna, setNummerbytenOppna] = useState(0);
@@ -207,6 +212,7 @@ export default function App() {
     d2dFeedbackArGranskare().then((g) => { if (on) setD2dGranskare(g); });
     // Löner (Door to door → Löner): bara de i d2d_lon_behorighet (Lukas, Jonas, Gustav).
     d2dLonBehorig().then((b) => { if (on) setD2dLoner(b); });
+    d2dKontaktBehorig().then((b) => { if (on) setD2dKontakter(b); });
     return () => { on = false; };
   }, [metaReady]);
   useEffect(() => {
@@ -329,6 +335,7 @@ export default function App() {
     : view?.kind === "d2davtal" ? "Avtal signerade med Scrive i D2D-vyn"
     : view?.kind === "d2dfeedback" ? "Feedback från säljarna i D2D-sälj — granskas innan den skickas vidare"
     : view?.kind === "d2dloner" ? "Kommande bonusar enligt lönemodellen — pinnar per säljare och månad"
+    : view?.kind === "d2dkontakter" ? "Kunder som lämnat telefon eller e-post — varje visning och export loggas"
     : view?.kind === "nummerbyten" ? "Portering och tillfälliga nummer"
     : view?.kind === "vtbestallningar" ? "Signerade avtal som ska beställas i VT"
     : view?.kind === "feedback" ? "Fel, idéer och önskemål från användarna"
@@ -354,6 +361,7 @@ export default function App() {
     : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2dkarta" || view?.kind === "d2davtal" || view?.kind === "d2dfeedback" || view?.kind === "d2dloner" ? "Door2Door"
     : view?.kind === "nummerbyten" ? (objectDefFor("nummerbyte")?.labelPlural ?? "Annat")
     : view?.kind === "vtbestallningar" ? "Door2Door"
+    : view?.kind === "d2dkontakter" ? "Door2Door"
     : view?.kind === "cases" || view?.kind === "case" || view?.kind === "newcase" ? "Ärenden"
     : "Annat";
 
@@ -390,6 +398,7 @@ export default function App() {
         newFeedback={newFeedback}
         d2dFeedback={d2dGranskare ? { vantar: d2dFeedbackVantar } : undefined}
         d2dLoner={d2dLoner}
+        d2dKontakter={d2dKontakter}
         nummerbytenOppna={nummerbytenOppna}
         vtOppna={vtOppna}
         arbetsvyer={arbetsvyer.vyer}
@@ -410,6 +419,7 @@ export default function App() {
           : view?.kind === "d2davtal" ? "__d2davtal__"
           : view?.kind === "d2dfeedback" ? "__d2dfeedback__"
           : view?.kind === "d2dloner" ? "__d2dloner__"
+          : view?.kind === "d2dkontakter" ? "__d2dkontakter__"
           : view?.kind === "nummerbyten" ? "nummerbyte"
           : view?.kind === "vtbestallningar" ? "vt_bestallning"
           : view?.kind === "cases" ? `__cases_${view.filter}__`
@@ -434,6 +444,7 @@ export default function App() {
             : key === "__d2davtal__" ? { kind: "d2davtal" }
             : key === "__d2dfeedback__" ? { kind: "d2dfeedback" }
             : key === "__d2dloner__" ? { kind: "d2dloner" }
+            : key === "__d2dkontakter__" ? { kind: "d2dkontakter" }
             : key === "nummerbyte" ? { kind: "nummerbyten" }
             : key === "vt_bestallning" ? { kind: "vtbestallningar" }
             : key === "__newcase__" ? { kind: "newcase" }
@@ -473,6 +484,7 @@ export default function App() {
                 : view?.kind === "d2davtal" ? "D2D – Avtal"
                 : view?.kind === "d2dfeedback" ? "Säljarfeedback"
                 : view?.kind === "d2dloner" ? "Löner"
+                : view?.kind === "d2dkontakter" ? "Kontaktlista"
                 : view?.kind === "nummerbyten" ? "Nummerbyten"
                 : view?.kind === "vtbestallningar" ? "VT-beställningar"
                 : view?.kind === "cases" ? "Ärenden"
@@ -520,6 +532,9 @@ export default function App() {
         {view?.kind === "d2dloner" && (d2dLoner
           ? <D2DLonerPage fields={objectDefFor("d2d_lagenhet")?.fields ?? []} />
           : <div className="page"><p className="formfield__help">Du har inte behörighet till löner.</p></div>)}
+        {view?.kind === "d2dkontakter" && (d2dKontakter
+          ? <D2DKontaktlistaPage onOpenRecord={openRecord} />
+          : <div className="page"><p className="formfield__help">Du har inte behörighet till kontaktlistan.</p></div>)}
 
         {view?.kind === "nummerbyten" && <NummerbytenPage />}
         {view?.kind === "vtbestallningar" && <VtBestallningarPage onOpenRecord={openRecord} />}

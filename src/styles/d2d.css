@@ -465,6 +465,30 @@
 .d2d-lon-editor__trappa + .btn { align-self: flex-start; margin-top: var(--sp-2); }
 @media (max-width: 760px) { .d2d-lon-editor__kolumner { grid-template-columns: 1fr; } }
 
+/* ── Door to door → Kontaktlista (D2DKontaktlista) ───────────────────────── */
+.d2dkl { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.d2dkl__info { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3) var(--sp-4); font-size: var(--text-sm); color: var(--ink-muted); }
+.d2dkl__info p { margin: 0; }
+.d2dkl__las { flex: none; margin-top: 2px; color: var(--ink-faint); }
+.d2dkl__filter { justify-content: space-between; }
+.d2dkl__sok { flex: 1 1 280px; max-width: 420px; }
+.d2dkl__antal { font-size: var(--text-sm); color: var(--ink-muted); white-space: nowrap; }
+.d2dkl__knappar { display: flex; gap: var(--sp-2); margin-left: auto; }
+.d2dkl__export { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); }
+.d2dkl__export p { margin: 0; font-size: var(--text-sm); }
+.d2dkl__logglista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--text-sm); max-height: 320px; overflow-y: auto; }
+.d2dkl__logglista li { display: flex; gap: var(--sp-3); }
+.d2dkl__loggtid { flex: none; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.d2dkl__tabell td a { color: inherit; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 2px; }
+.d2dkl__epost { overflow-wrap: anywhere; }
+.d2dkl__datum { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.d2dkl__fler { justify-self: center; }
+@media (max-width: 640px) {
+  .d2dkl__sok { flex: 1 1 100%; max-width: none; }
+  .d2dkl__knappar { margin-left: 0; }
+  .d2dkl__logglista li { flex-direction: column; gap: 0; }
+}
+
 /* ── Blitz → Översikt: pinnar den här månaden ──────────────────────────────
    Ett kort per säljare. Stapeln mäts mot säljarens eget nästa delmål
    (från föregående nivå till nästa), inte mot hela trappan. */
