@@ -20,12 +20,23 @@
 //                    statusen blir "Signera med Scrive", avtalet hämtas
 //                    (status, signerad PDF) som om det skapats härifrån.
 //
+//  action "order_forhand" → (admin) orderbekräftelse som PDF, förhandsgranskning.
+//  action "order_skicka"  → (admin) orderbekräftelsen laddas upp i Scrive och
+//                    startas. ConnectEstate signerar (utan BankID, länken
+//                    returneras); kunden är mottagare och får den slutliga
+//                    PDF:en från Scrive när ConnectEstate signerat.
+//  action "order_lank" / "order_pdf" / "order_status" / "order_avbryt" → (admin)
+//                    ny signeringslänk, PDF, läge från Scrive, avbryt.
+//                    Underlaget: tjänsterna i det signerade Scrive-avtalet
+//                    (avtalId) eller det sålda underlaget på lägenheten.
+//
 //  Behörighet: användarens JWT. d2d_avtal_for() släpper bara igenom den som
 //  får se lägenheten. Priserna räknas här på servern, aldrig i klienten.
 // =====================================================================
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { scrive, scriveJson, scriveMissing, syncAvtal, SCRIVE_URL, ScriveError, STATUS_FROM_SCRIVE } from "../_shared/scrive.ts";
+import { scrive, scriveJson, scriveMissing, scriveNyttFranPdf, syncAvtal, syncOrder, SCRIVE_URL, ScriveError, STATUS_FROM_SCRIVE } from "../_shared/scrive.ts";
 import { skapaUtkast } from "../_shared/utkast.ts";
+import { skapaOrderPdf, type Order } from "../_shared/orderbekraftelse.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -409,6 +420,76 @@ async function utkastLank(doc: any, tenantId: string, lagenhetId: string): Promi
   return (await db.storage.from("d2d-avtal").createSignedUrl(path, 1800)).data?.signedUrl ?? null;
 }
 
+// ── Orderbekräftelse: underlaget ────────────────────────────────────────
+
+const titelCase = (s: unknown) => String(s ?? "").toLowerCase().replace(/(^|[\s-])\p{L}/gu, (m) => m.toUpperCase());
+const heltal = (v: unknown): number | null => { const n = tal(v); return n != null && n > 0 ? Math.round(n) : null; };
+
+/** Kund, adress och tjänster till orderbekräftelsen. Med avtalId: det som stod i
+ *  det signerade Scrive-avtalet; annars lägenhetens sålda underlag (d2d_u). */
+async function byggOrder(tenantId: string, lagId: string, avtalId: string | null, orderId: string):
+  Promise<{ order: Order; avtalId: string | null } | { fel: string }> {
+  const { data: lag } = await db.from("records").select("id, tenant_id, data, status")
+    .eq("id", lagId).eq("tenant_id", tenantId).eq("object_type", "d2d_lagenhet").is("deleted_at", null).maybeSingle();
+  if (!lag) return { fel: "Lägenheten finns inte" };
+  const data = (lag.data ?? {}) as Record<string, any>;
+  const { data: listaRad } = await db.from("d2d_prislista").select("data").eq("tenant_id", tenantId).maybeSingle();
+  const lista = listaRad?.data ?? {};
+
+  let manad: Rad[] = [], engang: Rad[] = [];
+  let bindning: number | null = heltal(data.bindningstid_manader);
+  let start: string | null = data.startdatum_tjanst ?? data.mobil_startdatum ?? null;
+  let avtal: Record<string, any> | null = null;
+  if (avtalId) {
+    const { data: a } = await db.from("d2d_avtal").select("*").eq("id", avtalId).eq("lagenhet_id", lagId).maybeSingle();
+    if (!a) return { fel: "Avtalet finns inte" };
+    if (a.status !== "signerat") return { fel: "Avtalet är inte signerat ännu." };
+    avtal = a;
+    manad = (a.underlag?.manad ?? []) as Rad[];
+    engang = (a.underlag?.engang ?? []) as Rad[];
+    const falt = (a.underlag?.falt ?? {}) as Record<string, string>;
+    bindning = heltal(String(falt.bindningstid ?? "").match(/\d+/)?.[0]) ?? bindning;
+    if (/^\d{4}-\d{2}-\d{2}/.test(String(falt.startdatum ?? ""))) start = falt.startdatum;
+  }
+  if (!avtal || manad.length === 0) {
+    if (!avtal && lag.status !== "sald") return { fel: "Lägenheten är inte såld." };
+    const { data: du } = await db.rpc("d2d_u", { d: data });
+    const a = berakna((du ?? data) as Record<string, any>, await soldFalt(tenantId), lista);
+    manad = a.manad; engang = a.engang;
+  }
+  if (manad.length === 0) return { fel: "Inga sålda tjänster är ifyllda på lägenheten." };
+  const kundNamn = String(data.kund_namn ?? avtal?.kund_namn ?? "").trim();
+  if (!kundNamn) return { fel: "Kundens namn saknas på lägenheten." };
+
+  let saljare: string | null = null;
+  if (data.saljare) {
+    const { data: u } = await db.from("users").select("full_name, email").eq("id", String(data.saljare)).maybeSingle();
+    saljare = u ? (u.full_name || null) : null;
+  }
+  const summa = (r: Rad[], x: "kampanj" | "ordinarie") => r.reduce((s, y) => s + (y[x] ?? 0), 0);
+  const gata = [titelCase(data.gatunamn), data.gatunummer, data.ingang].filter(Boolean).join(" ").trim();
+  return {
+    avtalId: avtal?.id ?? null,
+    order: {
+      ordernummer: `CE-${orderId.slice(0, 8).toUpperCase()}`,
+      datum: new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" }),
+      kund: { namn: kundNamn, personnummer: data.personnummer ? String(data.personnummer) : null,
+        epost: data.kund_epost ? String(data.kund_epost).trim() : null, telefon: data.kund_telefon ? String(data.kund_telefon) : null },
+      adress: { gata, lgh: data.name ? String(data.name) : null, postnummer: data.postnummer ? String(data.postnummer) : null,
+        ort: data.postort ? titelCase(data.postort) : null },
+      manad: manad.map((r) => ({ label: r.label, kampanj: r.kampanj, ordinarie: r.ordinarie })),
+      engang: engang.map((r) => ({ label: r.label, kampanj: r.kampanj, ordinarie: r.ordinarie })),
+      totalKampanj: summa(manad, "kampanj"), totalOrdinarie: summa(manad, "ordinarie"),
+      kampanjManader: heltal(lista?.kampanjManader) ?? 12,
+      bindningManader: bindning ?? heltal(lista?.bindningManader) ?? 12,
+      startdatum: start ? String(start).slice(0, 10) : null,
+      leverantor: String(lista?.leverantor ?? "Telia"),
+      saljare,
+      ovrigt: String(data.scrive_ovrigt ?? "").trim() || null,
+    },
+  };
+}
+
 // ── Handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -536,6 +617,108 @@ Deno.serve(async (req: Request) => {
     } catch (e) {
       console.error("scrive-sign okopplade", String(e));
       return json({ error: e instanceof ScriveError ? e.message : "Kunde inte hämta dokumenten från Scrive." }, 502);
+    }
+  }
+
+  // ── Orderbekräftelse (bara administratörer) ──
+  if (action.startsWith("order_")) {
+    const { data: arAdmin } = await userDb.rpc("is_admin");
+    if (!arAdmin) return json({ error: "Bara administratörer kan skicka orderbekräftelser." }, 403);
+    const { data: tenantId } = await userDb.rpc("my_tenant_id");
+    const { data: me } = await userDb.auth.getUser();
+    try {
+      if (action === "order_forhand" || action === "order_skicka") {
+        const lagId = String(b.lagenhetId ?? "");
+        if (!/^[0-9a-f-]{36}$/.test(lagId)) return json({ error: "Ogiltig lägenhet" }, 400);
+        const orderId = crypto.randomUUID();
+        const r = await byggOrder(String(tenantId), lagId, b.avtalId ? String(b.avtalId) : null, orderId);
+        if ("fel" in r) return json({ error: r.fel }, 400);
+        const pdf = await skapaOrderPdf(r.order);
+        const filnamn = `Orderbekräftelse ${r.order.ordernummer}.pdf`;
+
+        if (action === "order_forhand") {
+          const path = `${tenantId}/${lagId}/order-forhand-${orderId}.pdf`;
+          const { error } = await db.storage.from("d2d-avtal").upload(path, pdf, { contentType: "application/pdf", upsert: true });
+          if (error) throw new Error(error.message);
+          const url = (await db.storage.from("d2d-avtal").createSignedUrl(path, 900)).data?.signedUrl ?? null;
+          return json({ ok: true, url, mottagare: r.order.kund.epost, order: r.order });
+        }
+
+        if (missing.filter((k) => k !== "SCRIVE_TEMPLATE_ID").length) {
+          return json({ error: "Scrive är inte kopplat ännu.", configured: false, missing }, 503);
+        }
+        const epost = r.order.kund.epost;
+        if (!epost || !epost.includes("@")) return json({ error: "Kunden saknar e-post. Fyll i e-post på lägenheten först." }, 400);
+        const { data: row, error: insErr } = await db.from("d2d_orderbekraftelse").insert({
+          id: orderId, tenant_id: tenantId, lagenhet_id: lagId, avtal_id: r.avtalId, kund_namn: r.order.kund.namn,
+          mottagare: epost, underlag: r.order, skapad_av: me?.user?.id ?? null,
+        }).select("*").single();
+        if (insErr) throw new Error(insErr.message);
+        try {
+          const doc = await scriveNyttFranPdf(pdf, filnamn);
+          await db.from("d2d_orderbekraftelse").update({ scrive_document_id: String(doc.id) }).eq("id", orderId);
+          const parter: any[] = doc.parties ?? [];
+          // ConnectEstate (avsändaren) signerar utan BankID — Scrive kräver minst en signerande part.
+          for (const p of parter) if (p.is_author) {
+            p.signatory_role = "signing_party"; p.is_signatory = true;
+            p.authentication_method_to_sign = "standard"; p.delivery_method = "api";
+          }
+          // Kunden får bara den slutliga PDF:en (ingen inbjudan, ingen signering).
+          let kund = parter.find((p) => !p.is_author);
+          if (!kund) { kund = { fields: [] }; parter.push(kund); }
+          const tel = r.order.kund.telefon ? mobilnr(r.order.kund.telefon) : "";
+          kund.signatory_role = "viewer"; kund.is_signatory = false;
+          kund.delivery_method = "api";
+          kund.confirmation_delivery_method = tel ? "email_mobile" : "email";
+          kund.fields = kund.fields ?? [];
+          const namn = r.order.kund.namn.trim().split(/\s+/);
+          const efternamn = namn.length > 1 ? namn.pop()! : "";
+          const satt = (type: string, value: string, order?: number) => {
+            const f = kund.fields.find((x: any) => x.type === type && (order == null || x.order === order));
+            if (f) f.value = value;
+            else kund.fields.push({ type, ...(order != null ? { order } : {}), value, is_obligatory: false, should_be_filled_by_sender: false, placements: [] });
+          };
+          satt("name", namn.join(" "), 1); satt("name", efternamn, 2); satt("email", epost);
+          if (tel) satt("mobile", tel);
+          doc.parties = parter;
+          doc.title = `Orderbekräftelse – ${r.order.kund.namn}`;
+          doc.api_callback_url = `${SUPABASE_URL}/functions/v1/scrive-callback?o=${orderId}&t=${row.callback_token}`;
+          await scriveJson(`/documents/${encodeURIComponent(doc.id)}/update`, { document: JSON.stringify(doc) });
+          const started = await scriveJson(`/documents/${encodeURIComponent(doc.id)}/start`, {});
+          await db.from("d2d_orderbekraftelse").update({ status: "vantar", uppdaterad: new Date().toISOString() }).eq("id", orderId);
+          const avs = (started.parties ?? []).find((p: any) => p.is_author);
+          return json({ ok: true, orderId, url: avs?.api_delivery_url ? SCRIVE_URL + avs.api_delivery_url : null });
+        } catch (e) {
+          await db.from("d2d_orderbekraftelse").update({ status: "fel", fel: String(e).slice(0, 500) }).eq("id", orderId);
+          throw e;
+        }
+      }
+
+      const { data: o } = await db.from("d2d_orderbekraftelse").select("*").eq("id", String(b.orderId ?? "")).eq("tenant_id", tenantId).maybeSingle();
+      if (!o) return json({ error: "Orderbekräftelsen finns inte" }, 404);
+      if (action === "order_pdf") {
+        if (!o.pdf_path) return json({ error: "Det finns ingen skickad PDF ännu" }, 404);
+        const { data, error } = await db.storage.from("d2d-avtal").createSignedUrl(o.pdf_path, 300, { download: `Orderbekräftelse ${o.kund_namn ?? ""}.pdf`.trim() });
+        if (error) return json({ error: "Kunde inte hämta PDF:en" }, 500);
+        return json({ url: data.signedUrl });
+      }
+      if (missing.filter((k) => k !== "SCRIVE_TEMPLATE_ID").length) return json({ error: "Scrive är inte kopplat ännu.", configured: false, missing }, 503);
+      if (!o.scrive_document_id) return json({ error: "Orderbekräftelsen kom aldrig till Scrive" }, 400);
+      if (action === "order_status") return json({ ok: true, order: await syncOrder(db, o.id) });
+      if (action === "order_avbryt") {
+        if (o.status === "vantar") await scriveJson(`/documents/${encodeURIComponent(o.scrive_document_id)}/cancel`, {});
+        return json({ ok: true, order: await syncOrder(db, o.id) });
+      }
+      if (action === "order_lank") {
+        const doc = await scriveJson(`/documents/${encodeURIComponent(o.scrive_document_id)}/get`);
+        if (doc.status !== "pending") return json({ ok: true, url: null, order: await syncOrder(db, o.id) });
+        const avs = (doc.parties ?? []).find((p: any) => p.is_author);
+        return json({ ok: true, url: avs?.api_delivery_url ? SCRIVE_URL + avs.api_delivery_url : null });
+      }
+      return json({ error: "Okänd åtgärd" }, 400);
+    } catch (e) {
+      console.error("scrive-sign", action, String(e));
+      return json({ error: e instanceof ScriveError ? e.message : "Något gick fel med orderbekräftelsen. Försök igen om en stund." }, 502);
     }
   }
 
