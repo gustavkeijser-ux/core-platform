@@ -354,9 +354,10 @@ export default function App() {
     : view?.kind === "dashboard" ? "Översikt"
     : view?.kind === "tasks" ? "Mina uppgifter"
     : view?.kind === "settings" ? (view.tab === "import" ? "Import" : view.tab === "m365" ? "Microsoft 365" : view.tab === "priser" ? "Door2Door" : "Inställningar")
-    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" || view?.kind === "d2dfeedback" || view?.kind === "d2dloner" || view?.kind === "d2dkontakter" ? "Door2Door"
+    : view?.kind === "d2dbuilder" || view?.kind === "d2dutfall" || view?.kind === "d2davtal" || view?.kind === "d2dfeedback" || view?.kind === "d2dloner" ? "Door2Door"
     : view?.kind === "nummerbyten" ? (objectDefFor("nummerbyte")?.labelPlural ?? "Annat")
     : view?.kind === "vtbestallningar" ? "Door2Door"
+    : view?.kind === "d2dkontakter" ? "Door2Door"
     : view?.kind === "cases" || view?.kind === "case" || view?.kind === "newcase" ? "Ärenden"
     : "Annat";
 
