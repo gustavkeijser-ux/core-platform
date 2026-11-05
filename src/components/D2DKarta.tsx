@@ -36,10 +36,13 @@ import "@/styles/d2d.css";
 
    Läget Penetration visar Telias penetration (filen "ConnectEstate penetration",
    importeras under Inställningar → Import) per hus och HC-viktat per ring, för
-   valt mått: BB Telia, BB totalt, IPTV Telia eller IPTV totalt.
+   valt mått: BB Telia, BB totalt, IPTV Telia eller IPTV totalt. I det läget
+   väljer man fastigheter i stället för projekt: listan visar husen i
+   kartområdet med penetration, och sökningen hittar ett hus var som helst
+   och zoomar in på det.
    ============================================================================= */
 
-const VERSION = "Karta 1.7 · 2026-11-04";
+const VERSION = "Karta 1.8 · 2026-11-05";
 
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
@@ -343,6 +346,8 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const [minFaktor, setMinFaktor] = useState(0);
   const [penMatt, setPenMatt] = useState<PenMatt>("bbTelia");
   const [maxPen, setMaxPen] = useState(0);
+  // Penetrationsläget: fastigheter väljs i stället för projekt (projektlagren döljs).
+  const penLage = lage === "penetration";
   const [valt, setValt] = useState<string | null>(null);
   const [zoom, setZoom] = useState(5);
   const [vy, setVy] = useState<{ s: number; n: number; v: number; o: number } | null>(null);
@@ -354,6 +359,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   // Projektet ligger i URL:en (#/d2dkarta?projekt=<id>) så en omladdning stannar kvar.
   const route = useRoute();
   const projektId = route.query.get("projekt");
+  const visaProjekt = !!projektId && !penLage;
   const setProjekt = (id: string | null) => navigate(["d2dkarta"], { projekt: id }, true);
   const [projektLista, setProjektLista] = useState<Array<{ id: string; title: string | null; status: string | null; updatedAt: string }>>([]);
   const [levTillFast, setLevTillFast] = useState<Map<string, string>>(new Map());
@@ -373,6 +379,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
   const [visaOversikt, setVisaOversikt] = useState(true);
   const [visaLista, setVisaLista] = useState(true);
   const [valjLage, setValjLage] = useState(false);
+  useEffect(() => { if (penLage) setValjLage(false); }, [penLage]);
   // I väljläget fälls bubblorna ihop så att kartan syns; de kommer tillbaka när man är klar.
   useEffect(() => { setVisaOversikt(!valjLage); setVisaLista(!valjLage); }, [valjLage]);
 
@@ -564,7 +571,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     const maxLgh = Math.max(1, ...aggs.map((a) => a.lgh));
     const lager = L.layerGroup();
     for (const a of aggs) {
-      const { html, d } = markorHtml(a, lage, maxLgh, a.hus.filter(iProjekt).length, skala, penMatt);
+      const { html, d } = markorHtml(a, lage, maxLgh, penLage ? 0 : a.hus.filter(iProjekt).length, skala, penMatt);
       const m = L.marker([a.lat, a.lon], {
         icon: L.divIcon({ html, className: "d2dk-ikon", iconSize: [d, d], iconAnchor: [d / 2, d / 2] }),
         title: valjLage && projektId
@@ -576,7 +583,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
       });
       m.on("click", () => {
         // Väljläget: hela ringen läggs till i projektet direkt (eller tas bort om allt redan är med).
-        if (valjLage && projektId) {
+        if (valjLage && projektId && !penLage) {
           if (arbetar) return;
           const nya = a.hus.filter((h) => h.levId && !iProjekt(h));
           // Många hus på en gång (låg zoom) tar tid: fråga först.
@@ -605,10 +612,11 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
       .slice(0, 12);
   }, [perNiva, vy]);
 
+  const husIVy = useMemo(() => filtrerade.filter((h) => h.lat != null && (!vy || (h.lat! >= vy.s && h.lat! <= vy.n && h.lon! >= vy.v && h.lon! <= vy.o))), [filtrerade, vy]);
   const iVy = useMemo(() => {
-    const l = filtrerade.filter((h) => h.lat != null && (!vy || (h.lat! >= vy.s && h.lat! <= vy.n && h.lon! >= vy.v && h.lon! <= vy.o)));
+    const l = husIVy;
     return { hus: l.length, lgh: l.reduce((s, h) => s + h.lgh, 0), eff: l.reduce((s, h) => s + h.effektiva, 0), slj: l.reduce((s, h) => s + h.saljbara, 0), pen: penFor(l, penMatt).varde };
-  }, [filtrerade, vy, penMatt]);
+  }, [husIVy, penMatt]);
 
   const kvalitet = useMemo(() => {
     const f = data?.fastigheter ?? [];
@@ -665,14 +673,14 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
     <div className={`d2dk${projektId ? " d2dk--projekt" : ""}`}>
       <div className={`d2dk-karta-wrap${valjLage && projektId ? " is-valj" : ""}`}>
         <div ref={mapEl} className="d2dk-karta" />
-        {projektId && valjLage && (
+        {visaProjekt && valjLage && (
           <div className="d2dk-valjbanner" role="status">
             <span><b>Välj fastigheter:</b> klicka på en ring ({NIVAER[niva]?.namn.toLowerCase()}){arbetar ? ` · ${arbetar}` : ""}</span>
             <button type="button" className="btn btn--sm btn--brand" onClick={() => setValjLage(false)}>Klar</button>
           </div>
         )}
-        {!projektId && <div className="d2dk-niva">{NIVAER[niva]?.namn} · zoom {zoom}</div>}
-        {projektId && (
+        {!visaProjekt && <div className="d2dk-niva">{NIVAER[niva]?.namn} · zoom {zoom}</div>}
+        {visaProjekt && (
           // Lager ovanpå kartan. Själva lagret släpper igenom klick till kartan, bara bubblorna tar emot dem.
           <div className={`d2dk-lager${valjLage ? " d2dk-lager--valj" : ""}`}>
             <div className={`d2dk-bubbla d2dk-bubbla--topp${visaOversikt ? "" : " is-hopfalld"}`}>
@@ -702,7 +710,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
 
         {data && (
           <>
-            <section className="d2dk-projekt">
+            {!penLage && <section className="d2dk-projekt">
               <div className="d2dk-projekt__rad">
                 <select className="input" value={projektId ?? ""} onChange={(e) => setProjekt(e.target.value || null)} aria-label="Projekt">
                   <option value="">Inget projekt — bara titta</option>
@@ -738,7 +746,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
               )}
               {arbetar && <div className="d2dk-arbetar">{arbetar}</div>}
               {projFel && <div className="d2d-error">{projFel}</div>}
-            </section>
+            </section>}
 
             <div className="d2dk-lage" role="tablist">
               <button role="tab" aria-selected={lage === "kvalitet"} className={lage === "kvalitet" ? "on" : ""} onClick={() => setLage("kvalitet")}>Dörrkvalitet</button>
@@ -757,6 +765,10 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
                   <button key={k} role="radio" aria-checked={penMatt === k} className={`d2dk-chip${penMatt === k ? " on" : ""}`} onClick={() => setPenMatt(k)}>{PEN_MATT[k]}</button>
                 ))}
               </div>
+            )}
+            {penLage && (
+              <PenFastigheter alla={data.fastigheter} iVy={husIVy} matt={penMatt} valtId={valt}
+                onValj={(h) => { setValt(h.id); if (h.lat != null) mapRef.current?.setView([h.lat, h.lon], 16); }} />
             )}
 
             <div className="d2dk-tiles">
@@ -798,11 +810,11 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
 
             <div ref={kortRef} />
             {valtHus && <Fastighetskort h={valtHus} idag={idag} onStang={() => setValt(null)} onOpenRecord={onOpenRecord}
-              projekt={projektId ? { namn: projNamn, iProjekt: iProjekt(valtHus), arbetar: !!arbetar,
+              projekt={visaProjekt ? { namn: projNamn, iProjekt: iProjekt(valtHus), arbetar: !!arbetar,
                 onLaggTill: () => laggTill([valtHus]), onTaBort: () => taBort(valtHus) } : null}
               tilldela={(() => {
                 const fastId = valtHus.levId ? levTillFast.get(valtHus.levId) : undefined;
-                if (!projektId || !fastId) return null;
+                if (!visaProjekt || !fastId) return null;
                 const nu = (tilldelning.get(fastId)?.saljare ?? []).map((a) => a.user_id);
                 return {
                   saljare, nu,
@@ -901,7 +913,7 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
         </div>
       </div>
     )}
-    {projektId && (
+    {visaProjekt && (
       <div className="d2dk-projektdetalj">
         <ProjectDetail projektId={projektId} inbaddad reloadKey={projKey} onAndrat={laddaProjektHus} onOpenRecord={onOpenRecord}
           platser={{ topp: toppPlats, fastigheter: listPlats }} onFokus={fokusera}
@@ -909,6 +921,72 @@ export function D2DKarta({ isAdmin = false, onOpenRecord }: { isAdmin?: boolean;
       </div>
     )}
     </div>
+  );
+}
+
+/** Penetrationsläget: fastigheterna i kartområdet med penetration, och sök på ett hus var som helst. */
+function PenFastigheter({ alla, iVy, matt, valtId, onValj }: {
+  alla: KartHus[]; iVy: KartHus[]; matt: PenMatt; valtId: string | null; onValj: (h: KartHus) => void;
+}) {
+  const [sok, setSok] = useState("");
+  const [ordning, setOrdning] = useState<"lagst" | "hogst" | "namn">("lagst");
+  const q = sok.trim().toLowerCase();
+  const traffar = useMemo(() => q.length < 2 ? [] : alla
+    .filter((h) => h.lat != null && [h.beteckning, h.adress, h.ort, h.kommun, h.agare, h.bolag].some((x) => x?.toLowerCase().includes(q)))
+    // Träff i beteckningen först, sedan adressen, sist ort/ägare.
+    .map((h) => ({ h, p: h.beteckning?.toLowerCase().startsWith(q) ? 0 : h.beteckning?.toLowerCase().includes(q) ? 1 : h.adress?.toLowerCase().includes(q) ? 2 : 3 }))
+    .sort((a, b) => a.p - b.p).map((x) => x.h)
+    .slice(0, 8), [alla, q]);
+  const lista = useMemo(() => {
+    const v = (h: KartHus) => (h.pen?.[matt] == null ? null : Number(h.pen[matt]));
+    return [...iVy].sort((a, b) => {
+      if (ordning === "namn") return (a.beteckning ?? "").localeCompare(b.beteckning ?? "", "sv");
+      const va = v(a), vb = v(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      return ordning === "lagst" ? va - vb : vb - va;
+    });
+  }, [iVy, matt, ordning]);
+  const MAX = 150;
+  const valj = (h: KartHus) => { onValj(h); setSok(""); };
+  return (
+    <section className="d2dk-penlista">
+      <div className="d2dk-penlista__sok">
+        <input className="input" placeholder="Sök fastighet, adress eller ägare…" value={sok} onChange={(e) => setSok(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && traffar[0]) valj(traffar[0]); }} aria-label="Sök fastighet" />
+        {traffar.length > 0 && (
+          <ul className="d2dk-penlista__traffar card" role="listbox">
+            {traffar.map((h) => (
+              <li key={h.id}><button type="button" onClick={() => valj(h)}>
+                <b>{h.beteckning}</b><span>{[h.adress, h.ort ?? h.kommun].filter(Boolean).join(" · ")}</span>
+              </button></li>
+            ))}
+          </ul>
+        )}
+        {q.length >= 2 && traffar.length === 0 && <div className="d2dk-hjalp">Ingen fastighet med läge matchar.</div>}
+      </div>
+      <div className="d2dk-penlista__head">
+        <h3>Fastigheter i kartområdet <span className="d2dpb-sek__antal">{lista.length}</span></h3>
+        <select className="input" value={ordning} onChange={(e) => setOrdning(e.target.value as typeof ordning)} aria-label="Sortering">
+          <option value="lagst">Lägst {PEN_MATT[matt]} först</option>
+          <option value="hogst">Högst {PEN_MATT[matt]} först</option>
+          <option value="namn">Namn</option>
+        </select>
+      </div>
+      {lista.length === 0 && <div className="d2dk-tom">Inga fastigheter i kartområdet. Zooma ut eller flytta kartan.</div>}
+      <ul className="d2dk-penlista__lista">
+        {lista.slice(0, MAX).map((h) => (
+          <li key={h.id}>
+            <button type="button" className={h.id === valtId ? "on" : ""} onClick={() => onValj(h)}>
+              <span className="d2dk-penlista__namn"><b>{h.beteckning}</b><span>{[h.ort ?? h.kommun, `${h.lgh} lgh`, h.pen?.hc != null ? `${h.pen.hc} HC` : null].filter(Boolean).join(" · ")}</span></span>
+              <span className={`d2dk-penlista__varde ${penSteg(h.pen?.[matt] == null ? null : Number(h.pen[matt]))}`}>{pctKort(h.pen?.[matt] == null ? null : Number(h.pen[matt]))}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {lista.length > MAX && <p className="d2dk-hjalp">Visar {MAX} av {lista.length}. Zooma in för att se resten.</p>}
+    </section>
   );
 }
 
