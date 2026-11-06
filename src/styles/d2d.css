@@ -512,6 +512,10 @@
 .d2dsms__fellista { margin: 0; padding-left: var(--sp-4); font-size: var(--text-sm); color: var(--ink-muted); max-height: 160px; overflow-y: auto; }
 .d2dsms__ok { margin: 0; font-size: var(--text-sm); color: var(--hue-green); }
 .d2dsms__dolj { margin-left: auto; }
+.d2dsms__egna { display: flex; flex-direction: column; gap: var(--sp-2); }
+.d2dsms__egnalista { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.d2dsms__egnalista li { display: flex; align-items: center; gap: var(--sp-2); padding: 2px var(--sp-1) 2px var(--sp-3); border-radius: 999px; background: var(--brand-soft); font-size: var(--text-sm); }
+.d2dsms__egnalista .close-btn { width: 24px; height: 24px; font-size: 16px; }
 @media (max-width: 640px) {
   .d2dsms__tecken { margin-left: 0; flex-basis: 100%; }
   .d2dkl__knappar { flex-wrap: wrap; }
