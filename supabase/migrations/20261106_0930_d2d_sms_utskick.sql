@@ -13,6 +13,12 @@
 --     Skickade SMS loggas som kommunikation (kanal sms) på lägenheten och som
 --     aktivitet i lägenhetens historik.
 --
+-- Filter (Gustav 6 nov): kontaktlistan, exporten och SMS-urvalet kan filtreras
+-- på status och ort (postort) utöver fritextsökningen. d2d_kontakt_rader,
+-- d2d_kontaktlista och d2d_kontaktlista_export får två nya parametrar
+-- (p_status, p_ort); de gamla signaturerna tas bort så att API:t inte får
+-- två kandidater. d2d_kontakt_filterval ger valen (med antal).
+--
 -- Säkerhet: tabellerna har RLS utan policyer och inga rättigheter för
 -- anon/authenticated — allt går via funktionerna, som kräver
 -- d2d_kontakt_behorig() (samma personer som ser kontaktlistan). Varje
@@ -64,6 +70,128 @@ create table if not exists public.d2d_sms_sparr (
 alter table public.d2d_sms_sparr enable row level security;
 revoke all on public.d2d_sms_sparr from anon, authenticated;
 
+-- ── Filter på status och ort ──────────────────────────────────────────────
+drop function if exists public.d2d_kontaktlista(text, integer, integer);
+drop function if exists public.d2d_kontaktlista_export(text);
+drop function if exists public.d2d_sms_skapa(text, text, uuid[], text, text);
+drop function if exists public.d2d_sms_forhand(text, uuid[], text);
+drop function if exists public.d2d_kontakt_rader(uuid, text);
+
+/** Raderna (intern). p_status: statusvärden (null = alla), p_ort: postort (null = alla, skiftlägesokänslig). */
+create or replace function public.d2d_kontakt_rader(p_tenant uuid, p_sok text, p_status text[], p_ort text)
+returns table (
+  id uuid, namn text, telefon text, epost text, gata text, postnummer text, postort text,
+  lgh text, fastighet text, status text, saljare text, inkom timestamptz
+) language sql stable security definer set search_path = public as $$
+  with l as (
+    select r.* from records r
+     where r.tenant_id = p_tenant and r.object_type = 'd2d_lagenhet' and r.deleted_at is null
+       and (coalesce(trim(r.data->>'kund_telefon'), '') <> '' or coalesce(trim(r.data->>'kund_epost'), '') <> '')
+       and (p_status is null or cardinality(p_status) = 0 or r.status = any(p_status))
+       and (coalesce(trim(p_ort), '') = '' or lower(trim(r.data->>'postort')) = lower(trim(p_ort)))
+  )
+  select l.id,
+         nullif(trim(l.data->>'kund_namn'), ''),
+         nullif(trim(l.data->>'kund_telefon'), ''),
+         nullif(trim(l.data->>'kund_epost'), ''),
+         nullif(trim(concat_ws(' ', nullif(trim(l.data->>'gatunamn'), ''), nullif(trim(l.data->>'gatunummer'), ''), nullif(trim(l.data->>'ingang'), ''))), ''),
+         nullif(trim(l.data->>'postnummer'), ''),
+         nullif(trim(l.data->>'postort'), ''),
+         nullif(trim(l.data->>'name'), ''),
+         nullif(trim(l.data->>'fastighetsbeteckning'), ''),
+         l.status,
+         u.full_name,
+         case when a.forsta is null or a.fanns_fore then l.created_at
+              else coalesce(a.med_kontakt, l.created_at) end
+    from l
+    left join users u on u.id = case when (l.data->>'saljare') ~ '^[0-9a-f-]{36}$' then (l.data->>'saljare')::uuid end
+    left join lateral (
+      select min(x.occurred_at) as forsta,
+             min(x.occurred_at) filter (where coalesce(trim(x.after->>'kund_telefon'), '') <> '' or coalesce(trim(x.after->>'kund_epost'), '') <> '') as med_kontakt,
+             (array_agg(coalesce(trim(x.before->>'kund_telefon'), '') <> '' or coalesce(trim(x.before->>'kund_epost'), '') <> '' order by x.occurred_at))[1] as fanns_fore
+        from audit_log x
+       where x.tenant_id = l.tenant_id and x.object_id = l.id
+    ) a on true
+   where coalesce(trim(p_sok), '') = ''
+      or concat_ws(' ', l.data->>'kund_namn', l.data->>'kund_telefon', regexp_replace(coalesce(l.data->>'kund_telefon', ''), '\D', '', 'g'),
+                   l.data->>'kund_epost', l.data->>'gatunamn', l.data->>'gatunummer', l.data->>'postort', l.data->>'postnummer',
+                   l.data->>'name', l.data->>'fastighetsbeteckning') ilike '%' || trim(p_sok) || '%'
+$$;
+revoke all on function public.d2d_kontakt_rader(uuid, text, text[], text) from public, anon, authenticated;
+
+/** Text till loggen: sökning + filter. */
+create or replace function public.d2d_kontakt_filtertext(p_sok text, p_status text[], p_ort text)
+returns text language sql immutable set search_path = public as $$
+  select nullif(concat_ws(' · ', nullif(trim(p_sok), ''),
+           case when cardinality(p_status) > 0 then 'status: ' || array_to_string(p_status, ', ') end,
+           case when coalesce(trim(p_ort), '') <> '' then 'ort: ' || trim(p_ort) end), '')
+$$;
+
+/** Kontaktlistan, en sida i taget (nyast inkomna först). Loggar varje visning/sökning. */
+create or replace function public.d2d_kontaktlista(p_sok text default null, p_limit integer default 100, p_offset integer default 0,
+                                                   p_status text[] default null, p_ort text default null)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare v_t uuid := my_tenant_id(); v_totalt integer; v_rader jsonb;
+begin
+  if not d2d_kontakt_behorig() then
+    raise exception 'Du har inte behörighet till kontaktlistan' using errcode = '42501';
+  end if;
+  p_limit := least(greatest(coalesce(p_limit, 100), 1), 500);
+  p_offset := greatest(coalesce(p_offset, 0), 0);
+
+  select coalesce(max(k.n), 0)::int,
+         coalesce(jsonb_agg(to_jsonb(k) - 'n' order by k.inkom desc, k.gata, k.lgh), '[]'::jsonb)
+    into v_totalt, v_rader
+    from (select r.*, count(*) over () as n from d2d_kontakt_rader(v_t, p_sok, p_status, p_ort) r
+           order by r.inkom desc, r.gata, r.lgh limit p_limit offset p_offset) k;
+  if v_totalt = 0 and p_offset > 0 then
+    select count(*) into v_totalt from d2d_kontakt_rader(v_t, p_sok, p_status, p_ort);
+  end if;
+
+  if p_offset = 0 then
+    insert into d2d_kontakt_logg (tenant_id, user_id, handling, sok, antal)
+      values (v_t, auth.uid(), 'visa', d2d_kontakt_filtertext(p_sok, p_status, p_ort), v_totalt);
+  end if;
+  return jsonb_build_object('totalt', v_totalt, 'rader', v_rader);
+end $$;
+
+/** Export (CSV byggs i webbläsaren). Loggas alltid med antal rader. */
+create or replace function public.d2d_kontaktlista_export(p_sok text default null, p_status text[] default null, p_ort text default null)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare v_t uuid := my_tenant_id(); v_rader jsonb; v_antal integer;
+begin
+  if not d2d_kontakt_behorig() then
+    raise exception 'Du har inte behörighet till kontaktlistan' using errcode = '42501';
+  end if;
+  select coalesce(jsonb_agg(to_jsonb(k) order by k.inkom desc, k.gata, k.lgh), '[]'::jsonb), count(*)
+    into v_rader, v_antal from d2d_kontakt_rader(v_t, p_sok, p_status, p_ort) k;
+  insert into d2d_kontakt_logg (tenant_id, user_id, handling, sok, antal)
+    values (v_t, auth.uid(), 'export', d2d_kontakt_filtertext(p_sok, p_status, p_ort), v_antal);
+  return v_rader;
+end $$;
+
+/** Val till filtren: status och ort med antal kontakter. */
+create or replace function public.d2d_kontakt_filterval()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_t uuid := my_tenant_id();
+begin
+  if not d2d_kontakt_behorig() then
+    raise exception 'Du har inte behörighet till kontaktlistan' using errcode = '42501';
+  end if;
+  return (
+    with l as (
+      select r.status, nullif(initcap(lower(trim(r.data->>'postort'))), '') as ort
+        from records r
+       where r.tenant_id = v_t and r.object_type = 'd2d_lagenhet' and r.deleted_at is null
+         and (coalesce(trim(r.data->>'kund_telefon'), '') <> '' or coalesce(trim(r.data->>'kund_epost'), '') <> '')
+    )
+    select jsonb_build_object(
+      'status', coalesce((select jsonb_agg(jsonb_build_object('v', status, 'n', n) order by n desc)
+                            from (select status, count(*) n from l where status is not null group by status) s), '[]'::jsonb),
+      'ort', coalesce((select jsonb_agg(jsonb_build_object('v', ort, 'n', n) order by ort)
+                         from (select ort, count(*) n from l where ort is not null group by ort) o), '[]'::jsonb)));
+end $$;
+
 /** Svenskt mobilnummer i formen +467XXXXXXXX, annars null. */
 create or replace function public.d2d_sms_mobil(p text)
 returns text language sql immutable set search_path = public as $$
@@ -81,7 +209,8 @@ $$;
 
 /** Skapar ett utskick. p_ids = markerade lägenheter; null = alla som matchar p_sok. */
 create or replace function public.d2d_sms_skapa(
-  p_mall text, p_avsandare text, p_ids uuid[] default null, p_sok text default null, p_testnummer text default null)
+  p_mall text, p_avsandare text, p_ids uuid[] default null, p_sok text default null, p_testnummer text default null,
+  p_status text[] default null, p_ort text default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
   v_t uuid := my_tenant_id(); v_id uuid; v_mall text := trim(coalesce(p_mall, ''));
@@ -104,7 +233,8 @@ begin
            (select 1 from d2d_sms_sparr s where s.tenant_id = v_t and s.telefon = u.mobil and s.aktiv))
     into v_valda, v_ej_mobil, v_sparr
     from (select d2d_sms_mobil(k.telefon) as mobil
-            from d2d_kontakt_rader(v_t, case when p_ids is null then p_sok end) k
+            from d2d_kontakt_rader(v_t, case when p_ids is null then p_sok end,
+                                    case when p_ids is null then p_status end, case when p_ids is null then p_ort end) k
            where p_ids is null or k.id = any(p_ids)) u;
   if v_valda = 0 then raise exception 'Inga kontakter valda' using errcode = '22023'; end if;
 
@@ -115,20 +245,22 @@ begin
       values (v_t, auth.uid(), v_avs, v_mall, true, 1) returning id into v_id;
     insert into d2d_sms_mottagare (utskick_id, tenant_id, lagenhet_id, telefon, text)
       select v_id, v_t, null, v_test, d2d_sms_fyll(v_mall, k.namn, k.gata, k.lgh, k.postort)
-        from d2d_kontakt_rader(v_t, case when p_ids is null then p_sok end) k
+        from d2d_kontakt_rader(v_t, case when p_ids is null then p_sok end,
+                                    case when p_ids is null then p_status end, case when p_ids is null then p_ort end) k
        where p_ids is null or k.id = any(p_ids)
        order by k.inkom desc limit 1;
     return jsonb_build_object('id', v_id, 'antal', 1, 'valda', 1, 'test', true);
   end if;
 
   insert into d2d_sms_utskick (tenant_id, skapad_av, avsandare, mall, sok, antal_valda)
-    values (v_t, auth.uid(), v_avs, v_mall, case when p_ids is null then nullif(trim(p_sok), '') end, v_valda)
+    values (v_t, auth.uid(), v_avs, v_mall, case when p_ids is null then d2d_kontakt_filtertext(p_sok, p_status, p_ort) end, v_valda)
     returning id into v_id;
   insert into d2d_sms_mottagare (utskick_id, tenant_id, lagenhet_id, telefon, text)
     select distinct on (u.mobil) v_id, v_t, u.id, u.mobil, u.text
       from (select k.id, k.inkom, d2d_sms_mobil(k.telefon) as mobil,
                    d2d_sms_fyll(v_mall, k.namn, k.gata, k.lgh, k.postort) as text
-              from d2d_kontakt_rader(v_t, case when p_ids is null then p_sok end) k
+              from d2d_kontakt_rader(v_t, case when p_ids is null then p_sok end,
+                                    case when p_ids is null then p_status end, case when p_ids is null then p_ort end) k
              where p_ids is null or k.id = any(p_ids)) u
      where u.mobil is not null
        and not exists (select 1 from d2d_sms_sparr s where s.tenant_id = v_t and s.telefon = u.mobil and s.aktiv)
@@ -142,7 +274,8 @@ begin
 end $$;
 
 /** Förhandsgranskning utan att något sparas: antal och de första texterna. */
-create or replace function public.d2d_sms_forhand(p_mall text, p_ids uuid[] default null, p_sok text default null)
+create or replace function public.d2d_sms_forhand(p_mall text, p_ids uuid[] default null, p_sok text default null,
+                                                   p_status text[] default null, p_ort text default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_t uuid := my_tenant_id(); r jsonb;
 begin
@@ -152,7 +285,8 @@ begin
   with u as (
     select k.id, d2d_sms_mobil(k.telefon) as mobil, k.telefon,
            d2d_sms_fyll(coalesce(p_mall, ''), k.namn, k.gata, k.lgh, k.postort) as text
-      from d2d_kontakt_rader(v_t, case when p_ids is null then p_sok end) k
+      from d2d_kontakt_rader(v_t, case when p_ids is null then p_sok end,
+                                    case when p_ids is null then p_status end, case when p_ids is null then p_ort end) k
      where p_ids is null or k.id = any(p_ids)
   ), m as (
     select u.*, exists (select 1 from d2d_sms_sparr s where s.tenant_id = v_t and s.telefon = u.mobil and s.aktiv) as sparrad from u
@@ -314,8 +448,12 @@ end $$;
 
 revoke all on function public.d2d_sms_mobil(text) from public, anon;
 revoke all on function public.d2d_sms_fyll(text, text, text, text, text) from public, anon;
-revoke all on function public.d2d_sms_skapa(text, text, uuid[], text, text) from public, anon;
-revoke all on function public.d2d_sms_forhand(text, uuid[], text) from public, anon;
+revoke all on function public.d2d_sms_skapa(text, text, uuid[], text, text, text[], text) from public, anon;
+revoke all on function public.d2d_sms_forhand(text, uuid[], text, text[], text) from public, anon;
+revoke all on function public.d2d_kontaktlista(text, integer, integer, text[], text) from public, anon;
+revoke all on function public.d2d_kontaktlista_export(text, text[], text) from public, anon;
+revoke all on function public.d2d_kontakt_filterval() from public, anon;
+revoke all on function public.d2d_kontakt_filtertext(text, text[], text) from public, anon;
 revoke all on function public.d2d_sms_ta_rader(uuid, integer) from public, anon;
 revoke all on function public.d2d_sms_rapportera(uuid, boolean, text, jsonb) from public, anon;
 revoke all on function public.d2d_sms_status(uuid) from public, anon;
@@ -323,8 +461,11 @@ revoke all on function public.d2d_sms_historik() from public, anon;
 revoke all on function public.d2d_sms_sparra(text, boolean, text) from public, anon;
 revoke all on function public.d2d_sms_sparrlista() from public, anon;
 grant execute on function public.d2d_sms_mobil(text) to authenticated;
-grant execute on function public.d2d_sms_skapa(text, text, uuid[], text, text) to authenticated;
-grant execute on function public.d2d_sms_forhand(text, uuid[], text) to authenticated;
+grant execute on function public.d2d_sms_skapa(text, text, uuid[], text, text, text[], text) to authenticated;
+grant execute on function public.d2d_sms_forhand(text, uuid[], text, text[], text) to authenticated;
+grant execute on function public.d2d_kontaktlista(text, integer, integer, text[], text) to authenticated;
+grant execute on function public.d2d_kontaktlista_export(text, text[], text) to authenticated;
+grant execute on function public.d2d_kontakt_filterval() to authenticated;
 grant execute on function public.d2d_sms_ta_rader(uuid, integer) to authenticated;
 grant execute on function public.d2d_sms_rapportera(uuid, boolean, text, jsonb) to authenticated;
 grant execute on function public.d2d_sms_status(uuid) to authenticated;
