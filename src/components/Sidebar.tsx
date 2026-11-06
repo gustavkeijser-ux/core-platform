@@ -34,6 +34,8 @@ type Props = {
   d2dFeedback?: { vantar: number };
   /** Door to door → Löner visas bara för dem med lönebehörighet (Lukas, Jonas, Gustav). */
   d2dLoner?: boolean;
+  /** Door to door → Kontaktlista visas bara för dem i d2d_kontakt_behorighet. */
+  d2dKontakter?: boolean;
   /** Antal öppna nummerbyten/porteringar — siffra vid Door to door → Nummerbyten. */
   nummerbytenOppna?: number;
   /** Antal öppna VT-beställningar — siffra vid Door to door → VT-beställningar. */
@@ -109,7 +111,7 @@ const MENU_GROUPS: MenuGroup[] = [
         <path d="M6.5 14V10h3v4" />
       </svg>
     ),
-    keys: ["__d2dutfall__", "__d2davtal__", "d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte", "vt_bestallning"],
+    keys: ["__d2dutfall__", "__d2davtal__", "__d2dkontakter__", "d2d_projekt", "d2d_fastighet", "d2d_lagenhet", "nummerbyte", "vt_bestallning"],
   },
 ];
 
@@ -370,7 +372,7 @@ function VyValjare({ vyer, vald, onValj }: { vyer: Arbetsvy[]; vald: Arbetsvy | 
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 
-export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, nummerbytenOppna, vtOppna, arbetsvyer, arbetsvy, onValjArbetsvy }: Props) {
+export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, onCloseMobile, canCases, isAdmin, caseCounts, user, onOpenSettings, onSignOut, onOpenAi, aiOpen, newFeedback, d2dFeedback, d2dLoner, d2dKontakter, nummerbytenOppna, vtOppna, arbetsvyer, arbetsvy, onValjArbetsvy }: Props) {
   /** Navigera och stäng den mobila menyn (no-op på desktop, där
    *  onCloseMobile inte är satt). */
   const hamtatNamn = useUserName(user?.id);
@@ -599,6 +601,16 @@ export function Sidebar({ objects, activeKey, onSelect, branding, mobileOpen, on
                           onClick={() => selectAndClose("__d2dloner__")}
                         >
                           Löner
+                        </button>
+                      )}
+                      {/* Kontaktlista — kunder som lämnat telefon/e-post (bara behöriga) */}
+                      {d2dKontakter && (
+                        <button
+                          className="sidebar__item sidebar__item--child"
+                          aria-current={activeKey === "__d2dkontakter__"}
+                          onClick={() => selectAndClose("__d2dkontakter__")}
+                        >
+                          Kontaktlista
                         </button>
                       )}
                       <button
