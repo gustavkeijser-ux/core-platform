@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadCsv } from "@/lib/csv";
 import { SkeletonRows } from "./PageChrome";
 import { STATUS_CONFIG } from "./D2DSellerApp";
+import { D2DSmsUtskick, D2DSmsSparr } from "./D2DSmsUtskick";
 import "@/styles/d2d.css";
 
 /* =============================================================================
@@ -18,6 +19,8 @@ import "@/styles/d2d.css";
    - Varje visning/sökning och varje export loggas (vem, när, sökord, antal).
    - Inget sparas i webbläsarens lagring; listan hämtas en sida i taget.
    - Personnummer ingår inte.
+   SMS: markera rader (eller inga = alla som matchar sökningen) → Skicka SMS
+   (D2DSmsUtskick, via LeadDesk). Utskicken syns i loggen; spärrlista finns.
    ========================================================================== */
 
 type Kontakt = {
@@ -25,7 +28,7 @@ type Kontakt = {
   gata: string | null; postnummer: string | null; postort: string | null; lgh: string | null;
   fastighet: string | null; status: string | null; saljare: string | null; inkom: string | null;
 };
-type Logg = { tid: string; handling: "visa" | "export"; sok: string | null; antal: number | null; vem: string | null };
+type Logg = { tid: string; handling: "visa" | "export" | "sms" | "smstest"; sok: string | null; antal: number | null; vem: string | null };
 
 const SIDA = 100;
 
@@ -46,6 +49,10 @@ const telLank = (t: string) => `tel:${t.replace(/[^\d+]/g, "")}`;
 export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: string) => void }) {
   const [sok, setSok] = useState("");
   const [aktivtSok, setAktivtSok] = useState("");
+  const [status, setStatus] = useState("");
+  const [ort, setOrt] = useState("");
+  const [filterval, setFilterval] = useState<{ status: Array<{ v: string; n: number }>; ort: Array<{ v: string; n: number }> } | null>(null);
+  const filter = useMemo(() => ({ p_status: status ? [status] : null, p_ort: ort || null }), [status, ort]);
   const [rader, setRader] = useState<Kontakt[] | null>(null);
   const [totalt, setTotalt] = useState(0);
   const [laddar, setLaddar] = useState(false);
@@ -55,6 +62,9 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
   const [visaLogg, setVisaLogg] = useState(false);
   const [logg, setLogg] = useState<Logg[] | null>(null);
   const anrop = useRef(0);
+  const [valda, setValda] = useState<Set<string>>(new Set());
+  const [smsOppen, setSmsOppen] = useState(false);
+  const [visaSparr, setVisaSparr] = useState(false);
 
   // Sök med kort fördröjning så att varje tangent inte blir en loggad sökning.
   useEffect(() => {
@@ -65,16 +75,35 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
   const hamta = useCallback(async (offset: number) => {
     const mitt = ++anrop.current;
     setLaddar(true); setFel(null);
-    const { data, error } = await supabase.rpc("d2d_kontaktlista", { p_sok: aktivtSok || null, p_limit: SIDA, p_offset: offset });
+    const { data, error } = await supabase.rpc("d2d_kontaktlista", { p_sok: aktivtSok || null, p_limit: SIDA, p_offset: offset, ...filter });
     if (mitt !== anrop.current) return;
     setLaddar(false);
     if (error) { setFel(error.message); return; }
     const svar = data as { totalt: number; rader: Kontakt[] };
     setTotalt(svar.totalt);
     setRader((f) => (offset === 0 ? svar.rader : [...(f ?? []), ...svar.rader]));
-  }, [aktivtSok]);
+  }, [aktivtSok, filter]);
 
-  useEffect(() => { setRader(null); void hamta(0); }, [hamta]);
+  useEffect(() => {
+    void supabase.rpc("d2d_kontakt_filterval").then(({ data }) => { if (data) setFilterval(data as typeof filterval); });
+  }, []);
+
+  useEffect(() => { setRader(null); setValda(new Set()); void hamta(0); }, [hamta]);
+
+  const vaxla = (id: string) => setValda((f) => {
+    const n = new Set(f);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const allaVisadeValda = !!rader?.length && rader.every((k) => valda.has(k.id));
+  const vaxlaAllaVisade = () => setValda((f) => {
+    const n = new Set(f);
+    for (const k of rader ?? []) { if (allaVisadeValda) n.delete(k.id); else n.add(k.id); }
+    return n;
+  });
+
+  const filtertext = [aktivtSok && `sökning ”${aktivtSok}”`, status && `status ${statusText(status)}`, ort && `ort ${ort}`]
+    .filter(Boolean).join(", ");
 
   const hamtaLogg = useCallback(async () => {
     const { data, error } = await supabase.rpc("d2d_kontakt_logglista");
@@ -85,7 +114,7 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
 
   const exportera = async () => {
     setExporterar(true); setFel(null);
-    const { data, error } = await supabase.rpc("d2d_kontaktlista_export", { p_sok: aktivtSok || null });
+    const { data, error } = await supabase.rpc("d2d_kontaktlista_export", { p_sok: aktivtSok || null, ...filter });
     setExporterar(false); setExportFraga(false);
     if (error) { setFel(error.message); return; }
     const lista = (data as Kontakt[]) ?? [];
@@ -113,13 +142,28 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
         <input className="input input--sm d2dkl__sok" type="search" autoComplete="off" spellCheck={false}
           placeholder="Sök namn, telefon, e-post, adress…" aria-label="Sök i kontaktlistan"
           value={sok} onChange={(e) => setSok(e.target.value)} />
+        <select className="input input--sm d2dkl__val" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filtrera på status">
+          <option value="">Alla statusar</option>
+          {filterval?.status.map((x) => <option key={x.v} value={x.v}>{statusText(x.v)} ({x.n.toLocaleString("sv-SE")})</option>)}
+        </select>
+        <select className="input input--sm d2dkl__val" value={ort} onChange={(e) => setOrt(e.target.value)} aria-label="Filtrera på ort">
+          <option value="">Alla orter</option>
+          {filterval?.ort.map((x) => <option key={x.v} value={x.v}>{x.v} ({x.n.toLocaleString("sv-SE")})</option>)}
+        </select>
         <span className="d2dkl__antal">{rader ? `${totalt.toLocaleString("sv-SE")} kontakter` : ""}</span>
         <div className="d2dkl__knappar">
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setVisaLogg((v) => !v)} aria-expanded={visaLogg}>
             {visaLogg ? "Dölj logg" : "Visa logg"}
           </button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setVisaSparr((v) => !v)} aria-expanded={visaSparr}>
+            Spärrade
+          </button>
           <button type="button" className="btn btn--sm" disabled={!totalt || exporterar} onClick={() => setExportFraga(true)}>
             Exportera
+          </button>
+          <button type="button" className="btn btn--brand btn--sm" disabled={!totalt} onClick={() => setSmsOppen(true)}
+            title={valda.size ? "Skicka SMS till de markerade" : "Skicka SMS till alla som matchar sökningen"}>
+            {valda.size ? `Skicka SMS (${valda.size.toLocaleString("sv-SE")})` : `Skicka SMS till alla (${totalt.toLocaleString("sv-SE")})`}
           </button>
         </div>
       </div>
@@ -127,7 +171,7 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
       {exportFraga && (
         <div className="card d2dkl__export" role="alertdialog" aria-label="Bekräfta export">
           <p>
-            Du exporterar <b>{totalt.toLocaleString("sv-SE")}</b> kontakter{aktivtSok ? <> (sökning ”{aktivtSok}”)</> : null} till
+            Du exporterar <b>{totalt.toLocaleString("sv-SE")}</b> kontakter{filtertext ? <> ({filtertext})</> : null} till
             en CSV-fil. Exporten loggas med ditt namn. Spara filen säkert och radera den när den inte behövs.
           </p>
           <div className="d2dkl__knappar">
@@ -139,6 +183,23 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
         </div>
       )}
 
+      {valda.size > 0 && (
+        <div className="d2dkl__valda">
+          <span><b>{valda.size.toLocaleString("sv-SE")}</b> markerade</span>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setValda(new Set())}>Avmarkera</button>
+        </div>
+      )}
+
+      {smsOppen && (
+        <D2DSmsUtskick ids={valda.size ? [...valda] : null} sok={aktivtSok} filter={filter} filtertext={filtertext} totalt={totalt}
+          onClose={(skickat) => {
+            setSmsOppen(false);
+            if (skickat) { setValda(new Set()); if (visaLogg) void hamtaLogg(); }
+          }} />
+      )}
+
+      {visaSparr && <D2DSmsSparr onClose={() => setVisaSparr(false)} />}
+
       {fel && <div className="formfield__error">{fel}</div>}
 
       {visaLogg && (
@@ -149,7 +210,8 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
               {logg.map((l, i) => (
                 <li key={i}>
                   <span className="d2dkl__loggtid">{tidpunkt(l.tid)}</span>
-                  <span><b>{l.vem ?? "Okänd"}</b> {l.handling === "export" ? "exporterade" : "visade"} {l.antal ?? 0} kontakter
+                  <span><b>{l.vem ?? "Okänd"}</b> {l.handling === "export" ? "exporterade" : l.handling === "sms" ? "skickade SMS till"
+                    : l.handling === "smstest" ? "skickade test-SMS," : "visade"} {l.antal ?? 0} {l.handling === "smstest" ? "mottagare" : "kontakter"}
                     {l.sok && <> · sökning ”{l.sok}”</>}</span>
                 </li>
               ))}
@@ -163,16 +225,25 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
       {rader && (
         <section className="card utf__sek">
           {rader.length === 0 ? (
-            <p className="formfield__help">{aktivtSok ? "Inga kontakter matchar sökningen." : "Inga kontaktuppgifter har kommit in ännu."}</p>
+            <p className="formfield__help">{aktivtSok || status || ort ? "Inga kontakter matchar sökningen/filtren." : "Inga kontaktuppgifter har kommit in ännu."}</p>
           ) : (
             <div className="rtable-scroll">
               <table className="rtable d2dkl__tabell">
                 <thead>
-                  <tr><th>Namn</th><th>Telefon</th><th>E-post</th><th>Adress</th><th>Status</th><th>Inkom</th></tr>
+                  <tr>
+                    <th className="rtable__select">
+                      <input type="checkbox" aria-label="Markera alla visade" checked={allaVisadeValda} onChange={vaxlaAllaVisade} />
+                    </th>
+                    <th>Namn</th><th>Telefon</th><th>E-post</th><th>Adress</th><th>Status</th><th>Inkom</th></tr>
                 </thead>
                 <tbody>
                   {rader.map((k) => (
-                    <tr key={k.id} className="rtable__row rtable__row--click" onClick={() => onOpenRecord(k.id)}>
+                    <tr key={k.id} className={`rtable__row rtable__row--click${valda.has(k.id) ? " rtable__row--selected" : ""}`}
+                      onClick={() => onOpenRecord(k.id)}>
+                      <td className="rtable__select" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" aria-label={`Markera ${k.namn ?? k.telefon ?? "kontakt"}`}
+                          checked={valda.has(k.id)} onChange={() => vaxla(k.id)} />
+                      </td>
                       <td data-label="Namn" className="rtable__title"><span>{k.namn ?? "–"}</span></td>
                       <td data-label="Telefon">
                         {k.telefon ? <a href={telLank(k.telefon)} onClick={(e) => e.stopPropagation()}>{k.telefon}</a> : "–"}

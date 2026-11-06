@@ -472,6 +472,7 @@
 .d2dkl__las { flex: none; margin-top: 2px; color: var(--ink-faint); }
 .d2dkl__filter { justify-content: space-between; }
 .d2dkl__sok { flex: 1 1 280px; max-width: 420px; }
+.d2dkl__val { flex: 0 1 190px; width: auto; }
 .d2dkl__antal { font-size: var(--text-sm); color: var(--ink-muted); white-space: nowrap; }
 .d2dkl__knappar { display: flex; gap: var(--sp-2); margin-left: auto; }
 .d2dkl__export { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); }
@@ -485,8 +486,35 @@
 .d2dkl__fler { justify-self: center; }
 @media (max-width: 640px) {
   .d2dkl__sok { flex: 1 1 100%; max-width: none; }
+  .d2dkl__val { flex: 1 1 45%; }
   .d2dkl__knappar { margin-left: 0; }
   .d2dkl__logglista li { flex-direction: column; gap: 0; }
+}
+
+/* ── Door to door → Kontaktlista → Skicka SMS (D2DSmsUtskick) ─────────────── */
+.d2dkl__valda { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--text-sm); color: var(--ink-muted); }
+.d2dsms { width: min(560px, 100%); max-height: calc(100dvh - 2 * var(--sp-4)); display: flex; flex-direction: column; }
+.d2dsms__body { display: flex; flex-direction: column; gap: var(--sp-3); overflow-y: auto; }
+.d2dsms__urval { margin: 0; font-size: var(--text-sm); }
+.d2dsms__text { resize: vertical; min-height: 6rem; font: inherit; }
+.d2dsms__falt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.d2dsms__tecken { margin-left: auto; font-size: var(--text-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.d2dsms__tecken--varn { color: var(--hue-red); }
+.d2dsms__exempel { display: flex; flex-direction: column; gap: var(--sp-2); }
+.d2dsms__bubbla { align-self: flex-start; max-width: 90%; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm, 10px); background: var(--brand-soft); }
+.d2dsms__bubbla p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-sm); }
+.d2dsms__test { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.d2dsms__test .input { flex: 1 1 160px; }
+.d2dsms__bekrafta { padding: var(--sp-3); border-radius: var(--r-sm, 10px); background: var(--brand-soft); font-size: var(--text-sm); }
+.d2dsms__progress p, .d2dsms__klart p { margin: 0 0 var(--sp-2); }
+.d2dsms__bar { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.d2dsms__bar span { display: block; height: 100%; background: var(--brand); transition: width .3s; }
+.d2dsms__fellista { margin: 0; padding-left: var(--sp-4); font-size: var(--text-sm); color: var(--ink-muted); max-height: 160px; overflow-y: auto; }
+.d2dsms__ok { margin: 0; font-size: var(--text-sm); color: var(--hue-green); }
+.d2dsms__dolj { margin-left: auto; }
+@media (max-width: 640px) {
+  .d2dsms__tecken { margin-left: 0; flex-basis: 100%; }
+  .d2dkl__knappar { flex-wrap: wrap; }
 }
 
 /* ── Blitz → Översikt: pinnar den här månaden ──────────────────────────────
