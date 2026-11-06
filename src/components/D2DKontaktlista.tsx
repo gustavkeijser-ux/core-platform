@@ -63,7 +63,7 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
   const [logg, setLogg] = useState<Logg[] | null>(null);
   const anrop = useRef(0);
   const [valda, setValda] = useState<Set<string>>(new Set());
-  const [smsOppen, setSmsOppen] = useState(false);
+  const [smsOppen, setSmsOppen] = useState<false | "lista" | "egna">(false);
   const [visaSparr, setVisaSparr] = useState(false);
 
   // Sök med kort fördröjning så att varje tangent inte blir en loggad sökning.
@@ -161,7 +161,11 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
           <button type="button" className="btn btn--sm" disabled={!totalt || exporterar} onClick={() => setExportFraga(true)}>
             Exportera
           </button>
-          <button type="button" className="btn btn--brand btn--sm" disabled={!totalt} onClick={() => setSmsOppen(true)}
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSmsOppen("egna")}
+            title="Skicka SMS till namn och nummer som du skriver in själv">
+            Eget SMS
+          </button>
+          <button type="button" className="btn btn--brand btn--sm" disabled={!totalt} onClick={() => setSmsOppen("lista")}
             title={valda.size ? "Skicka SMS till de markerade" : "Skicka SMS till alla som matchar sökningen"}>
             {valda.size ? `Skicka SMS (${valda.size.toLocaleString("sv-SE")})` : `Skicka SMS till alla (${totalt.toLocaleString("sv-SE")})`}
           </button>
@@ -191,7 +195,7 @@ export function D2DKontaktlistaPage({ onOpenRecord }: { onOpenRecord: (id: strin
       )}
 
       {smsOppen && (
-        <D2DSmsUtskick ids={valda.size ? [...valda] : null} sok={aktivtSok} filter={filter} filtertext={filtertext} totalt={totalt}
+        <D2DSmsUtskick ids={smsOppen === "egna" ? [] : valda.size ? [...valda] : null} sok={aktivtSok} filter={filter} filtertext={filtertext} totalt={totalt}
           onClose={(skickat) => {
             setSmsOppen(false);
             if (skickat) { setValda(new Set()); if (visaLogg) void hamtaLogg(); }
