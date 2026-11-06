@@ -88,7 +88,10 @@ Deno.serve(async (req: Request) => {
 
   const ldAuth = (Deno.env.get("LEADDESK_API_AUTH") ?? "").trim();
   if (!ldAuth) {
-    return json({ error: "LeadDesk-nyckeln saknas (secret LEADDESK_API_AUTH). Inget har skickats." }, 503);
+    // Hjälp vid felsökning: visa NAMNEN (aldrig värdena) på secrets som liknar nyckeln.
+    const liknande = Object.keys(Deno.env.toObject()).filter((k) => /LEAD|DESK/i.test(k));
+    return json({ error: "LeadDesk-nyckeln saknas (secret LEADDESK_API_AUTH) i det här Supabase-projektet. Inget har skickats."
+      + (liknande.length ? ` Hittade secrets med liknande namn: ${liknande.join(", ")}.` : "") }, 503);
   }
 
   // Användarens behörighet gäller i alla databasanrop (security definer-funktionerna kontrollerar den).
