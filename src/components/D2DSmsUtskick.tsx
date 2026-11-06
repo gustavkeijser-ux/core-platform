@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { normaliseraTelefon, visaTelefon } from "@/lib/phone";
 import "@/styles/d2d.css";
 
 /* =============================================================================
    Door to door → Kontaktlista → Skicka SMS.
 
-   Urval: markerade rader (ids) eller alla som matchar sökningen (ids = null).
+   Urval: markerade rader (ids), alla som matchar sökningen (ids = null) eller
+   inga ur listan (ids = []). Dessutom egna mottagare: namn + mobilnummer som
+   skrivs in för hand (p_extra), t.ex. någon som inte finns i listan.
    1. Förhandsgranskning (d2d_sms_forhand): antal mottagare, bortvalda
       (ej mobilnummer, spärrade) och de första texterna med fälten ifyllda.
    2. Testutskick till ett eget nummer (d2d_sms_skapa med p_testnummer).
@@ -48,6 +51,9 @@ function sparaAvs(v: string) {
 }
 
 const sv = (n: number) => n.toLocaleString("sv-SE");
+/** Svenskt mobilnummer som +467XXXXXXXX, annars null (samma regel som d2d_sms_mobil). */
+const mobil = (v: string) => { const n = normaliseraTelefon(v); return n && /^\+467[02369]\d{7}$/.test(n) ? n : null; };
+type Egen = { namn: string; telefon: string };
 
 export function D2DSmsUtskick({ ids, sok, filter, filtertext, totalt, onClose }: {
   ids: string[] | null; sok: string; totalt: number; onClose: (skickat: boolean) => void;
@@ -65,9 +71,24 @@ export function D2DSmsUtskick({ ids, sok, filter, filtertext, totalt, onClose }:
   const [resultat, setResultat] = useState<Resultat | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const anrop = useRef(0);
+  const [egna, setEgna] = useState<Egen[]>([]);
+  const [egetNamn, setEgetNamn] = useState("");
+  const [egetNr, setEgetNr] = useState("");
+  const [egenFel, setEgenFel] = useState<string | null>(null);
 
-  const urval = useMemo(() => (ids ? { p_ids: ids, p_sok: null, p_status: null, p_ort: null }
-    : { p_ids: null, p_sok: sok || null, ...filter }), [ids, sok, filter]);
+  const urval = useMemo(() => ({
+    ...(ids ? { p_ids: ids, p_sok: null, p_status: null, p_ort: null } : { p_ids: null, p_sok: sok || null, ...filter }),
+    p_extra: egna.length ? egna : null,
+  }), [ids, sok, filter, egna]);
+  const baraEgna = !!ids && ids.length === 0;
+
+  const laggTill = () => {
+    const nr = mobil(egetNr);
+    if (!nr) { setEgenFel("Skriv ett svenskt mobilnummer (07…)."); return; }
+    if (egna.some((e) => e.telefon === nr)) { setEgenFel("Numret finns redan i listan."); return; }
+    setEgna((f) => [...f, { namn: egetNamn.trim(), telefon: nr }]);
+    setEgetNamn(""); setEgetNr(""); setEgenFel(null);
+  };
   const antalValda = ids ? ids.length : totalt;
 
   // Förhandsgranskning med fördröjning medan man skriver.
@@ -159,8 +180,10 @@ export function D2DSmsUtskick({ ids, sok, filter, filtertext, totalt, onClose }:
 
         <div className="field-config__body d2dsms__body">
           <p className="d2dsms__urval">
-            {ids ? <><b>{sv(ids.length)}</b> markerade kontakter</>
+            {baraEgna ? <>Egna mottagare</>
+              : ids ? <><b>{sv(ids.length)}</b> markerade kontakter</>
               : <><b>Alla {sv(totalt)}</b> kontakter{filtertext ? <> ({filtertext})</> : null}</>}
+            {egna.length > 0 && !baraEgna && <> + <b>{sv(egna.length)}</b> egna</>}
             {forhand && <> → <b>{sv(forhand.mottagare)}</b> mottagare</>}
           </p>
           {forhand && (forhand.ej_mobil > 0 || forhand.sparrade > 0 || forhand.valda - forhand.ej_mobil - forhand.sparrade > forhand.mottagare) && (
@@ -176,6 +199,33 @@ export function D2DSmsUtskick({ ids, sok, filter, filtertext, totalt, onClose }:
 
           {(steg === "skriv" || steg === "bekrafta") && (
             <>
+              <div className="d2dsms__egna">
+                <span className="formfield__label">{baraEgna ? "Mottagare" : "Egna mottagare (valfritt)"}</span>
+                {egna.length > 0 && (
+                  <ul className="d2dsms__egnalista">
+                    {egna.map((e) => (
+                      <li key={e.telefon}>
+                        <span>{e.namn || "–"} <small className="utf__sub">{visaTelefon(e.telefon)}</small></span>
+                        {steg === "skriv" && (
+                          <button type="button" className="close-btn" aria-label={`Ta bort ${e.namn || e.telefon}`}
+                            onClick={() => setEgna((f) => f.filter((x) => x.telefon !== e.telefon))}>×</button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {steg === "skriv" && (
+                  <form className="d2dsms__test" onSubmit={(e) => { e.preventDefault(); laggTill(); }}>
+                    <input className="input input--sm" placeholder="Namn" value={egetNamn} maxLength={60}
+                      onChange={(e) => setEgetNamn(e.target.value)} aria-label="Mottagarens namn" />
+                    <input className="input input--sm" placeholder="Mobilnummer" inputMode="tel" value={egetNr}
+                      onChange={(e) => { setEgetNr(e.target.value); setEgenFel(null); }} aria-label="Mottagarens mobilnummer" />
+                    <button type="submit" className="btn btn--ghost btn--sm" disabled={!egetNr.trim()}>Lägg till</button>
+                  </form>
+                )}
+                {egenFel && <small className="formfield__error">{egenFel}</small>}
+              </div>
+
               <label className="formfield">
                 <span className="formfield__label">Avsändare</span>
                 <input className="input" value={avs} maxLength={16} onChange={(e) => setAvs(e.target.value)} disabled={steg === "bekrafta"} />
@@ -270,7 +320,7 @@ export function D2DSmsUtskick({ ids, sok, filter, filtertext, totalt, onClose }:
           </>}
           {steg === "klart" && <button type="button" className="btn btn--brand" onClick={() => onClose(true)}>Stäng</button>}
         </div>
-        {antalValda === 0 && <p className="formfield__help">Inga kontakter valda.</p>}
+        {antalValda === 0 && !baraEgna && <p className="formfield__help">Inga kontakter valda.</p>}
       </div>
     </div>
   );
