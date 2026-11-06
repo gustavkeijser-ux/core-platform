@@ -49,8 +49,9 @@ function sparaAvs(v: string) {
 
 const sv = (n: number) => n.toLocaleString("sv-SE");
 
-export function D2DSmsUtskick({ ids, sok, totalt, onClose }: {
+export function D2DSmsUtskick({ ids, sok, filter, filtertext, totalt, onClose }: {
   ids: string[] | null; sok: string; totalt: number; onClose: (skickat: boolean) => void;
+  filter: { p_status: string[] | null; p_ort: string | null }; filtertext: string;
 }) {
   const [mall, setMall] = useState("Hej {namn}! ");
   const [avs, setAvs] = useState(lasAvs);
@@ -65,7 +66,8 @@ export function D2DSmsUtskick({ ids, sok, totalt, onClose }: {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const anrop = useRef(0);
 
-  const urval = useMemo(() => ({ p_ids: ids, p_sok: ids ? null : sok || null }), [ids, sok]);
+  const urval = useMemo(() => (ids ? { p_ids: ids, p_sok: null, p_status: null, p_ort: null }
+    : { p_ids: null, p_sok: sok || null, ...filter }), [ids, sok, filter]);
   const antalValda = ids ? ids.length : totalt;
 
   // Förhandsgranskning med fördröjning medan man skriver.
@@ -158,7 +160,7 @@ export function D2DSmsUtskick({ ids, sok, totalt, onClose }: {
         <div className="field-config__body d2dsms__body">
           <p className="d2dsms__urval">
             {ids ? <><b>{sv(ids.length)}</b> markerade kontakter</>
-              : <><b>Alla {sv(totalt)}</b> kontakter{sok ? <> som matchar ”{sok}”</> : null}</>}
+              : <><b>Alla {sv(totalt)}</b> kontakter{filtertext ? <> ({filtertext})</> : null}</>}
             {forhand && <> → <b>{sv(forhand.mottagare)}</b> mottagare</>}
           </p>
           {forhand && (forhand.ej_mobil > 0 || forhand.sparrade > 0 || forhand.valda - forhand.ej_mobil - forhand.sparrade > forhand.mottagare) && (
